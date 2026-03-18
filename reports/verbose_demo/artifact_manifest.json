@@ -1,0 +1,13 @@
+{
+  "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo",
+  "files": {
+    "input_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/input_equations.tex",
+    "parsed_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/parsed_equations.txt",
+    "intermediate_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/intermediate_equations.txt",
+    "state_space": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/state_space.txt",
+    "graph": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/graph.json",
+    "summary": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/summary.json",
+    "simulation_plot": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/simulation_plot.png",
+    "simulink_model_image": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose_demo/simulink_model.png"
+  }
+}
