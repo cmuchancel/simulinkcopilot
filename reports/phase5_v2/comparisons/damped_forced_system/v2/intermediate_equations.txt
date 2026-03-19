@@ -1,0 +1,11 @@
+Parsed equations:
+  D1_x = v
+  D1_v = u - 2*v*z - w_0**2*x
+
+Solved derivatives:
+  D1_v = u - 2*v*z - w_0**2*x
+  D1_x = v
+
+First-order system:
+  d/dt v = u - 2*v*z - w_0**2*x
+  d/dt x = v

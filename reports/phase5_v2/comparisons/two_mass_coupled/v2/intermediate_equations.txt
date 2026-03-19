@@ -1,0 +1,13 @@
+Parsed equations:
+  D2_x_1*m_1 + c*(D1_x_1 - D1_x_2) + k*(x_1 - x_2) = u
+  D2_x_2*m_2 + c*(-D1_x_1 + D1_x_2) + k*(-x_1 + x_2) = 0
+
+Solved derivatives:
+  D2_x_1 = (-D1_x_1*c + D1_x_2*c - k*x_1 + k*x_2 + u)/m_1
+  D2_x_2 = (D1_x_1*c - D1_x_2*c + k*x_1 - k*x_2)/m_2
+
+First-order system:
+  d/dt x_1 = x_1_dot
+  d/dt x_1_dot = (-c*x_1_dot + c*x_2_dot - k*x_1 + k*x_2 + u)/m_1
+  d/dt x_2 = x_2_dot
+  d/dt x_2_dot = (c*x_1_dot - c*x_2_dot + k*x_1 - k*x_2)/m_2

@@ -1,0 +1,166 @@
+{
+  "kind": "first_order_system_graph",
+  "name": "driven_oscillator",
+  "nodes": [
+    {
+      "id": "const_2",
+      "op": "constant",
+      "inputs": [],
+      "value": 2
+    },
+    {
+      "id": "const__1",
+      "op": "constant",
+      "inputs": [],
+      "value": -1
+    },
+    {
+      "id": "expr_0001",
+      "op": "pow",
+      "inputs": [
+        "symbol_w_0",
+        "const_2"
+      ]
+    },
+    {
+      "id": "expr_0002",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "expr_0001",
+        "state_x"
+      ]
+    },
+    {
+      "id": "expr_0003",
+      "op": "add",
+      "inputs": [
+        "symbol_u",
+        "expr_0002"
+      ]
+    },
+    {
+      "id": "integrator_v",
+      "op": "integrator",
+      "inputs": [
+        "expr_0003"
+      ],
+      "state": "v"
+    },
+    {
+      "id": "integrator_x",
+      "op": "integrator",
+      "inputs": [
+        "state_v"
+      ],
+      "state": "x"
+    },
+    {
+      "id": "state_v",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_v"
+      ],
+      "state": "v"
+    },
+    {
+      "id": "state_x",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x"
+      ],
+      "state": "x"
+    },
+    {
+      "id": "symbol_u",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "u",
+      "symbol_role": "input"
+    },
+    {
+      "id": "symbol_w_0",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "w_0",
+      "symbol_role": "parameter"
+    }
+  ],
+  "edges": [
+    {
+      "src": "const_2",
+      "dst": "expr_0001",
+      "dst_port": 1
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0002",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0001",
+      "dst": "expr_0002",
+      "dst_port": 1
+    },
+    {
+      "src": "expr_0002",
+      "dst": "expr_0003",
+      "dst_port": 1
+    },
+    {
+      "src": "expr_0003",
+      "dst": "integrator_v",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_v",
+      "dst": "state_v",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x",
+      "dst": "state_x",
+      "dst_port": 0
+    },
+    {
+      "src": "state_v",
+      "dst": "integrator_x",
+      "dst_port": 0
+    },
+    {
+      "src": "state_x",
+      "dst": "expr_0002",
+      "dst_port": 2
+    },
+    {
+      "src": "symbol_u",
+      "dst": "expr_0003",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_w_0",
+      "dst": "expr_0001",
+      "dst_port": 0
+    }
+  ],
+  "outputs": {
+    "rhs_v": "expr_0003",
+    "rhs_x": "state_v",
+    "v": "state_v",
+    "x": "state_x"
+  },
+  "state_chains": [
+    {
+      "state": "v",
+      "signal": "state_v",
+      "integrator": "integrator_v",
+      "rhs": "expr_0003"
+    },
+    {
+      "state": "x",
+      "signal": "state_x",
+      "integrator": "integrator_x",
+      "rhs": "state_v"
+    }
+  ]
+}

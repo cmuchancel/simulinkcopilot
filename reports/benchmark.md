@@ -1,0 +1,5219 @@
+# Synthetic Benchmark
+
+- generated systems: 216
+- evaluated systems: 216
+- passed systems: 216
+- failed systems: 0
+- tolerance: 1e-06
+
+## Failure Categories
+- none
+
+## Success Rate by Generated State Count
+- 1 states: 36/36 (100.0%), avg graph nodes=12.833333333333334, avg Simulink blocks=9.694444444444445, avg build time=1.7755890335797124, avg sim time=0.18453137736812802
+- 2 states: 36/36 (100.0%), avg graph nodes=22.47222222222222, avg Simulink blocks=18.0, avg build time=1.5497489640498923, avg sim time=0.164324418974704
+- 3 states: 36/36 (100.0%), avg graph nodes=31.444444444444443, avg Simulink blocks=26.194444444444443, avg build time=1.6560325509166836, avg sim time=0.16345133216560093
+- 4 states: 36/36 (100.0%), avg graph nodes=37.388888888888886, avg Simulink blocks=32.27777777777778, avg build time=1.6087340057209885, avg sim time=0.16883498029751032
+- 5 states: 36/36 (100.0%), avg graph nodes=44.69444444444444, avg Simulink blocks=39.19444444444444, avg build time=1.5245778402814822, avg sim time=0.1757010659396959
+- 6 states: 36/36 (100.0%), avg graph nodes=51.361111111111114, avg Simulink blocks=45.55555555555556, avg build time=1.6284534584475396, avg sim time=0.16585431719431654
+
+## Success Rate by Nonlinearity
+- nonlinear=false: 108/108 (100.0%)
+- nonlinear=true: 108/108 (100.0%)
+
+## Success Rate by Trigonometric Content
+- trig=false: 144/144 (100.0%)
+- trig=true: 72/72 (100.0%)
+
+## Aggregate Metrics
+- average RMSE: 1.4407310043982335e-11
+- average max abs error: 7.032795984270189e-11
+- average graph node count: 33.36574074074074
+- average Simulink block count: 28.48611111111111
+- average build time sec: 1.623855975499383
+- average simulation time sec: 0.1704495819899926
+
+## System Results
+### syn_s1_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.2308234888418206e-12
+- max_abs_error: 1.1851311598753966e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.231e-12, max=1.185e-11)
+
+### syn_s1_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.84647145434705e-12
+- max_abs_error: 1.1940899657947313e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.846e-12, max=1.194e-11)
+
+### syn_s1_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 1.1334106771236824e-11
+- max_abs_error: 3.050343311272741e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.133e-11, max=3.050e-11)
+
+### syn_s1_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 6.584430376525043e-12
+- max_abs_error: 1.889494116724677e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.584e-12, max=1.889e-11)
+
+### syn_s1_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.096625646875348e-12
+- max_abs_error: 1.651754427678398e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.097e-12, max=1.652e-11)
+
+### syn_s1_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.4799620748532254e-11
+- max_abs_error: 4.3322456733108083e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=3.048e-17, max=8.327e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.480e-11, max=4.332e-11)
+
+### syn_s2_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.538929218591408e-12
+- max_abs_error: 1.471936461605594e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.539e-12, max=1.472e-11)
+
+### syn_s2_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.7724990709274255e-12
+- max_abs_error: 1.4273970894151944e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.772e-12, max=1.427e-11)
+
+### syn_s2_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 1.2029083124028897e-11
+- max_abs_error: 3.143360571833398e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.203e-11, max=3.143e-11)
+
+### syn_s2_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.636084623632567e-10
+- max_abs_error: 7.039729355007296e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.636e-10, max=7.040e-10)
+
+### syn_s2_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 1.872135692224446e-12
+- max_abs_error: 5.754556553494439e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.872e-12, max=5.755e-12)
+
+### syn_s2_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 4.41803382827337e-12
+- max_abs_error: 1.712779917895091e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.418e-12, max=1.713e-11)
+
+### syn_s3_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.844924060224778e-12
+- max_abs_error: 2.0042342785409062e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.845e-12, max=2.004e-11)
+
+### syn_s3_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 5.01205506877626e-12
+- max_abs_error: 1.744204780607106e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.012e-12, max=1.744e-11)
+
+### syn_s3_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 8.83950779610307e-12
+- max_abs_error: 2.4543506116359026e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.840e-12, max=2.454e-11)
+
+### syn_s3_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.1232581298439501e-11
+- max_abs_error: 2.766201157022863e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.123e-11, max=2.766e-11)
+
+### syn_s3_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.1976336838893397e-12
+- max_abs_error: 1.4993249697337063e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=8.886e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.198e-12, max=1.499e-11)
+
+### syn_s3_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.943775246704493e-11
+- max_abs_error: 7.890355036010988e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.944e-11, max=7.890e-11)
+
+### syn_s4_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.0165186812977044e-12
+- max_abs_error: 1.2293902007520785e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.017e-12, max=1.229e-11)
+
+### syn_s4_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.623098578575276e-12
+- max_abs_error: 1.2354638145861685e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.623e-12, max=1.235e-11)
+
+### syn_s4_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 9.690909607740507e-12
+- max_abs_error: 5.001912772861772e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.691e-12, max=5.002e-11)
+
+### syn_s4_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 2.7471136479459414e-12
+- max_abs_error: 1.5257219099229502e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.747e-12, max=1.526e-11)
+
+### syn_s4_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.245362780006608e-12
+- max_abs_error: 1.923777803725102e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.868e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.245e-12, max=1.924e-11)
+
+### syn_s4_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 2.4678462906023406e-12
+- max_abs_error: 1.627957491034948e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.468e-12, max=1.628e-11)
+
+### syn_s5_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.107251302524034e-12
+- max_abs_error: 1.779849184702087e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.107e-12, max=1.780e-11)
+
+### syn_s5_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.296453504119198e-12
+- max_abs_error: 1.7118396977711114e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.296e-12, max=1.712e-11)
+
+### syn_s5_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 1.2012718365752637e-11
+- max_abs_error: 5.56767965065319e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.201e-11, max=5.568e-11)
+
+### syn_s5_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.752959941544218e-11
+- max_abs_error: 7.470493668115807e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.753e-11, max=7.470e-11)
+
+### syn_s5_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.4115140363947885e-12
+- max_abs_error: 1.622103840137612e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.255e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.412e-12, max=1.622e-11)
+
+### syn_s5_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 8.455489609279918e-12
+- max_abs_error: 3.22338683522716e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.455e-12, max=3.223e-11)
+
+### syn_s6_d1_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.33095894751485e-12
+- max_abs_error: 1.4003423420838601e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.331e-12, max=1.400e-11)
+
+### syn_s6_d1_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.9250993542185585e-12
+- max_abs_error: 1.4208648146940561e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.925e-12, max=1.421e-11)
+
+### syn_s6_d1_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 1.2579388461806738e-11
+- max_abs_error: 5.143288572817539e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.258e-11, max=5.143e-11)
+
+### syn_s6_d1_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 7.264610904226284e-12
+- max_abs_error: 3.164410400380291e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=7.265e-12, max=3.164e-11)
+
+### syn_s6_d1_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.907181699237273e-12
+- max_abs_error: 1.6588133644468428e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.986e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.907e-12, max=1.659e-11)
+
+### syn_s6_d1_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 3.049637836808224e-12
+- max_abs_error: 2.2021176548925325e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.050e-12, max=2.202e-11)
+
+### syn_s1_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.5155520869290946e-12
+- max_abs_error: 1.147741623963583e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.516e-12, max=1.148e-11)
+
+### syn_s1_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 5.372941009501912e-12
+- max_abs_error: 1.221049650279582e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.373e-12, max=1.221e-11)
+
+### syn_s1_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 3.514468301568928e-12
+- max_abs_error: 1.2059554743704126e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.514e-12, max=1.206e-11)
+
+### syn_s1_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.1338323545246201e-11
+- max_abs_error: 2.3401391935351512e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.134e-11, max=2.340e-11)
+
+### syn_s1_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 2.349071003836547e-11
+- max_abs_error: 7.714212602039083e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.349e-11, max=7.714e-11)
+
+### syn_s1_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 2.497975305668605e-11
+- max_abs_error: 8.018963271183566e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.498e-11, max=8.019e-11)
+
+### syn_s2_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.06802281767972e-12
+- max_abs_error: 1.5309892242854062e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.858e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.068e-12, max=1.531e-11)
+
+### syn_s2_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 5.22834737857744e-12
+- max_abs_error: 1.5567658273596408e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.502e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.228e-12, max=1.557e-11)
+
+### syn_s2_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 1.3817421338464373e-11
+- max_abs_error: 4.287184496298835e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.382e-11, max=4.287e-11)
+
+### syn_s2_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 9.574158346404846e-12
+- max_abs_error: 2.3701138274212497e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.574e-12, max=2.370e-11)
+
+### syn_s2_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 6.3877018261353876e-12
+- max_abs_error: 1.6873447084009285e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.388e-12, max=1.687e-11)
+
+### syn_s2_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 3.0475743851702665e-11
+- max_abs_error: 1.0487855028884496e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.048e-11, max=1.049e-10)
+
+### syn_s3_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.377348271410759e-12
+- max_abs_error: 2.1012941386899797e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.553e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.377e-12, max=2.101e-11)
+
+### syn_s3_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.521523346052134e-12
+- max_abs_error: 1.580382352761589e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.060e-17, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.522e-12, max=1.580e-11)
+
+### syn_s3_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 9.14324414308688e-12
+- max_abs_error: 4.444761225741445e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.143e-12, max=4.445e-11)
+
+### syn_s3_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.399842497533085e-11
+- max_abs_error: 5.468031583077959e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.400e-11, max=5.468e-11)
+
+### syn_s3_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.887522065938346e-12
+- max_abs_error: 1.4949950999376682e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.320e-17, max=1.110e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.888e-12, max=1.495e-11)
+
+### syn_s3_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 4.9091868154436987e-11
+- max_abs_error: 3.2448460585143835e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.909e-11, max=3.245e-10)
+
+### syn_s4_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.455275669271027e-12
+- max_abs_error: 1.2628183221341516e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=3.802e-18, max=1.735e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.455e-12, max=1.263e-11)
+
+### syn_s4_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.0682971480590654e-12
+- max_abs_error: 1.3253363684295749e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.747e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.068e-12, max=1.325e-11)
+
+### syn_s4_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 6.640367989800488e-12
+- max_abs_error: 3.227158817953324e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.640e-12, max=3.227e-11)
+
+### syn_s4_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.243962105088098e-11
+- max_abs_error: 6.497967441898567e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.244e-11, max=6.498e-11)
+
+### syn_s4_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 8.17934745346422e-12
+- max_abs_error: 3.915809343446597e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.444e-17, max=2.220e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.179e-12, max=3.916e-11)
+
+### syn_s4_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.8259448890508366e-11
+- max_abs_error: 1.0560441410234489e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.826e-11, max=1.056e-10)
+
+### syn_s5_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.5768011567815644e-12
+- max_abs_error: 1.781280678514463e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.361e-18, max=1.561e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.577e-12, max=1.781e-11)
+
+### syn_s5_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.814188377069364e-12
+- max_abs_error: 1.7490897619154566e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.067e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.814e-12, max=1.749e-11)
+
+### syn_s5_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 7.8831329422782e-12
+- max_abs_error: 4.754585614108464e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=7.883e-12, max=4.755e-11)
+
+### syn_s5_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.987953223022121e-11
+- max_abs_error: 6.932582286012234e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.988e-11, max=6.933e-11)
+
+### syn_s5_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.089217477914581e-12
+- max_abs_error: 2.269276433430889e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.486e-17, max=8.327e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.089e-12, max=2.269e-11)
+
+### syn_s5_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 1.9437851032662894e-11
+- max_abs_error: 8.859808720007578e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.944e-11, max=8.860e-11)
+
+### syn_s6_d1_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 3.850348868313454e-12
+- max_abs_error: 1.4319857799538482e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.261e-18, max=1.735e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.850e-12, max=1.432e-11)
+
+### syn_s6_d1_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 4.365180708433511e-12
+- max_abs_error: 1.337004118528995e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.672e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.365e-12, max=1.337e-11)
+
+### syn_s6_d1_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: False
+- rmse: 6.346325332265563e-12
+- max_abs_error: 4.2125442023532855e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.346e-12, max=4.213e-11)
+
+### syn_s6_d1_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 4.748980875048033e-12
+- max_abs_error: 2.5992999419521823e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.749e-12, max=2.599e-11)
+
+### syn_s6_d1_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 1
+- nonlinear: False
+- trig: False
+- rmse: 5.1791032186950535e-12
+- max_abs_error: 2.6803899377814133e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.758e-17, max=1.110e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.179e-12, max=2.680e-11)
+
+### syn_s6_d1_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 1
+- nonlinear: True
+- trig: True
+- rmse: 9.319523750625755e-11
+- max_abs_error: 7.326983186839442e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d1_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.320e-11, max=7.327e-10)
+
+### syn_s1_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.231959368875358e-12
+- max_abs_error: 1.1956123591172485e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.232e-12, max=1.196e-11)
+
+### syn_s1_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.853484302797799e-12
+- max_abs_error: 1.1318980475127915e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.853e-12, max=1.132e-11)
+
+### syn_s1_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 7.515047510699079e-11
+- max_abs_error: 1.899149726369842e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=7.515e-11, max=1.899e-10)
+
+### syn_s1_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 2.6885411685218268e-11
+- max_abs_error: 6.332373514439382e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.689e-11, max=6.332e-11)
+
+### syn_s1_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.697644736796053e-12
+- max_abs_error: 1.7506322780302952e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.698e-12, max=1.751e-11)
+
+### syn_s1_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.991734602348143e-12
+- max_abs_error: 2.4220805916463917e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.992e-12, max=2.422e-11)
+
+### syn_s2_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.476935534713365e-12
+- max_abs_error: 1.3920531394262525e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.477e-12, max=1.392e-11)
+
+### syn_s2_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.6807767964439606e-12
+- max_abs_error: 1.5084086757433113e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.681e-12, max=1.508e-11)
+
+### syn_s2_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 2.5684696669961704e-11
+- max_abs_error: 1.7513534372737283e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.568e-11, max=1.751e-10)
+
+### syn_s2_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 1.476015056086933e-11
+- max_abs_error: 4.13702266888194e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.476e-11, max=4.137e-11)
+
+### syn_s2_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 2.1811775449857685e-12
+- max_abs_error: 1.2328756071600111e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.181e-12, max=1.233e-11)
+
+### syn_s2_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 7.674438675644308e-12
+- max_abs_error: 2.2100571372973832e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=7.674e-12, max=2.210e-11)
+
+### syn_s3_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.942852380619049e-12
+- max_abs_error: 1.806571559015424e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.943e-12, max=1.807e-11)
+
+### syn_s3_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.259019122705983e-12
+- max_abs_error: 1.346791428380456e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.230e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.259e-12, max=1.347e-11)
+
+### syn_s3_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 6.235087113566107e-10
+- max_abs_error: 3.956256433568228e-09
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.235e-10, max=3.956e-09)
+
+### syn_s3_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.132217854086762e-12
+- max_abs_error: 1.9778761961575242e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.132e-12, max=1.978e-11)
+
+### syn_s3_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.5957760739153687e-12
+- max_abs_error: 1.4970455430862728e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.372e-17, max=4.163e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.596e-12, max=1.497e-11)
+
+### syn_s3_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 1.5988683432295862e-11
+- max_abs_error: 6.811781694260333e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.599e-11, max=6.812e-11)
+
+### syn_s4_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.904192450299594e-12
+- max_abs_error: 1.2726195097734205e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.904e-12, max=1.273e-11)
+
+### syn_s4_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.6718587353262616e-12
+- max_abs_error: 1.4658899094577293e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.196e-17, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.672e-12, max=1.466e-11)
+
+### syn_s4_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 8.253346255014417e-12
+- max_abs_error: 3.8687331116449286e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.253e-12, max=3.869e-11)
+
+### syn_s4_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 9.8558100465187e-12
+- max_abs_error: 3.8100606003510507e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.856e-12, max=3.810e-11)
+
+### syn_s4_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.3393520810539296e-12
+- max_abs_error: 1.8488766073687657e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.574e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.339e-12, max=1.849e-11)
+
+### syn_s4_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 4.955104915010818e-12
+- max_abs_error: 2.0234303815813703e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.955e-12, max=2.023e-11)
+
+### syn_s5_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.025550271995807e-12
+- max_abs_error: 1.6264836699697582e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.026e-12, max=1.626e-11)
+
+### syn_s5_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.250069309369596e-12
+- max_abs_error: 2.0441398573822767e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.085e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.250e-12, max=2.044e-11)
+
+### syn_s5_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 6.086484920857933e-12
+- max_abs_error: 3.382964741671657e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.086e-12, max=3.383e-11)
+
+### syn_s5_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 8.339835985986855e-12
+- max_abs_error: 3.5280667276538225e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.340e-12, max=3.528e-11)
+
+### syn_s5_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.848207798073301e-12
+- max_abs_error: 1.6012947912091846e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.556e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.848e-12, max=1.601e-11)
+
+### syn_s5_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.58775491217558e-12
+- max_abs_error: 2.4079668814458444e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.588e-12, max=2.408e-11)
+
+### syn_s6_d2_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.209439779954136e-12
+- max_abs_error: 1.41811909437628e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.209e-12, max=1.418e-11)
+
+### syn_s6_d2_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.938795089356667e-12
+- max_abs_error: 1.4350118315853422e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.726e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.939e-12, max=1.435e-11)
+
+### syn_s6_d2_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 1.2349153362090324e-11
+- max_abs_error: 5.890879450909381e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.235e-11, max=5.891e-11)
+
+### syn_s6_d2_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 1.0196113928861589e-11
+- max_abs_error: 4.531486297310039e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.020e-11, max=4.531e-11)
+
+### syn_s6_d2_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.944681019470921e-12
+- max_abs_error: 2.010470956381738e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.066e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.945e-12, max=2.010e-11)
+
+### syn_s6_d2_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.7333440682245085e-12
+- max_abs_error: 3.106118140472347e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.733e-12, max=3.106e-11)
+
+### syn_s1_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 6.035422133403595e-12
+- max_abs_error: 1.2104352242747751e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.035e-12, max=1.210e-11)
+
+### syn_s1_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.0232082390521767e-12
+- max_abs_error: 1.097005819516994e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.023e-12, max=1.097e-11)
+
+### syn_s1_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 5.758452689219391e-12
+- max_abs_error: 1.220186451877936e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.758e-12, max=1.220e-11)
+
+### syn_s1_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.991726128654598e-12
+- max_abs_error: 1.2273661254003088e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.992e-12, max=1.227e-11)
+
+### syn_s1_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.334258745984307e-11
+- max_abs_error: 9.739964390576006e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.334e-11, max=9.740e-11)
+
+### syn_s1_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 8.66182066954108e-11
+- max_abs_error: 4.3290382389926663e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.662e-11, max=4.329e-10)
+
+### syn_s2_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.9921113167827225e-12
+- max_abs_error: 1.5649467832723474e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.259e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.992e-12, max=1.565e-11)
+
+### syn_s2_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.058351040070271e-12
+- max_abs_error: 1.4094940492537233e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.870e-18, max=1.648e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.058e-12, max=1.409e-11)
+
+### syn_s2_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 4.813972329447681e-12
+- max_abs_error: 2.3247855029939757e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.814e-12, max=2.325e-11)
+
+### syn_s2_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 5.7704885706664056e-11
+- max_abs_error: 4.629394645405682e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.770e-11, max=4.629e-10)
+
+### syn_s2_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 8.863071698665491e-12
+- max_abs_error: 2.8562124887443474e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.863e-12, max=2.856e-11)
+
+### syn_s2_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 4.67359841159353e-11
+- max_abs_error: 2.61466071016514e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.674e-11, max=2.615e-10)
+
+### syn_s3_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 6.1988203277371594e-12
+- max_abs_error: 1.8451580541256618e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=8.955e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.199e-12, max=1.845e-11)
+
+### syn_s3_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.596028278951237e-12
+- max_abs_error: 1.4335525821973505e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.881e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.596e-12, max=1.434e-11)
+
+### syn_s3_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 2.6025044229340336e-12
+- max_abs_error: 1.5987836055053606e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.603e-12, max=1.599e-11)
+
+### syn_s3_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 3.025092121170792e-11
+- max_abs_error: 1.803968086022678e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.025e-11, max=1.804e-10)
+
+### syn_s3_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 6.840148303213614e-12
+- max_abs_error: 2.0022872249114698e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=3.621e-17, max=1.665e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.840e-12, max=2.002e-11)
+
+### syn_s3_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 4.684920449005803e-11
+- max_abs_error: 3.5313182933371934e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.685e-11, max=3.531e-10)
+
+### syn_s4_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.4181495143938125e-12
+- max_abs_error: 1.3408205101761439e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=9.452e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.418e-12, max=1.341e-11)
+
+### syn_s4_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.2299141639889977e-12
+- max_abs_error: 1.6136120217780103e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.503e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.230e-12, max=1.614e-11)
+
+### syn_s4_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 1.941803077699635e-11
+- max_abs_error: 9.735207084915487e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.942e-11, max=9.735e-11)
+
+### syn_s4_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 1.3867451450377655e-11
+- max_abs_error: 4.069422576691295e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.387e-11, max=4.069e-11)
+
+### syn_s4_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 1.14857251532648e-11
+- max_abs_error: 5.8205829045476776e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.107e-17, max=2.220e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.149e-11, max=5.821e-11)
+
+### syn_s4_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 2.973571138889535e-11
+- max_abs_error: 2.11174078224019e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.974e-11, max=2.112e-10)
+
+### syn_s5_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.588993735142404e-12
+- max_abs_error: 1.722558207184477e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.561e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.589e-12, max=1.723e-11)
+
+### syn_s5_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.659615359085008e-12
+- max_abs_error: 1.9529086681124852e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.413e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.660e-12, max=1.953e-11)
+
+### syn_s5_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 3.2806994443241225e-12
+- max_abs_error: 1.8904912357786685e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.281e-12, max=1.890e-11)
+
+### syn_s5_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 8.118333527385544e-12
+- max_abs_error: 4.559330690767638e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.118e-12, max=4.559e-11)
+
+### syn_s5_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 8.999246623458048e-12
+- max_abs_error: 3.384889590840601e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.401e-17, max=1.665e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.999e-12, max=3.385e-11)
+
+### syn_s5_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 1.2408266881216289e-11
+- max_abs_error: 8.833767051186214e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.241e-11, max=8.834e-11)
+
+### syn_s6_d2_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 4.70751175793278e-12
+- max_abs_error: 1.4903654699249813e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.199e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.708e-12, max=1.490e-11)
+
+### syn_s6_d2_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 3.3898422130851997e-12
+- max_abs_error: 1.587706355277163e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.056e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.390e-12, max=1.588e-11)
+
+### syn_s6_d2_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: False
+- rmse: 4.563985476468447e-12
+- max_abs_error: 2.3533716642099023e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.564e-12, max=2.353e-11)
+
+### syn_s6_d2_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 8.580237809794086e-12
+- max_abs_error: 4.879177617489461e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.580e-12, max=4.879e-11)
+
+### syn_s6_d2_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 2
+- nonlinear: False
+- trig: False
+- rmse: 8.066335519967245e-12
+- max_abs_error: 3.785416424761934e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.770e-17, max=2.220e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.066e-12, max=3.785e-11)
+
+### syn_s6_d2_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 2
+- depth: 2
+- nonlinear: True
+- trig: True
+- rmse: 8.387265884985928e-12
+- max_abs_error: 4.3378522995851654e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d2_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.387e-12, max=4.338e-11)
+
+### syn_s1_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.2330981397272516e-12
+- max_abs_error: 1.167171914673304e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.233e-12, max=1.167e-11)
+
+### syn_s1_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.8537409923216954e-12
+- max_abs_error: 1.1940344546435e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.854e-12, max=1.194e-11)
+
+### syn_s1_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 4.2513414488358366e-12
+- max_abs_error: 1.2234976920488805e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.251e-12, max=1.223e-11)
+
+### syn_s1_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.0591388460523082e-11
+- max_abs_error: 3.4968944406799096e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.059e-11, max=3.497e-11)
+
+### syn_s1_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 6.129864008074764e-12
+- max_abs_error: 1.8989837480276606e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=8.372e-18, max=5.551e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.130e-12, max=1.899e-11)
+
+### syn_s1_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 7.890608957670556e-12
+- max_abs_error: 2.0939500133820843e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=7.891e-12, max=2.094e-11)
+
+### syn_s2_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.414089065885563e-12
+- max_abs_error: 1.497177382070447e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.414e-12, max=1.497e-11)
+
+### syn_s2_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.980428265147511e-12
+- max_abs_error: 1.5286119592339276e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.980e-12, max=1.529e-11)
+
+### syn_s2_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 4.143035880178591e-12
+- max_abs_error: 1.9816558116669825e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.143e-12, max=1.982e-11)
+
+### syn_s2_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.3783497566538448e-11
+- max_abs_error: 3.552752536606363e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.378e-11, max=3.553e-11)
+
+### syn_s2_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 2.2236010140541877e-12
+- max_abs_error: 6.788722362038868e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=9.009e-18, max=4.163e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.224e-12, max=6.789e-12)
+
+### syn_s2_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.6810635919335912e-11
+- max_abs_error: 6.805711549873195e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.681e-11, max=6.806e-11)
+
+### syn_s3_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.8787910551723275e-12
+- max_abs_error: 1.6886554654593766e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.879e-12, max=1.689e-11)
+
+### syn_s3_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.170343668767836e-12
+- max_abs_error: 1.7638654425944367e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.125e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.170e-12, max=1.764e-11)
+
+### syn_s3_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 1.3210835828065133e-11
+- max_abs_error: 4.705941192284513e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.321e-11, max=4.706e-11)
+
+### syn_s3_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.127157196000592e-11
+- max_abs_error: 6.167655275390871e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.127e-11, max=6.168e-11)
+
+### syn_s3_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 2.097145526816172e-12
+- max_abs_error: 6.176857636486233e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.291e-17, max=4.163e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.097e-12, max=6.177e-12)
+
+### syn_s3_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 3.8072745334558825e-12
+- max_abs_error: 1.8471779661410892e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.807e-12, max=1.847e-11)
+
+### syn_s4_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.810810305507336e-12
+- max_abs_error: 1.2649485625626511e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.811e-12, max=1.265e-11)
+
+### syn_s4_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 2.9854403332089174e-12
+- max_abs_error: 1.254710224607436e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.668e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.985e-12, max=1.255e-11)
+
+### syn_s4_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 8.402611272365109e-12
+- max_abs_error: 3.939068515812494e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.403e-12, max=3.939e-11)
+
+### syn_s4_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 2.2172386521322193e-11
+- max_abs_error: 5.599359864660869e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.217e-11, max=5.599e-11)
+
+### syn_s4_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 2.6034008526144227e-12
+- max_abs_error: 7.456937844985134e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.195e-17, max=4.163e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.603e-12, max=7.457e-12)
+
+### syn_s4_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 4.961978328146726e-12
+- max_abs_error: 2.2461282833674545e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.962e-12, max=2.246e-11)
+
+### syn_s5_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.938963415449517e-12
+- max_abs_error: 1.7358926795996155e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.939e-12, max=1.736e-11)
+
+### syn_s5_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 5.7892127966383264e-12
+- max_abs_error: 2.9612562402192566e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.557e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.789e-12, max=2.961e-11)
+
+### syn_s5_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 2.3062111095706758e-11
+- max_abs_error: 8.860778777375344e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.306e-11, max=8.861e-11)
+
+### syn_s5_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 6.5065200328268884e-12
+- max_abs_error: 2.086020245428699e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.507e-12, max=2.086e-11)
+
+### syn_s5_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.404398443161114e-12
+- max_abs_error: 2.1246129855434503e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.148e-17, max=5.551e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.404e-12, max=2.125e-11)
+
+### syn_s5_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 2.6252084858108235e-12
+- max_abs_error: 1.1195717963818907e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.625e-12, max=1.120e-11)
+
+### syn_s6_d3_u0_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 4.108528620481354e-12
+- max_abs_error: 1.4117526592194451e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.109e-12, max=1.412e-11)
+
+### syn_s6_d3_u0_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.319541589201766e-12
+- max_abs_error: 1.3398650244855759e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.160e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.320e-12, max=1.340e-11)
+
+### syn_s6_d3_u0_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 2.471474446800361e-11
+- max_abs_error: 1.3222362094111872e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.471e-11, max=1.322e-10)
+
+### syn_s6_d3_u0_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 6.818088996915987e-12
+- max_abs_error: 3.388124503178602e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.818e-12, max=3.388e-11)
+
+### syn_s6_d3_u0_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 2.1010115361882283e-12
+- max_abs_error: 7.941536317446207e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.946e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.101e-12, max=7.942e-12)
+
+### syn_s6_d3_u0_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 8.83251439327038e-12
+- max_abs_error: 3.047076480022781e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u0_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.833e-12, max=3.047e-11)
+
+### syn_s1_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.1771790428768213e-12
+- max_abs_error: 1.1837225644129035e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.177e-12, max=1.184e-11)
+
+### syn_s1_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 5.182738130805927e-12
+- max_abs_error: 1.2348580491483574e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=0.000e+00, max=0.000e+00)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.183e-12, max=1.235e-11)
+
+### syn_s1_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 1.36662187108208e-11
+- max_abs_error: 3.800915138185701e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.367e-11, max=3.801e-11)
+
+### syn_s1_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 1
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 3.2615790637618925e-12
+- max_abs_error: 9.900927300243723e-12
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.262e-12, max=9.901e-12)
+
+### syn_s1_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 6.889940323021919e-11
+- max_abs_error: 2.7915836309233555e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.157e-17, max=3.331e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.890e-11, max=2.792e-10)
+
+### syn_s1_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 1
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 9.678862420378731e-11
+- max_abs_error: 4.5557002614771136e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s1_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.679e-11, max=4.556e-10)
+
+### syn_s2_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.80155941946371e-12
+- max_abs_error: 1.3897667738849151e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.085e-17, max=2.429e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.802e-12, max=1.390e-11)
+
+### syn_s2_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 5.3444717786159e-12
+- max_abs_error: 1.601625776448401e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.141e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.344e-12, max=1.602e-11)
+
+### syn_s2_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 2.9794864100614965e-11
+- max_abs_error: 1.5280857135202552e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.979e-11, max=1.528e-10)
+
+### syn_s2_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 2
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.096300759863536e-11
+- max_abs_error: 2.388869657643511e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.096e-11, max=2.389e-11)
+
+### syn_s2_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 9.009729351704517e-12
+- max_abs_error: 2.728051118339181e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.311e-17, max=8.327e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.010e-12, max=2.728e-11)
+
+### syn_s2_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 2
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.0993005448313413e-11
+- max_abs_error: 4.1278314100168245e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.479e-19, max=6.939e-18)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s2_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.099e-11, max=4.128e-11)
+
+### syn_s3_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.871732149055356e-12
+- max_abs_error: 1.7886692127433435e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=3.749e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.872e-12, max=1.789e-11)
+
+### syn_s3_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 6.5906870791275464e-12
+- max_abs_error: 2.006450561253814e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=1.041e-17, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.591e-12, max=2.006e-11)
+
+### syn_s3_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 3.9151804742651705e-12
+- max_abs_error: 1.8426996040155075e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.915e-12, max=1.843e-11)
+
+### syn_s3_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 3
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 3.818985828162257e-12
+- max_abs_error: 1.7656459627701793e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.819e-12, max=1.766e-11)
+
+### syn_s3_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 6.096110108056902e-12
+- max_abs_error: 3.011613181058692e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.523e-17, max=1.110e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.096e-12, max=3.012e-11)
+
+### syn_s3_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 3
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 4.8159492239598664e-11
+- max_abs_error: 2.208510041512568e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s3_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=4.816e-11, max=2.209e-10)
+
+### syn_s4_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.2221277747396207e-12
+- max_abs_error: 1.1850791181711173e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.843e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.222e-12, max=1.185e-11)
+
+### syn_s4_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.688278625112021e-12
+- max_abs_error: 1.37375666398043e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=5.808e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.688e-12, max=1.374e-11)
+
+### syn_s4_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 2.0248006798965095e-11
+- max_abs_error: 5.7979010481545856e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=2.025e-11, max=5.798e-11)
+
+### syn_s4_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 4
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 5.6098751979067964e-12
+- max_abs_error: 2.942199262001566e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.610e-12, max=2.942e-11)
+
+### syn_s4_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 1.3433906605579684e-11
+- max_abs_error: 7.711831173651262e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=6.135e-17, max=3.331e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.343e-11, max=7.712e-11)
+
+### syn_s4_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 4
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 3.1218290081753864e-11
+- max_abs_error: 2.084222794351831e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s4_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.122e-11, max=2.084e-10)
+
+### syn_s5_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.2702870555791653e-12
+- max_abs_error: 1.710741270866123e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.981e-18, max=1.561e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.270e-12, max=1.711e-11)
+
+### syn_s5_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 5.635847979080629e-12
+- max_abs_error: 2.2854718118026085e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.926e-18, max=2.776e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.636e-12, max=2.285e-11)
+
+### syn_s5_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 8.595733839411989e-12
+- max_abs_error: 4.038860912380926e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=8.596e-12, max=4.039e-11)
+
+### syn_s5_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 5
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 3.187737199636832e-11
+- max_abs_error: 1.2391554449209252e-10
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.188e-11, max=1.239e-10)
+
+### syn_s5_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 6.013753458571118e-12
+- max_abs_error: 2.5373952938778643e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=2.356e-17, max=1.110e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=6.014e-12, max=2.537e-11)
+
+### syn_s5_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 5
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 9.877042005104434e-12
+- max_abs_error: 3.496200551289519e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s5_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=9.877e-12, max=3.496e-11)
+
+### syn_s6_d3_u1_f0
+- family: linear_first_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.3811348644717204e-12
+- max_abs_error: 1.3015095945423383e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=4.933e-18, max=1.388e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f0_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.381e-12, max=1.302e-11)
+
+### syn_s6_d3_u1_f1
+- family: linear_dense_coupled
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 3.813715211877951e-12
+- max_abs_error: 1.2805180527042381e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=7.825e-18, max=2.082e-17)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f1_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.814e-12, max=1.281e-11)
+
+### syn_s6_d3_u1_f2
+- family: nonlinear_polynomial
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: False
+- rmse: 3.0111726221674822e-12
+- max_abs_error: 2.073489296927633e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f2_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=3.011e-12, max=2.073e-11)
+
+### syn_s6_d3_u1_f3
+- family: nonlinear_trigonometric
+- overall_pass: True
+- generated_state_count: 6
+- order: 1
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.3824665267706832e-11
+- max_abs_error: 9.090284081025857e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f3_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.382e-11, max=9.090e-11)
+
+### syn_s6_d3_u1_f4
+- family: linear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 3
+- depth: 3
+- nonlinear: False
+- trig: False
+- rmse: 5.762666887959601e-12
+- max_abs_error: 2.8437141530446297e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: passed
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: passed
+- state_space_compare: passed (rmse=3.672e-17, max=3.331e-16)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f4_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=5.763e-12, max=2.844e-11)
+
+### syn_s6_d3_u1_f5
+- family: nonlinear_mixed_order
+- overall_pass: True
+- generated_state_count: 6
+- order: 3
+- depth: 3
+- nonlinear: True
+- trig: True
+- rmse: 1.4347835825438869e-11
+- max_abs_error: 6.111866568403457e-11
+- parse: passed
+- state_extraction: passed
+- solve: passed
+- first_order: passed
+- state_space: skipped (nonlinear explicit system)
+- graph_lowering: passed
+- graph_validation: passed
+- ode_simulation: passed
+- state_space_simulation: skipped (state-space unavailable)
+- state_space_compare: skipped (state-space unavailable)
+- simulink_build: passed (/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/synthetic_benchmark_models/syn_s6_d3_u1_f5_simulink.slx)
+- simulink_simulation: passed
+- simulink_compare: passed (rmse=1.435e-11, max=6.112e-11)

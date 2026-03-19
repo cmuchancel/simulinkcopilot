@@ -1,0 +1,423 @@
+{
+  "source_path": "/Users/chancelavoie/Desktop/simulinkcopilot/examples/driven_oscillator.tex",
+  "equations": [
+    "D1_x = v",
+    "D1_v = u - w_0**2*x"
+  ],
+  "equation_dicts": [
+    {
+      "op": "equation",
+      "lhs": {
+        "op": "derivative",
+        "base": "x",
+        "order": 1
+      },
+      "rhs": {
+        "op": "symbol",
+        "name": "v"
+      }
+    },
+    {
+      "op": "equation",
+      "lhs": {
+        "op": "derivative",
+        "base": "v",
+        "order": 1
+      },
+      "rhs": {
+        "op": "add",
+        "args": [
+          {
+            "op": "mul",
+            "args": [
+              {
+                "op": "neg",
+                "args": [
+                  {
+                    "op": "pow",
+                    "args": [
+                      {
+                        "op": "symbol",
+                        "name": "w_0"
+                      },
+                      {
+                        "op": "const",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "symbol",
+                "name": "x"
+              }
+            ]
+          },
+          {
+            "op": "symbol",
+            "name": "u"
+          }
+        ]
+      }
+    }
+  ],
+  "extraction": {
+    "states": [
+      "v",
+      "x"
+    ],
+    "inputs": [
+      "u"
+    ],
+    "parameters": [
+      "w_0"
+    ],
+    "derivative_orders": {
+      "v": 1,
+      "x": 1
+    },
+    "symbol_metadata": {
+      "u": {
+        "name": "u",
+        "role": "input",
+        "source": "inferred"
+      },
+      "v": {
+        "name": "v",
+        "role": "state_candidate",
+        "source": "inferred"
+      },
+      "w_0": {
+        "name": "w_0",
+        "role": "parameter",
+        "source": "inferred"
+      },
+      "x": {
+        "name": "x",
+        "role": "state_candidate",
+        "source": "inferred"
+      }
+    }
+  },
+  "solved_derivatives": [
+    {
+      "base": "v",
+      "order": 1,
+      "equation": {
+        "op": "equation",
+        "lhs": {
+          "op": "derivative",
+          "base": "v",
+          "order": 1
+        },
+        "rhs": {
+          "op": "add",
+          "args": [
+            {
+              "op": "symbol",
+              "name": "u"
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "const",
+                  "value": -1
+                },
+                {
+                  "op": "pow",
+                  "args": [
+                    {
+                      "op": "symbol",
+                      "name": "w_0"
+                    },
+                    {
+                      "op": "const",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "op": "symbol",
+                  "name": "x"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "base": "x",
+      "order": 1,
+      "equation": {
+        "op": "equation",
+        "lhs": {
+          "op": "derivative",
+          "base": "x",
+          "order": 1
+        },
+        "rhs": {
+          "op": "symbol",
+          "name": "v"
+        }
+      }
+    }
+  ],
+  "first_order": {
+    "states": [
+      "v",
+      "x"
+    ],
+    "inputs": [
+      "u"
+    ],
+    "parameters": [
+      "w_0"
+    ],
+    "state_equations": [
+      {
+        "state": "v",
+        "rhs": {
+          "op": "add",
+          "args": [
+            {
+              "op": "symbol",
+              "name": "u"
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "const",
+                  "value": -1
+                },
+                {
+                  "op": "pow",
+                  "args": [
+                    {
+                      "op": "symbol",
+                      "name": "w_0"
+                    },
+                    {
+                      "op": "const",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "op": "symbol",
+                  "name": "x"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "state": "x",
+        "rhs": {
+          "op": "symbol",
+          "name": "v"
+        }
+      }
+    ]
+  },
+  "explicit_form": {
+    "form": "explicit_first_order",
+    "rhs": {
+      "v": "u - w_0**2*x",
+      "x": "v"
+    }
+  },
+  "linearity": {
+    "is_linear": true,
+    "offending_entries": []
+  },
+  "state_space": {
+    "states": [
+      "v",
+      "x"
+    ],
+    "inputs": [
+      "u"
+    ],
+    "parameters": [
+      "w_0"
+    ],
+    "A": [
+      [
+        {
+          "op": "const",
+          "value": 0
+        },
+        {
+          "op": "neg",
+          "args": [
+            {
+              "op": "pow",
+              "args": [
+                {
+                  "op": "symbol",
+                  "name": "w_0"
+                },
+                {
+                  "op": "const",
+                  "value": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "op": "const",
+          "value": 1
+        },
+        {
+          "op": "const",
+          "value": 0
+        }
+      ]
+    ],
+    "B": [
+      [
+        {
+          "op": "const",
+          "value": 1
+        }
+      ],
+      [
+        {
+          "op": "const",
+          "value": 0
+        }
+      ]
+    ],
+    "C": [
+      [
+        {
+          "op": "const",
+          "value": 1
+        },
+        {
+          "op": "const",
+          "value": 0
+        }
+      ],
+      [
+        {
+          "op": "const",
+          "value": 0
+        },
+        {
+          "op": "const",
+          "value": 1
+        }
+      ]
+    ],
+    "D": [
+      [
+        {
+          "op": "const",
+          "value": 0
+        }
+      ],
+      [
+        {
+          "op": "const",
+          "value": 0
+        }
+      ]
+    ],
+    "offset": [
+      [
+        {
+          "op": "const",
+          "value": 0
+        }
+      ],
+      [
+        {
+          "op": "const",
+          "value": 0
+        }
+      ]
+    ]
+  },
+  "graph": {
+    "node_count": 11,
+    "edge_count": 11,
+    "ops": [
+      "add",
+      "constant",
+      "integrator",
+      "mul",
+      "pow",
+      "state_signal",
+      "symbol_input"
+    ]
+  },
+  "comparison": {
+    "rmse": 0.0,
+    "max_abs_error": 0.0,
+    "per_state_rmse": {
+      "v": 0.0,
+      "x": 0.0
+    },
+    "per_state_max_abs_error": {
+      "v": 0.0,
+      "x": 0.0
+    },
+    "tolerance": 1e-06,
+    "passes": true
+  },
+  "simulink": {
+    "enabled": true,
+    "model_name": "driven_oscillator_simulink",
+    "model_file": "/Users/chancelavoie/Desktop/simulinkcopilot/generated_models/backend_models/driven_oscillator_simulink.slx",
+    "validation": {
+      "vs_ode": {
+        "rmse": 5.924335494655627e-10,
+        "max_abs_error": 1.5526500085627504e-09,
+        "per_state_rmse": {
+          "v": 6.696343466380684e-10,
+          "x": 5.035323851226829e-10
+        },
+        "per_state_max_abs_error": {
+          "v": 1.5526500085627504e-09,
+          "x": 1.0783287821697352e-09
+        },
+        "tolerance": 1e-06,
+        "passes": true
+      },
+      "vs_state_space": {
+        "rmse": 5.924335494655627e-10,
+        "max_abs_error": 1.5526500085627504e-09,
+        "per_state_rmse": {
+          "v": 6.696343466380684e-10,
+          "x": 5.035323851226829e-10
+        },
+        "per_state_max_abs_error": {
+          "v": 1.5526500085627504e-09,
+          "x": 1.0783287821697352e-09
+        },
+        "tolerance": 1e-06,
+        "passes": true
+      },
+      "passes": true
+    }
+  },
+  "runtime": {
+    "parameter_values": {
+      "w_0": 1.4
+    },
+    "initial_conditions": {
+      "v": 0.0,
+      "x": 0.0
+    },
+    "expected_linear": true
+  }
+}

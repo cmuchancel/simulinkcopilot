@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections import Counter
 import unittest
 
-from canonicalize.first_order import build_first_order_system
-from backend.graph_to_simulink import graph_to_simulink_model
-from ir.graph_lowering import lower_first_order_system_graph
-from latex_frontend.translator import translate_latex
-from states.extract_states import extract_states
+from canonicalize_v2.first_order import build_first_order_system
+from backend_v2.graph_to_simulink import graph_to_simulink_model
+from ir_v2.graph_lowering import lower_first_order_system_graph
+from latex_frontend_v2.translator import translate_latex
+from states_v2.extract_states import extract_states
 
 
 class GraphToSimulinkTests(unittest.TestCase):
@@ -22,8 +22,13 @@ class GraphToSimulinkTests(unittest.TestCase):
         )
         block_types = {spec["type"] for spec in model["blocks"].values()}
         self.assertIn("Integrator", block_types)
+        self.assertIn("Subsystem", block_types)
         self.assertIn("Outport", block_types)
         self.assertEqual([entry["name"] for entry in model["outputs"]], ["x", "x_dot"])
+        self.assertEqual(
+            [block_id for block_id, spec in model["blocks"].items() if spec["type"] == "Subsystem"],
+            ["subsystem_x"],
+        )
 
     def test_pow_parameter_subtree_is_constant_folded(self) -> None:
         first_order = build_first_order_system(translate_latex(r"\dot{x}=-w_0^2x+u"))
@@ -64,6 +69,9 @@ class GraphToSimulinkTests(unittest.TestCase):
         )
         block_types = {spec["type"] for spec in model["blocks"].values()}
         self.assertIn("TrigonometricFunction", block_types)
+        labels = {connection["label"] for connection in model["connections"] if connection.get("label")}
+        self.assertIn("q", labels)
+        self.assertTrue(any("sin" in label for label in labels))
 
     def test_exp_log_and_sec_graph_map_to_backend_blocks(self) -> None:
         equations = translate_latex(r"\dot{x}=\exp(-ax)+u+\ln(b)+\sec(x)")
@@ -102,9 +110,54 @@ class GraphToSimulinkTests(unittest.TestCase):
             state_names=first_order["states"],
             parameter_values={"a": 0.2},
         )
-        destination_counts = Counter((dst, dport) for _, _, dst, dport in model["connections"])
+        destination_counts = Counter(
+            (connection["system"], connection["dst_block"], connection["dst_port"])
+            for connection in model["connections"]
+        )
         duplicates = {key: count for key, count in destination_counts.items() if count > 1}
         self.assertFalse(duplicates)
+
+    def test_coupled_trig_difference_reuses_shared_expression_at_root(self) -> None:
+        first_order = build_first_order_system(
+            translate_latex(
+                r"\dot{\theta_1}=\omega_1"
+                "\n"
+                r"\dot{\omega_1}=-\sin(\theta_1-\theta_2)"
+                "\n"
+                r"\dot{\theta_2}=\omega_2"
+                "\n"
+                r"\dot{\omega_2}=\sin(\theta_1-\theta_2)"
+            )
+        )
+        graph = lower_first_order_system_graph(first_order, name="coupled_trig_difference")
+        model = graph_to_simulink_model(graph, state_names=first_order["states"])
+        trig_blocks = [
+            spec
+            for spec in model["blocks"].values()
+            if spec["type"] == "TrigonometricFunction"
+        ]
+        self.assertEqual(len(trig_blocks), 1)
+        self.assertEqual(trig_blocks[0]["system"], "root")
+
+    def test_group_subsystems_and_traceability_are_present(self) -> None:
+        first_order = build_first_order_system(translate_latex(r"m_1\ddot{x}_1+c_1\dot{x}_1+k_1 x_1=u"))
+        graph = lower_first_order_system_graph(first_order, name="single_group")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+            parameter_values={"m_1": 1.0, "c_1": 0.2, "k_1": 2.0},
+            input_values={"u": 1.0},
+        )
+        self.assertIn("subsystem_x_1", model["blocks"])
+        self.assertEqual(model["blocks"]["subsystem_x_1"]["type"], "Subsystem")
+        internal_integrators = [
+            spec
+            for spec in model["blocks"].values()
+            if spec["system"] == "subsystem_x_1" and spec["type"] == "Integrator"
+        ]
+        self.assertEqual(len(internal_integrators), 2)
+        labels = [connection["label"] for connection in model["connections"] if connection.get("label")]
+        self.assertTrue(any("x_1" in label for label in labels))
 
 
 if __name__ == "__main__":

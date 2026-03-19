@@ -1,0 +1,696 @@
+{
+  "kind": "first_order_system_graph",
+  "name": "three_mass_coupled",
+  "nodes": [
+    {
+      "id": "const_2",
+      "op": "constant",
+      "inputs": [],
+      "value": 2
+    },
+    {
+      "id": "const__1",
+      "op": "constant",
+      "inputs": [],
+      "value": -1
+    },
+    {
+      "id": "expr_0001",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "symbol_c",
+        "state_x_1_dot"
+      ]
+    },
+    {
+      "id": "expr_0002",
+      "op": "gain",
+      "inputs": [
+        "symbol_c",
+        "state_x_2_dot"
+      ]
+    },
+    {
+      "id": "expr_0003",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "symbol_k",
+        "state_x_1"
+      ]
+    },
+    {
+      "id": "expr_0004",
+      "op": "gain",
+      "inputs": [
+        "symbol_k",
+        "state_x_2"
+      ]
+    },
+    {
+      "id": "expr_0005",
+      "op": "sum",
+      "inputs": [
+        "expr_0001",
+        "expr_0002",
+        "expr_0003",
+        "expr_0004",
+        "symbol_u"
+      ]
+    },
+    {
+      "id": "expr_0006",
+      "op": "div",
+      "inputs": [
+        "expr_0005",
+        "symbol_m_1"
+      ]
+    },
+    {
+      "id": "expr_0007",
+      "op": "gain",
+      "inputs": [
+        "symbol_c",
+        "state_x_1_dot"
+      ]
+    },
+    {
+      "id": "expr_0008",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "const_2",
+        "symbol_c",
+        "state_x_2_dot"
+      ]
+    },
+    {
+      "id": "expr_0009",
+      "op": "gain",
+      "inputs": [
+        "symbol_c",
+        "state_x_3_dot"
+      ]
+    },
+    {
+      "id": "expr_0010",
+      "op": "gain",
+      "inputs": [
+        "symbol_k",
+        "state_x_1"
+      ]
+    },
+    {
+      "id": "expr_0011",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "const_2",
+        "symbol_k",
+        "state_x_2"
+      ]
+    },
+    {
+      "id": "expr_0012",
+      "op": "gain",
+      "inputs": [
+        "symbol_k",
+        "state_x_3"
+      ]
+    },
+    {
+      "id": "expr_0013",
+      "op": "sum",
+      "inputs": [
+        "expr_0007",
+        "expr_0008",
+        "expr_0009",
+        "expr_0010",
+        "expr_0011",
+        "expr_0012"
+      ]
+    },
+    {
+      "id": "expr_0014",
+      "op": "div",
+      "inputs": [
+        "expr_0013",
+        "symbol_m_2"
+      ]
+    },
+    {
+      "id": "expr_0015",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "symbol_c",
+        "state_x_3_dot"
+      ]
+    },
+    {
+      "id": "expr_0016",
+      "op": "mul",
+      "inputs": [
+        "const__1",
+        "symbol_k",
+        "state_x_3"
+      ]
+    },
+    {
+      "id": "expr_0017",
+      "op": "sum",
+      "inputs": [
+        "expr_0002",
+        "expr_0015",
+        "expr_0004",
+        "expr_0016"
+      ]
+    },
+    {
+      "id": "expr_0018",
+      "op": "div",
+      "inputs": [
+        "expr_0017",
+        "symbol_m_3"
+      ]
+    },
+    {
+      "id": "integrator_x_1",
+      "op": "integrator",
+      "inputs": [
+        "state_x_1_dot"
+      ],
+      "state": "x_1"
+    },
+    {
+      "id": "integrator_x_1_dot",
+      "op": "integrator",
+      "inputs": [
+        "expr_0006"
+      ],
+      "state": "x_1_dot"
+    },
+    {
+      "id": "integrator_x_2",
+      "op": "integrator",
+      "inputs": [
+        "state_x_2_dot"
+      ],
+      "state": "x_2"
+    },
+    {
+      "id": "integrator_x_2_dot",
+      "op": "integrator",
+      "inputs": [
+        "expr_0014"
+      ],
+      "state": "x_2_dot"
+    },
+    {
+      "id": "integrator_x_3",
+      "op": "integrator",
+      "inputs": [
+        "state_x_3_dot"
+      ],
+      "state": "x_3"
+    },
+    {
+      "id": "integrator_x_3_dot",
+      "op": "integrator",
+      "inputs": [
+        "expr_0018"
+      ],
+      "state": "x_3_dot"
+    },
+    {
+      "id": "state_x_1",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_1"
+      ],
+      "state": "x_1"
+    },
+    {
+      "id": "state_x_1_dot",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_1_dot"
+      ],
+      "state": "x_1_dot"
+    },
+    {
+      "id": "state_x_2",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_2"
+      ],
+      "state": "x_2"
+    },
+    {
+      "id": "state_x_2_dot",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_2_dot"
+      ],
+      "state": "x_2_dot"
+    },
+    {
+      "id": "state_x_3",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_3"
+      ],
+      "state": "x_3"
+    },
+    {
+      "id": "state_x_3_dot",
+      "op": "state_signal",
+      "inputs": [
+        "integrator_x_3_dot"
+      ],
+      "state": "x_3_dot"
+    },
+    {
+      "id": "symbol_c",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "c",
+      "symbol_role": "parameter"
+    },
+    {
+      "id": "symbol_k",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "k",
+      "symbol_role": "parameter"
+    },
+    {
+      "id": "symbol_m_1",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "m_1",
+      "symbol_role": "parameter"
+    },
+    {
+      "id": "symbol_m_2",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "m_2",
+      "symbol_role": "parameter"
+    },
+    {
+      "id": "symbol_m_3",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "m_3",
+      "symbol_role": "parameter"
+    },
+    {
+      "id": "symbol_u",
+      "op": "symbol_input",
+      "inputs": [],
+      "name": "u",
+      "symbol_role": "input"
+    }
+  ],
+  "edges": [
+    {
+      "src": "const_2",
+      "dst": "expr_0008",
+      "dst_port": 1
+    },
+    {
+      "src": "const_2",
+      "dst": "expr_0011",
+      "dst_port": 1
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0001",
+      "dst_port": 0
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0003",
+      "dst_port": 0
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0008",
+      "dst_port": 0
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0011",
+      "dst_port": 0
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0015",
+      "dst_port": 0
+    },
+    {
+      "src": "const__1",
+      "dst": "expr_0016",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0001",
+      "dst": "expr_0005",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0002",
+      "dst": "expr_0005",
+      "dst_port": 1
+    },
+    {
+      "src": "expr_0002",
+      "dst": "expr_0017",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0003",
+      "dst": "expr_0005",
+      "dst_port": 2
+    },
+    {
+      "src": "expr_0004",
+      "dst": "expr_0005",
+      "dst_port": 3
+    },
+    {
+      "src": "expr_0004",
+      "dst": "expr_0017",
+      "dst_port": 2
+    },
+    {
+      "src": "expr_0005",
+      "dst": "expr_0006",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0006",
+      "dst": "integrator_x_1_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0007",
+      "dst": "expr_0013",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0008",
+      "dst": "expr_0013",
+      "dst_port": 1
+    },
+    {
+      "src": "expr_0009",
+      "dst": "expr_0013",
+      "dst_port": 2
+    },
+    {
+      "src": "expr_0010",
+      "dst": "expr_0013",
+      "dst_port": 3
+    },
+    {
+      "src": "expr_0011",
+      "dst": "expr_0013",
+      "dst_port": 4
+    },
+    {
+      "src": "expr_0012",
+      "dst": "expr_0013",
+      "dst_port": 5
+    },
+    {
+      "src": "expr_0013",
+      "dst": "expr_0014",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0014",
+      "dst": "integrator_x_2_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0015",
+      "dst": "expr_0017",
+      "dst_port": 1
+    },
+    {
+      "src": "expr_0016",
+      "dst": "expr_0017",
+      "dst_port": 3
+    },
+    {
+      "src": "expr_0017",
+      "dst": "expr_0018",
+      "dst_port": 0
+    },
+    {
+      "src": "expr_0018",
+      "dst": "integrator_x_3_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_1",
+      "dst": "state_x_1",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_1_dot",
+      "dst": "state_x_1_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_2",
+      "dst": "state_x_2",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_2_dot",
+      "dst": "state_x_2_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_3",
+      "dst": "state_x_3",
+      "dst_port": 0
+    },
+    {
+      "src": "integrator_x_3_dot",
+      "dst": "state_x_3_dot",
+      "dst_port": 0
+    },
+    {
+      "src": "state_x_1",
+      "dst": "expr_0003",
+      "dst_port": 2
+    },
+    {
+      "src": "state_x_1",
+      "dst": "expr_0010",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_1_dot",
+      "dst": "expr_0001",
+      "dst_port": 2
+    },
+    {
+      "src": "state_x_1_dot",
+      "dst": "expr_0007",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_1_dot",
+      "dst": "integrator_x_1",
+      "dst_port": 0
+    },
+    {
+      "src": "state_x_2",
+      "dst": "expr_0004",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_2",
+      "dst": "expr_0011",
+      "dst_port": 3
+    },
+    {
+      "src": "state_x_2_dot",
+      "dst": "expr_0002",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_2_dot",
+      "dst": "expr_0008",
+      "dst_port": 3
+    },
+    {
+      "src": "state_x_2_dot",
+      "dst": "integrator_x_2",
+      "dst_port": 0
+    },
+    {
+      "src": "state_x_3",
+      "dst": "expr_0012",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_3",
+      "dst": "expr_0016",
+      "dst_port": 2
+    },
+    {
+      "src": "state_x_3_dot",
+      "dst": "expr_0009",
+      "dst_port": 1
+    },
+    {
+      "src": "state_x_3_dot",
+      "dst": "expr_0015",
+      "dst_port": 2
+    },
+    {
+      "src": "state_x_3_dot",
+      "dst": "integrator_x_3",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0001",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0002",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0007",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0008",
+      "dst_port": 2
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0009",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_c",
+      "dst": "expr_0015",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0003",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0004",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0010",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0011",
+      "dst_port": 2
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0012",
+      "dst_port": 0
+    },
+    {
+      "src": "symbol_k",
+      "dst": "expr_0016",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_m_1",
+      "dst": "expr_0006",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_m_2",
+      "dst": "expr_0014",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_m_3",
+      "dst": "expr_0018",
+      "dst_port": 1
+    },
+    {
+      "src": "symbol_u",
+      "dst": "expr_0005",
+      "dst_port": 4
+    }
+  ],
+  "outputs": {
+    "rhs_x_1": "state_x_1_dot",
+    "rhs_x_1_dot": "expr_0006",
+    "rhs_x_2": "state_x_2_dot",
+    "rhs_x_2_dot": "expr_0014",
+    "rhs_x_3": "state_x_3_dot",
+    "rhs_x_3_dot": "expr_0018",
+    "x_1": "state_x_1",
+    "x_1_dot": "state_x_1_dot",
+    "x_2": "state_x_2",
+    "x_2_dot": "state_x_2_dot",
+    "x_3": "state_x_3",
+    "x_3_dot": "state_x_3_dot"
+  },
+  "state_chains": [
+    {
+      "state": "x_1",
+      "signal": "state_x_1",
+      "integrator": "integrator_x_1",
+      "rhs": "state_x_1_dot"
+    },
+    {
+      "state": "x_1_dot",
+      "signal": "state_x_1_dot",
+      "integrator": "integrator_x_1_dot",
+      "rhs": "expr_0006"
+    },
+    {
+      "state": "x_2",
+      "signal": "state_x_2",
+      "integrator": "integrator_x_2",
+      "rhs": "state_x_2_dot"
+    },
+    {
+      "state": "x_2_dot",
+      "signal": "state_x_2_dot",
+      "integrator": "integrator_x_2_dot",
+      "rhs": "expr_0014"
+    },
+    {
+      "state": "x_3",
+      "signal": "state_x_3",
+      "integrator": "integrator_x_3",
+      "rhs": "state_x_3_dot"
+    },
+    {
+      "state": "x_3_dot",
+      "signal": "state_x_3_dot",
+      "integrator": "integrator_x_3_dot",
+      "rhs": "expr_0018"
+    }
+  ]
+}

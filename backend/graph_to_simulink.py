@@ -347,10 +347,10 @@ class GraphToSimulinkLowerer:
                 self.node_source_cache[node_id] = source
                 return source
             if math.isclose(exponent_value, rounded, rel_tol=0.0, abs_tol=1e-12):
-                base_source = self.materialize(base_id)
                 power_source: tuple[str, str]
                 magnitude = abs(rounded)
                 if magnitude == 1:
+                    base_source = self.materialize(base_id)
                     power_source = base_source
                 else:
                     block_name = self.add_block(
@@ -359,6 +359,9 @@ class GraphToSimulinkLowerer:
                         {"Inputs": "*" * magnitude},
                     )
                     power_source = (block_name, "1")
+                    # Cache before wiring to avoid duplicate connections on self-referential state paths.
+                    self.node_source_cache[node_id] = power_source
+                    base_source = self.materialize(base_id)
                     for index in range(1, magnitude + 1):
                         self.add_connection(base_source, block_name, index)
                 if rounded > 0:

@@ -1,0 +1,40 @@
+{
+  "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum",
+  "files": {
+    "comparison_json": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/comparison.json",
+    "v1_expression_labeled_diagram": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/simulink_model.png",
+    "v2_expression_labeled_diagram": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/simulink_model.png",
+    "model_comparison": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/model_comparison.png"
+  },
+  "comparison": {
+    "input_path": "/Users/chancelavoie/Desktop/simulinkcopilot/examples/nonlinear_pendulum.tex",
+    "v1_vs_v2_ode_rmse": 0.0,
+    "v1_vs_v2_simulink_rmse": 0.0,
+    "v1_manifest": {
+      "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1",
+      "files": {
+        "input_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/input_equations.tex",
+        "parsed_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/parsed_equations.txt",
+        "intermediate_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/intermediate_equations.txt",
+        "state_space": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/state_space.txt",
+        "graph": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/graph.json",
+        "summary": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/summary.json",
+        "simulation_plot": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/simulation_plot.png",
+        "simulink_model_image": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v1/simulink_model.png"
+      }
+    },
+    "v2_manifest": {
+      "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2",
+      "files": {
+        "input_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/input_equations.tex",
+        "parsed_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/parsed_equations.txt",
+        "intermediate_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/intermediate_equations.txt",
+        "state_space": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/state_space.txt",
+        "graph": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/graph.json",
+        "summary": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/summary.json",
+        "simulation_plot": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/simulation_plot.png",
+        "simulink_model_image": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/nonlinear_pendulum/v2/simulink_model.png"
+      }
+    }
+  }
+}

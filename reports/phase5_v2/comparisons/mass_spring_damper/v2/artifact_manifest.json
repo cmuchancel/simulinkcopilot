@@ -1,0 +1,13 @@
+{
+  "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2",
+  "files": {
+    "input_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/input_equations.tex",
+    "parsed_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/parsed_equations.txt",
+    "intermediate_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/intermediate_equations.txt",
+    "state_space": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/state_space.txt",
+    "graph": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/graph.json",
+    "summary": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/summary.json",
+    "simulation_plot": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/simulation_plot.png",
+    "simulink_model_image": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/phase5_v2/comparisons/mass_spring_damper/v2/simulink_model.png"
+  }
+}
