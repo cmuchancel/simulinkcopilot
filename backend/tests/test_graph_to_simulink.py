@@ -102,7 +102,10 @@ class GraphToSimulinkTests(unittest.TestCase):
             state_names=first_order["states"],
             parameter_values={"a": 0.2},
         )
-        destination_counts = Counter((dst, dport) for _, _, dst, dport in model["connections"])
+        destination_counts = Counter(
+            (connection["system"], connection["dst_block"], connection["dst_port"])
+            for connection in model["connections"]
+        )
         duplicates = {key: count for key, count in destination_counts.items() if count > 1}
         self.assertFalse(duplicates)
 

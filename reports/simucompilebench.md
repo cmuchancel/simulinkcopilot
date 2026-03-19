@@ -28,15 +28,15 @@
 - average robustness score: 1.0
 
 ## Complexity by Generated State Count
-- 1 states: avg graph nodes=13.19047619047619, avg Simulink blocks=10.675, avg build time=1.833975288453803, avg sim time=0.18969564585422632
-- 2 states: avg graph nodes=22.121951219512194, avg Simulink blocks=17.951219512195124, avg build time=1.5101156554897543, avg sim time=0.16080786480011827
-- 3 states: avg graph nodes=31.135135135135137, avg Simulink blocks=26.0, avg build time=1.6052164301304523, avg sim time=0.16399262386462274
-- 4 states: avg graph nodes=36.794871794871796, avg Simulink blocks=31.846153846153847, avg build time=1.649070518256989, avg sim time=0.15833397125765586
-- 5 states: avg graph nodes=45.08108108108108, avg Simulink blocks=39.5945945945946, avg build time=1.7225259008685228, avg sim time=0.16867579503387614
-- 6 states: avg graph nodes=51.44736842105263, avg Simulink blocks=45.71052631578947, avg build time=1.8312605042868342, avg sim time=0.20146295602745867
-- 8 states: avg graph nodes=106.5, avg Simulink blocks=98.5, avg build time=9.382258375015226, avg sim time=0.5027628227690002
-- 10 states: avg graph nodes=131.5, avg Simulink blocks=123.5, avg build time=3.5249073855229653, avg sim time=0.14479684349498712
-- 12 states: avg graph nodes=156.25, avg Simulink blocks=148.25, avg build time=3.9844410942605464, avg sim time=0.1715408434974961
+- 1 states: avg graph nodes=13.19047619047619, avg Simulink blocks=16.3, avg build time=2.5746987572478246, avg sim time=0.18854733332555043
+- 2 states: avg graph nodes=22.121951219512194, avg Simulink blocks=29.853658536585368, avg build time=2.943217410559755, avg sim time=0.1794435395844985
+- 3 states: avg graph nodes=31.135135135135137, avg Simulink blocks=44.54054054054054, avg build time=3.8528973242925555, avg sim time=0.18655304283822408
+- 4 states: avg graph nodes=36.794871794871796, avg Simulink blocks=56.05128205128205, avg build time=4.322030544870545, avg sim time=0.20844009187138185
+- 5 states: avg graph nodes=45.08108108108108, avg Simulink blocks=71.43243243243244, avg build time=4.803068219539332, avg sim time=0.22389684012946295
+- 6 states: avg graph nodes=51.44736842105263, avg Simulink blocks=83.6842105263158, avg build time=5.076140720346685, avg sim time=0.23879587945166827
+- 8 states: avg graph nodes=106.5, avg Simulink blocks=167.5, avg build time=11.53033994800353, avg sim time=0.44425971899181604
+- 10 states: avg graph nodes=131.5, avg Simulink blocks=211.0, avg build time=6.345639385006507, avg sim time=0.15913255199848209
+- 12 states: avg graph nodes=156.25, avg Simulink blocks=254.0, avg build time=7.0137488125037635, avg sim time=0.1630356355162803
 
 ## System Results
 ### syn_s1_d1_u0_f0
