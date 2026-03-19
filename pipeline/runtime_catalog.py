@@ -1,4 +1,4 @@
-"""Bundled runtime metadata for the isolated v2 pipeline."""
+"""Bundled runtime metadata for the canonical pipeline."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from simulate_v2.ode_sim import constant_inputs
+from simulate.ode_sim import constant_inputs
 
 
 @dataclass(frozen=True)

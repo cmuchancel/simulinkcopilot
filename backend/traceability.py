@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ir_v2.graph_validate import validate_graph_dict
+from ir.graph_validate import validate_graph_dict
 
 
 _ATOMIC_PATTERN = re.compile(r"^[A-Za-z0-9_.]+$")

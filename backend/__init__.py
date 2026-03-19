@@ -1,3 +1,2 @@
-"""Compatibility facade to the organized v2 implementation."""
+"""Deterministic Simulink backend for graph-lowered systems."""
 
-from backend_v2.__init__ import *  # noqa: F401,F403

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from backend_v2.simulink_dict import ROOT_SYSTEM, BackendSimulinkModelDict
-from backend_v2.traceability import state_order
+from backend.simulink_dict import ROOT_SYSTEM, BackendSimulinkModelDict
+from backend.traceability import state_order
 
 
 ROOT_SOURCE_X = 40

@@ -1,3 +1,1 @@
-"""Compatibility facade to the organized v2 implementation."""
-
-from latex_frontend_v2.__init__ import *  # noqa: F401,F403
+"""Deterministic LaTeX frontend for a restricted ODE grammar."""
