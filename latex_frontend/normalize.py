@@ -25,12 +25,38 @@ _DERIVATIVE_FRACTION_RE = re.compile(
 )
 
 _BRACED_SUBSCRIPT_RE = re.compile(r"([A-Za-z][A-Za-z0-9]*)_\{([A-Za-z0-9_]+)\}")
+_TRAILING_SUBSCRIPT_DERIVATIVE_RE = re.compile(
+    r"""
+    \\(?P<command>dot|ddot)
+    \s*\{
+        (?P<symbol>[A-Za-z][A-Za-z0-9_]*)
+    \}
+    \s*_
+    (?P<subscript>\{?[A-Za-z0-9_]+\}?)
+    """,
+    re.VERBOSE,
+)
+_TRAILING_SUBSCRIPT_GENERAL_DERIVATIVE_RE = re.compile(
+    r"""
+    \\deriv
+    \s*\{
+        (?P<order>\d+)
+    \}
+    \s*\{
+        (?P<symbol>[A-Za-z][A-Za-z0-9_]*)
+    \}
+    \s*_
+    (?P<subscript>\{?[A-Za-z0-9_]+\}?)
+    """,
+    re.VERBOSE,
+)
 _TIME_DEPENDENT_SYMBOL_RE = re.compile(
     r"(?<!\\)\b(?P<name>[A-Za-z][A-Za-z0-9_]*(?:_\{?[A-Za-z0-9_]+\}?)?)\s*\(\s*t\s*\)"
 )
 
 _GREEK_SYMBOL_MAP = {
     r"\theta": "q",
+    r"\omega": "w",
 }
 
 
@@ -64,11 +90,32 @@ def _replace_derivative_fraction(match: re.Match[str]) -> str:
     return rf"\deriv{{{order}}}{{{symbol}}}"
 
 
+def _move_derivative_subscript_inside_group(match: re.Match[str]) -> str:
+    symbol = _normalize_symbol_name(match.group("symbol"))
+    subscript = match.group("subscript")
+    if subscript.startswith("{") and subscript.endswith("}"):
+        subscript = subscript[1:-1]
+    return rf"\{match.group('command')}{{{symbol}_{subscript}}}"
+
+
+def _move_general_derivative_subscript_inside_group(match: re.Match[str]) -> str:
+    symbol = _normalize_symbol_name(match.group("symbol"))
+    subscript = match.group("subscript")
+    if subscript.startswith("{") and subscript.endswith("}"):
+        subscript = subscript[1:-1]
+    return rf"\deriv{{{match.group('order')}}}{{{symbol}_{subscript}}}"
+
+
 def normalize_latex(text: str) -> str:
     """Normalize supported LaTeX variants into the core deterministic grammar."""
     normalized = text.replace(r"\left", "").replace(r"\right", "")
     for source, target in _GREEK_SYMBOL_MAP.items():
         normalized = normalized.replace(source, target)
+    normalized = _TRAILING_SUBSCRIPT_DERIVATIVE_RE.sub(_move_derivative_subscript_inside_group, normalized)
+    normalized = _TRAILING_SUBSCRIPT_GENERAL_DERIVATIVE_RE.sub(
+        _move_general_derivative_subscript_inside_group,
+        normalized,
+    )
     normalized = _BRACED_SUBSCRIPT_RE.sub(r"\1_\2", normalized)
     normalized = _TIME_DEPENDENT_SYMBOL_RE.sub(lambda match: _normalize_symbol_name(match.group("name")), normalized)
 

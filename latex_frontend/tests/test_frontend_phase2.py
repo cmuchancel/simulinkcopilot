@@ -19,6 +19,11 @@ class FrontendPhase2Tests(unittest.TestCase):
         self.assertNotIn("u(t)", normalized)
         self.assertIn(r"\ddot{q}", normalized)
 
+    def test_normalizes_trailing_derivative_subscripts_and_omega(self) -> None:
+        normalized = normalize_latex(r"\dot{\theta}_1=\omega_1 \quad \ddot{\theta}_2=0".replace(r" \quad ", " "))
+        self.assertIn(r"\dot{q_1}=w_1", normalized)
+        self.assertIn(r"\ddot{q_2}=0", normalized)
+
     def test_parenthesized_implicit_products_translate(self) -> None:
         equations = translate_latex(r"c(\dot{x}-\dot{y})+k(x_1-x_2)=0")
         self.assertEqual(
@@ -79,6 +84,11 @@ class FrontendPhase2Tests(unittest.TestCase):
     def test_exponential_expression_translates(self) -> None:
         equations = translate_latex(r"\dot{x}=\exp(-ax)")
         self.assertEqual(equation_to_string(equations[0]), "D1_x = exp(-a*x)")
+
+    def test_subscripted_derivative_targets_translate(self) -> None:
+        equations = translate_latex(r"\dot{\theta}_1=\omega_1" + "\n" + r"\dot{\omega}_1=-\sin(\theta_1-\theta_2)")
+        self.assertEqual(equation_to_string(equations[0]), "D1_q_1 = w_1")
+        self.assertEqual(equation_to_string(equations[1]), "D1_w_1 = -sin(q_1 - q_2)")
 
     def test_left_right_and_multiple_subscripts_normalize(self) -> None:
         equations = translate_latex(r"\left(k_{12}\right)(x_1-x_2)=0")
