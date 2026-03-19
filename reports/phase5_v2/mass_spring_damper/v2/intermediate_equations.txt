@@ -1,9 +1,0 @@
-Parsed equations:
-  D1_x*c + D2_x*m + k*x = u
-
-Solved derivatives:
-  D2_x = (-D1_x*c - k*x + u)/m
-
-First-order system:
-  d/dt x = x_dot
-  d/dt x_dot = (-c*x_dot - k*x + u)/m
