@@ -1,0 +1,14 @@
+{
+  "output_dir": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled",
+  "files": {
+    "input_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/input_equations.tex",
+    "parsed_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/parsed_equations.txt",
+    "intermediate_equations": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/intermediate_equations.txt",
+    "state_space": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/state_space.txt",
+    "graph": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/graph.json",
+    "summary": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/summary.json",
+    "simulation_plot": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/simulation_plot.png",
+    "simulink_model_image": null,
+    "simulink_model_note": "/Users/chancelavoie/Desktop/simulinkcopilot/reports/verbose/cart_pendulum_coupled/simulink_model_note.txt"
+  }
+}

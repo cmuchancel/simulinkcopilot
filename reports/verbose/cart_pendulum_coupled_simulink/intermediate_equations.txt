@@ -1,0 +1,13 @@
+Parsed equations:
+  -D1_q**2*l*m_2*sin(q)/2 + D2_q*l*m_2*cos(q)/2 + D2_x*(m_1 + m_2) + k*x = 0
+  D2_q*(4*I + l**2*m_2)/4 + D2_x*l*m_2*cos(q)/2 + g*l*m_2*sin(q)/2 = 0
+
+Solved derivatives:
+  D2_q = l*m_2*(-D1_q**2*l*m_2*sin(2*q) - 4*g*m_1*sin(q) - 4*g*m_2*sin(q) + 4*k*x*cos(q))/(8*I*m_1 + 8*I*m_2 + 2*l**2*m_1*m_2 + 2*l**2*m_2**2*sin(q)**2)
+  D2_x = (4*D1_q**2*I*l*m_2*sin(q) + D1_q**2*l**3*m_2**2*sin(q) - 8*I*k*x + g*l**2*m_2**2*sin(2*q) - 2*k*l**2*m_2*x)/(8*I*m_1 + 8*I*m_2 + 2*l**2*m_1*m_2 + 2*l**2*m_2**2*sin(q)**2)
+
+First-order system:
+  d/dt q = q_dot
+  d/dt q_dot = l*m_2*(-4*g*m_1*sin(q) - 4*g*m_2*sin(q) + 4*k*x*cos(q) - l*m_2*q_dot**2*sin(2*q))/(8*I*m_1 + 8*I*m_2 + 2*l**2*m_1*m_2 + 2*l**2*m_2**2*sin(q)**2)
+  d/dt x = x_dot
+  d/dt x_dot = (-8*I*k*x + 4*I*l*m_2*q_dot**2*sin(q) + g*l**2*m_2**2*sin(2*q) - 2*k*l**2*m_2*x + l**3*m_2**2*q_dot**2*sin(q))/(8*I*m_1 + 8*I*m_2 + 2*l**2*m_1*m_2 + 2*l**2*m_2**2*sin(q)**2)

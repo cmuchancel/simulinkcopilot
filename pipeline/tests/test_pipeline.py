@@ -20,6 +20,18 @@ class PipelineTests(unittest.TestCase):
         self.assertIsNone(result["state_space"])
         self.assertIsNone(result["comparison"])
 
+    def test_nonlinear_pipeline_allows_simulink_validation(self) -> None:
+        result = run_pipeline(
+            Path(__file__).resolve().parents[2] / "examples" / "nonlinear_pendulum.tex",
+            run_simulink=True,
+        )
+        self.assertFalse(result["linearity"]["is_linear"])
+        self.assertIsNone(result["state_space"])
+        self.assertIsNotNone(result["simulink_result"])
+        self.assertIsNotNone(result["simulink_validation"])
+        self.assertIsNone(result["simulink_validation"]["vs_state_space"])
+        self.assertTrue(result["simulink_validation"]["passes"])
+
     def test_verbose_artifacts_are_written(self) -> None:
         import tempfile
 

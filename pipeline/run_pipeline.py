@@ -126,10 +126,6 @@ def run_pipeline(
             comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
 
     if run_simulink:
-        if state_space is None:
-            raise DeterministicCompileError(
-                "The Simulink validation backend currently requires a linear example with state-space form."
-            )
         from backend.graph_to_simulink import graph_to_simulink_model
         from backend.simulate_simulink import simulation_model_params, simulate_simulink_model
         from backend.validate_simulink import compare_simulink_results

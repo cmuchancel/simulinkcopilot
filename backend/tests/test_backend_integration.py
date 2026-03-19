@@ -67,6 +67,38 @@ class BackendIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(validation["passes"])
 
+    def test_nonlinear_pendulum_builds_and_matches_ode(self) -> None:
+        equations = translate_latex(r"\ddot{\theta}+\frac{g}{l}\sin(\theta)=0")
+        first_order = build_first_order_system(equations)
+        graph = lower_first_order_system_graph(first_order, name="nonlinear_pendulum_backend_test")
+        params = {"g": 9.81, "l": 1.0}
+        initial_conditions = {"q": 0.3, "q_dot": 0.0}
+        t_eval = np.linspace(0.0, 4.0, 320)
+        model = graph_to_simulink_model(
+            graph,
+            name="nonlinear_pendulum_backend_test",
+            state_names=first_order["states"],
+            parameter_values=params,
+            initial_conditions=initial_conditions,
+            model_params=simulation_model_params(t_span=(0.0, 4.0), t_eval=t_eval),
+        )
+        simulink_result = simulate_simulink_model(self.eng, model, output_dir=self.output_dir)
+        ode_result = simulate_ode_system(
+            first_order,
+            parameter_values=params,
+            initial_conditions=initial_conditions,
+            input_function=constant_inputs({}),
+            t_eval=t_eval,
+        )
+        validation = compare_simulink_results(
+            simulink_result,
+            ode_result,
+            None,
+            tolerance=1e-6,
+        )
+        self.assertIsNone(validation["vs_state_space"])
+        self.assertTrue(validation["passes"])
+
 
 if __name__ == "__main__":
     unittest.main()

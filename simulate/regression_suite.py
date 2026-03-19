@@ -27,6 +27,7 @@ SUPPORTED_SYSTEM_CLASSES = [
     "coupled multi-state linear systems",
     "mixed first/second-order systems",
     "explicit nonlinear polynomial first-order systems",
+    "nonlinear first-order systems lowered to Simulink block graphs",
 ]
 
 KNOWN_UNSUPPORTED_CLASSES = [
@@ -42,6 +43,7 @@ SIMULINK_REGRESSION_EXAMPLES = {
     "three_mass_coupled",
     "driven_oscillator",
     "damped_forced_system",
+    "nonlinear_pendulum",
 }
 
 

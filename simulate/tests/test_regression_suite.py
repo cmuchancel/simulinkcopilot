@@ -20,6 +20,13 @@ class RegressionSuiteTests(unittest.TestCase):
         self.assertEqual(entry["stages"]["simulink_build"]["status"], "passed")
         self.assertEqual(entry["stages"]["simulink_compare"]["status"], "passed")
 
+    def test_regression_suite_reports_simulink_stage_for_nonlinear_example(self) -> None:
+        report = run_regression_suite(selected_examples=["nonlinear_pendulum"], run_simulink=True)
+        entry = report["examples"][0]
+        self.assertEqual(entry["stages"]["state_space"]["status"], "skipped")
+        self.assertEqual(entry["stages"]["simulink_build"]["status"], "passed")
+        self.assertEqual(entry["stages"]["simulink_compare"]["status"], "passed")
+
     def test_markdown_report_contains_summary(self) -> None:
         report = run_regression_suite(selected_examples=["mass_spring_damper"], run_simulink=False)
         markdown = render_markdown_report(report)

@@ -1,0 +1,2 @@
+-D1_q**2*l*m_2*sin(q)/2 + D2_q*l*m_2*cos(q)/2 + D2_x*(m_1 + m_2) + k*x = 0
+D2_q*(4*I + l**2*m_2)/4 + D2_x*l*m_2*cos(q)/2 + g*l*m_2*sin(q)/2 = 0
