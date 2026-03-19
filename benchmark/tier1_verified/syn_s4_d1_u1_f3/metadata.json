@@ -1,0 +1,54 @@
+{
+  "classification_mode": "configured",
+  "depth": 1,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "source": "simulate.synthetic_benchmark"
+  },
+  "family": "legacy::nonlinear_trigonometric",
+  "generated_state_count": 4,
+  "graph_fault": null,
+  "includes_trig": true,
+  "initial_conditions": {
+    "x_1": 0.04,
+    "x_2": -0.05,
+    "x_3": 0.06,
+    "x_4": -0.07
+  },
+  "input_values": {
+    "u": 0.15
+  },
+  "max_order": 1,
+  "nonlinear": true,
+  "parameter_values": {
+    "a": 0.31,
+    "b": 0.07,
+    "c": 0.065,
+    "k": 0.12,
+    "m": 0.55
+  },
+  "sample_count": 100,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "syn_s4_d1_u1_f3",
+  "t_span": [
+    0.0,
+    3.0
+  ],
+  "tags": [
+    "legacy",
+    "synthetic",
+    "nonlinear_trigonometric"
+  ],
+  "tier": "tier1_verified"
+}

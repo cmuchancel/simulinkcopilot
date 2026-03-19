@@ -1,0 +1,56 @@
+{
+  "classification_mode": "configured",
+  "depth": 4,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "supports_state_space": true
+  },
+  "family": "higher_order_scalar",
+  "generated_state_count": 1,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x": 0.05,
+    "x_d3": 0.0,
+    "x_d4": 0.0,
+    "x_ddot": 0.0,
+    "x_dot": 0.0
+  },
+  "input_values": {
+    "u": 0.08
+  },
+  "max_order": 5,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.7,
+    "b": 0.5,
+    "c": 0.3,
+    "k": 0.2,
+    "m": 0.9
+  },
+  "sample_count": 140,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "higher_order_5_linear",
+  "t_span": [
+    0.0,
+    2.0
+  ],
+  "tags": [
+    "structural",
+    "higher_order",
+    "input",
+    "linear"
+  ],
+  "tier": "tier2_structural"
+}

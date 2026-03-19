@@ -1,0 +1,52 @@
+{
+  "classification_mode": "configured",
+  "depth": 3,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "supports_state_space": true
+  },
+  "family": "physical_rlc",
+  "generated_state_count": 2,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "i_1": 0.0,
+    "v_1": 0.1
+  },
+  "input_values": {
+    "u": 0.08
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "c": 0.9,
+    "g": 0.4,
+    "l": 1.1,
+    "r": 0.6
+  },
+  "sample_count": 180,
+  "simulink_expected": true,
+  "symbol_config": {
+    "c": "parameter",
+    "g": "parameter",
+    "l": "parameter",
+    "r": "parameter",
+    "u": "input"
+  },
+  "system_id": "rlc_pair",
+  "t_span": [
+    0.0,
+    4.0
+  ],
+  "tags": [
+    "structural",
+    "physical",
+    "rlc",
+    "linear",
+    "input"
+  ],
+  "tier": "tier2_structural"
+}

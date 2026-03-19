@@ -1,0 +1,34 @@
+{
+  "classification_mode": "strict",
+  "depth": 1,
+  "expected_failure_category": "parse_failure",
+  "expected_failure_stage": "parse",
+  "expected_failure_substring": "Unsupported",
+  "expected_properties": {
+    "expected_behavior": "expected_failure"
+  },
+  "family": "hybrid_unsupported",
+  "generated_state_count": 1,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {},
+  "input_values": {},
+  "max_order": 1,
+  "nonlinear": true,
+  "parameter_values": {},
+  "sample_count": 240,
+  "simulink_expected": false,
+  "symbol_config": {},
+  "system_id": "hybrid_saturation",
+  "t_span": [
+    0.0,
+    6.0
+  ],
+  "tags": [
+    "adversarial",
+    "hybrid",
+    "saturation",
+    "unsupported"
+  ],
+  "tier": "tier3_adversarial"
+}

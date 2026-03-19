@@ -1,0 +1,52 @@
+{
+  "classification_mode": "configured",
+  "depth": 3,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "supports_state_space": true
+  },
+  "family": "physical_rc_ladder",
+  "generated_state_count": 6,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "v_1": 0.02,
+    "v_2": 0.04,
+    "v_3": 0.06,
+    "v_4": 0.08,
+    "v_5": 0.1,
+    "v_6": 0.12
+  },
+  "input_values": {
+    "u": 0.05
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "c": 0.8,
+    "r": 1.2
+  },
+  "sample_count": 160,
+  "simulink_expected": true,
+  "symbol_config": {
+    "c": "parameter",
+    "r": "parameter",
+    "u": "input"
+  },
+  "system_id": "rc_ladder_6",
+  "t_span": [
+    0.0,
+    3.0
+  ],
+  "tags": [
+    "structural",
+    "physical",
+    "rc",
+    "linear",
+    "input"
+  ],
+  "tier": "tier2_structural"
+}

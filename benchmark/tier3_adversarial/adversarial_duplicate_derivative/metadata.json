@@ -1,0 +1,32 @@
+{
+  "classification_mode": "strict",
+  "depth": 1,
+  "expected_failure_category": "symbolic_failure",
+  "expected_failure_stage": "solve",
+  "expected_failure_substring": "Overdetermined or inconsistent system",
+  "expected_properties": {
+    "expected_behavior": "expected_failure"
+  },
+  "family": "symbolic_failure",
+  "generated_state_count": 1,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {},
+  "input_values": {},
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {},
+  "sample_count": 240,
+  "simulink_expected": false,
+  "symbol_config": {},
+  "system_id": "adversarial_duplicate_derivative",
+  "t_span": [
+    0.0,
+    6.0
+  ],
+  "tags": [
+    "adversarial",
+    "duplicate_derivative"
+  ],
+  "tier": "tier3_adversarial"
+}

@@ -1,0 +1,35 @@
+{
+  "classification_mode": "strict",
+  "depth": 2,
+  "expected_failure_category": "numerical_instability",
+  "expected_failure_stage": "ode_simulation",
+  "expected_failure_substring": "Required step size is less than spacing between numbers",
+  "expected_properties": {
+    "expected_behavior": "expected_failure"
+  },
+  "family": "numerical_instability",
+  "generated_state_count": 1,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x": 2.0
+  },
+  "input_values": {},
+  "max_order": 1,
+  "nonlinear": true,
+  "parameter_values": {},
+  "sample_count": 160,
+  "simulink_expected": false,
+  "symbol_config": {},
+  "system_id": "adversarial_numerical_blowup",
+  "t_span": [
+    0.0,
+    1.0
+  ],
+  "tags": [
+    "adversarial",
+    "numerical_instability",
+    "nonlinear"
+  ],
+  "tier": "tier3_adversarial"
+}

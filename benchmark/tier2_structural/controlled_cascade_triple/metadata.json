@@ -1,0 +1,56 @@
+{
+  "classification_mode": "configured",
+  "depth": 3,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "outputs": [
+      "x_1",
+      "x_3"
+    ]
+  },
+  "family": "controlled_linear",
+  "generated_state_count": 3,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": 0.1,
+    "x_2": -0.05,
+    "x_3": 0.02
+  },
+  "input_values": {
+    "u": 0.08
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.7,
+    "b": 0.6,
+    "c": 0.4,
+    "m": 0.5
+  },
+  "sample_count": 180,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "controlled_cascade_triple",
+  "t_span": [
+    0.0,
+    4.0
+  ],
+  "tags": [
+    "structural",
+    "controlled",
+    "linear",
+    "input",
+    "feedback"
+  ],
+  "tier": "tier2_structural"
+}

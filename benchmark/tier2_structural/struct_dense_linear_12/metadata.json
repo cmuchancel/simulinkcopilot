@@ -1,0 +1,61 @@
+{
+  "classification_mode": "configured",
+  "depth": 4,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "state_count_target": 12,
+    "supports_state_space": true
+  },
+  "family": "scaled_dense_linear",
+  "generated_state_count": 12,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": -0.01,
+    "x_10": 0.01,
+    "x_11": 0.03,
+    "x_12": -0.03,
+    "x_2": 0.01,
+    "x_3": 0.03,
+    "x_4": -0.03,
+    "x_5": -0.01,
+    "x_6": 0.01,
+    "x_7": 0.03,
+    "x_8": -0.03,
+    "x_9": -0.01
+  },
+  "input_values": {},
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.55,
+    "b": 0.35,
+    "c": 0.28,
+    "k": 0.16,
+    "m": 0.12
+  },
+  "sample_count": 180,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter"
+  },
+  "system_id": "struct_dense_linear_12",
+  "t_span": [
+    0.0,
+    4.0
+  ],
+  "tags": [
+    "structural",
+    "linear",
+    "high_state",
+    "coupled"
+  ],
+  "tier": "tier2_structural"
+}

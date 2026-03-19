@@ -1,0 +1,43 @@
+{
+  "classification_mode": "configured",
+  "depth": 1,
+  "expected_failure_category": "graph_invalid",
+  "expected_failure_stage": "graph_validation",
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "expected_failure"
+  },
+  "family": "graph_fault_injection",
+  "generated_state_count": 1,
+  "graph_fault": "drop_node",
+  "includes_trig": false,
+  "initial_conditions": {
+    "x": 0.1
+  },
+  "input_values": {
+    "u": 0.05
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.5,
+    "b": 0.3
+  },
+  "sample_count": 240,
+  "simulink_expected": false,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "u": "input"
+  },
+  "system_id": "adversarial_graph_fault",
+  "t_span": [
+    0.0,
+    6.0
+  ],
+  "tags": [
+    "adversarial",
+    "graph_fault"
+  ],
+  "tier": "tier3_adversarial"
+}

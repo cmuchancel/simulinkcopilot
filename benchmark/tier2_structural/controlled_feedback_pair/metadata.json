@@ -1,0 +1,53 @@
+{
+  "classification_mode": "configured",
+  "depth": 3,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "outputs": [
+      "x_1"
+    ]
+  },
+  "family": "controlled_linear",
+  "generated_state_count": 2,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": 0.2,
+    "x_2": 0.0
+  },
+  "input_values": {
+    "u": 0.12
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.9,
+    "b": 0.3,
+    "c": 0.7,
+    "k": 0.4
+  },
+  "sample_count": 180,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "u": "input"
+  },
+  "system_id": "controlled_feedback_pair",
+  "t_span": [
+    0.0,
+    4.0
+  ],
+  "tags": [
+    "structural",
+    "controlled",
+    "linear",
+    "input"
+  ],
+  "tier": "tier2_structural"
+}
