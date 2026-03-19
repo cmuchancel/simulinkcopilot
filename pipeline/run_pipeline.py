@@ -41,6 +41,69 @@ def default_runtime_context(stem: str, first_order_system: dict[str, object]) ->
     return runtime_context_for_example(stem, first_order_system)
 
 
+def apply_runtime_override(
+    runtime: dict[str, object],
+    override: dict[str, object] | None,
+) -> dict[str, object]:
+    """Apply deterministic runtime overrides for ad hoc pipeline runs."""
+    if override is None:
+        return runtime
+
+    allowed_keys = {
+        "parameter_values",
+        "initial_conditions",
+        "input_values",
+        "t_span",
+        "sample_count",
+        "t_eval",
+        "expected_linear",
+    }
+    unknown = sorted(set(override) - allowed_keys)
+    if unknown:
+        raise DeterministicCompileError(f"Unsupported runtime override keys: {', '.join(unknown)}")
+
+    merged = {
+        "parameter_values": dict(runtime["parameter_values"]),  # type: ignore[arg-type]
+        "initial_conditions": dict(runtime["initial_conditions"]),  # type: ignore[arg-type]
+        "input_function": runtime["input_function"],
+        "t_span": tuple(runtime["t_span"]),  # type: ignore[arg-type]
+        "t_eval": np.asarray(runtime["t_eval"], dtype=float),  # type: ignore[arg-type]
+        "expected_linear": bool(runtime["expected_linear"]),
+    }
+
+    if "parameter_values" in override:
+        merged["parameter_values"].update(dict(override["parameter_values"]))  # type: ignore[arg-type]
+    if "initial_conditions" in override:
+        merged["initial_conditions"].update(dict(override["initial_conditions"]))  # type: ignore[arg-type]
+    if "input_values" in override:
+        merged["input_function"] = constant_inputs(dict(override["input_values"]))  # type: ignore[arg-type]
+    if "expected_linear" in override:
+        merged["expected_linear"] = bool(override["expected_linear"])
+
+    if "t_eval" in override:
+        t_eval = np.asarray(override["t_eval"], dtype=float)  # type: ignore[arg-type]
+        if t_eval.ndim != 1 or t_eval.size < 2:
+            raise DeterministicCompileError("Runtime override t_eval must be a 1D array with at least two entries.")
+        merged["t_eval"] = t_eval
+        merged["t_span"] = (float(t_eval[0]), float(t_eval[-1]))
+    else:
+        t_span = merged["t_span"]
+        if "t_span" in override:
+            raw_t_span = override["t_span"]  # type: ignore[assignment]
+            if not isinstance(raw_t_span, (list, tuple)) or len(raw_t_span) != 2:
+                raise DeterministicCompileError("Runtime override t_span must be a two-item list or tuple.")
+            t_span = (float(raw_t_span[0]), float(raw_t_span[1]))
+            merged["t_span"] = t_span
+        sample_count = int(len(merged["t_eval"]))
+        if "sample_count" in override:
+            sample_count = int(override["sample_count"])
+            if sample_count < 2:
+                raise DeterministicCompileError("Runtime override sample_count must be at least 2.")
+        merged["t_eval"] = np.linspace(t_span[0], t_span[1], sample_count)
+
+    return merged
+
+
 def _constant_input_values(runtime: dict[str, object], input_names: list[str]) -> dict[str, float]:
     """Resolve a deterministic constant input vector from the runtime input function."""
     input_function = runtime["input_function"]
@@ -82,6 +145,7 @@ def run_pipeline(
     run_sim: bool = True,
     validate_graph: bool = True,
     run_simulink: bool = False,
+    runtime_override: dict[str, object] | None = None,
     matlab_engine=None,
     simulink_output_dir: str | Path | None = None,
 ) -> dict[str, object]:
@@ -97,7 +161,7 @@ def run_pipeline(
     state_space = build_state_space_system(first_order) if linearity["is_linear"] else None
     graph = lower_first_order_system_graph(first_order, name=source_path.stem)
     validated_graph = validate_graph_dict(graph) if validate_graph else graph
-    runtime = default_runtime_context(source_path.stem, first_order)
+    runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
 
     ode_result = None
     state_space_result = None
@@ -337,8 +401,9 @@ def main() -> int:
     parser.add_argument("--validate-graph", action="store_true", help="Print graph-validation status.")
     parser.add_argument("--run-sim", dest="run_sim", action="store_true", help="Run simulation stages.")
     parser.add_argument("--skip-sim", dest="run_sim", action="store_false", help="Skip simulation stages.")
-    parser.add_argument("--simulink", action="store_true", help="Build and validate a Simulink model for linear examples.")
+    parser.add_argument("--simulink", action="store_true", help="Build and validate a Simulink model from the lowered graph.")
     parser.add_argument("--simulink-output-dir", help="Directory for generated Simulink models.")
+    parser.add_argument("--runtime-json", help="Path to a JSON file overriding parameter values, initial conditions, and time settings.")
     parser.add_argument("--report-json", help="Write a JSON pipeline summary to a file.")
     parser.set_defaults(run_sim=True)
     args = parser.parse_args()
@@ -352,6 +417,10 @@ def main() -> int:
 
     engine = None
     try:
+        runtime_override = None
+        if args.runtime_json:
+            runtime_override = json.loads(Path(args.runtime_json).read_text(encoding="utf-8"))
+
         if args.simulink and verbose_requested:
             from simulink.engine import start_engine
 
@@ -363,6 +432,7 @@ def main() -> int:
             run_sim=args.run_sim,
             validate_graph=True,
             run_simulink=args.simulink,
+            runtime_override=runtime_override,
             matlab_engine=engine,
             simulink_output_dir=args.simulink_output_dir,
         )
