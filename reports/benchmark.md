@@ -10,12 +10,12 @@
 - none
 
 ## Success Rate by Generated State Count
-- 1 states: 36/36 (100.0%), avg graph nodes=12.833333333333334, avg Simulink blocks=9.694444444444445, avg build time=1.7755890335797124, avg sim time=0.18453137736812802
-- 2 states: 36/36 (100.0%), avg graph nodes=22.47222222222222, avg Simulink blocks=18.0, avg build time=1.5497489640498923, avg sim time=0.164324418974704
-- 3 states: 36/36 (100.0%), avg graph nodes=31.444444444444443, avg Simulink blocks=26.194444444444443, avg build time=1.6560325509166836, avg sim time=0.16345133216560093
-- 4 states: 36/36 (100.0%), avg graph nodes=37.388888888888886, avg Simulink blocks=32.27777777777778, avg build time=1.6087340057209885, avg sim time=0.16883498029751032
-- 5 states: 36/36 (100.0%), avg graph nodes=44.69444444444444, avg Simulink blocks=39.19444444444444, avg build time=1.5245778402814822, avg sim time=0.1757010659396959
-- 6 states: 36/36 (100.0%), avg graph nodes=51.361111111111114, avg Simulink blocks=45.55555555555556, avg build time=1.6284534584475396, avg sim time=0.16585431719431654
+- 1 states: 36/36 (100.0%), avg graph nodes=12.833333333333334, avg Simulink blocks=9.694444444444445, avg build time=1.9081518008363976, avg sim time=0.19362007639332054
+- 2 states: 36/36 (100.0%), avg graph nodes=22.47222222222222, avg Simulink blocks=18.0, avg build time=1.5366114872805257, avg sim time=0.15661357405123352
+- 3 states: 36/36 (100.0%), avg graph nodes=31.444444444444443, avg Simulink blocks=26.194444444444443, avg build time=1.599875001107446, avg sim time=0.16170450694496846
+- 4 states: 36/36 (100.0%), avg graph nodes=37.388888888888886, avg Simulink blocks=32.27777777777778, avg build time=1.6290997269728298, avg sim time=0.15892555677985204
+- 5 states: 36/36 (100.0%), avg graph nodes=44.69444444444444, avg Simulink blocks=39.19444444444444, avg build time=1.7092898807540122, avg sim time=0.16483331364644174
+- 6 states: 36/36 (100.0%), avg graph nodes=51.361111111111114, avg Simulink blocks=45.55555555555556, avg build time=1.8203581040514918, avg sim time=0.20011684133431926
 
 ## Success Rate by Nonlinearity
 - nonlinear=false: 108/108 (100.0%)
@@ -30,8 +30,8 @@
 - average max abs error: 7.032795984270189e-11
 - average graph node count: 33.36574074074074
 - average Simulink block count: 28.48611111111111
-- average build time sec: 1.623855975499383
-- average simulation time sec: 0.1704495819899926
+- average build time sec: 1.7005643335004506
+- average simulation time sec: 0.17263564485835592
 
 ## System Results
 ### syn_s1_d1_u0_f0
