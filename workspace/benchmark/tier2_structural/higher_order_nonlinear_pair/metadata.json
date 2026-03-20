@@ -1,0 +1,55 @@
+{
+  "classification_mode": "configured",
+  "depth": 5,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "supports_state_space": false
+  },
+  "family": "higher_order_coupled",
+  "generated_state_count": 2,
+  "graph_fault": null,
+  "includes_trig": true,
+  "initial_conditions": {
+    "x_1": 0.04,
+    "x_1_ddot": 0.0,
+    "x_1_dot": 0.0,
+    "x_2": 0.06
+  },
+  "input_values": {
+    "u": 0.05
+  },
+  "max_order": 3,
+  "nonlinear": true,
+  "parameter_values": {
+    "a": 0.6,
+    "b": 0.3,
+    "c": 0.4,
+    "m": 0.5
+  },
+  "sample_count": 150,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "higher_order_nonlinear_pair",
+  "t_span": [
+    0.0,
+    2.2
+  ],
+  "tags": [
+    "structural",
+    "higher_order",
+    "coupled",
+    "input",
+    "nonlinear",
+    "trig"
+  ],
+  "tier": "tier2_structural"
+}

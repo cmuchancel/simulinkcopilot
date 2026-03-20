@@ -12,6 +12,7 @@ from backend.simulate_simulink import simulation_model_params, simulate_simulink
 from backend.validate_simulink import compare_simulink_results
 from ir.graph_lowering import lower_first_order_system_graph
 from latex_frontend.translator import translate_latex
+from repo_paths import GENERATED_MODELS_ROOT
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
 from simulink.engine import start_engine
@@ -21,7 +22,7 @@ class BackendIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.eng = start_engine(retries=1, retry_delay_seconds=1.0)
-        cls.output_dir = Path(__file__).resolve().parents[2] / "generated_models" / "backend_tests"
+        cls.output_dir = GENERATED_MODELS_ROOT / "backend_tests"
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -72,7 +73,7 @@ class BackendIntegrationTests(unittest.TestCase):
         first_order = build_first_order_system(equations)
         graph = lower_first_order_system_graph(first_order, name="nonlinear_pendulum_backend_test")
         params = {"g": 9.81, "l": 1.0}
-        initial_conditions = {"q": 0.3, "q_dot": 0.0}
+        initial_conditions = {"theta": 0.3, "theta_dot": 0.0}
         t_eval = np.linspace(0.0, 4.0, 320)
         model = graph_to_simulink_model(
             graph,

@@ -27,6 +27,7 @@ from ir.graph_lowering import lower_first_order_system_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import DeterministicCompileError, state_name
 from latex_frontend.translator import translate_latex
+from repo_paths import DATA_ROOT, GENERATED_MODELS_ROOT, REPORTS_ROOT
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
@@ -759,7 +760,7 @@ def run_synthetic_benchmark(
                             build_info = build_simulink_model(
                                 eng,
                                 model,
-                                output_dir=Path("generated_models") / "synthetic_benchmark_models",
+                                output_dir=GENERATED_MODELS_ROOT / "synthetic_benchmark_models",
                             )
                             simulink_build_time_sec = time.perf_counter() - build_start
                             model_name = str(build_info["model_name"])
@@ -1061,8 +1062,8 @@ def _csv_rows(report: dict[str, object]) -> list[dict[str, object]]:
 
 def write_synthetic_benchmark_outputs(
     *,
-    output_dir: str | Path = "reports",
-    data_dir: str | Path = "data",
+    output_dir: str | Path = REPORTS_ROOT,
+    data_dir: str | Path = DATA_ROOT,
     count: int = DEFAULT_SYNTHETIC_SYSTEM_COUNT,
     seed: int = DEFAULT_SYNTHETIC_SEED,
     tolerance: float = DEFAULT_TOLERANCE,

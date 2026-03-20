@@ -1,0 +1,51 @@
+{
+  "classification_mode": "configured",
+  "depth": 2,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "source": "simulate.synthetic_benchmark"
+  },
+  "family": "legacy::linear_dense_coupled",
+  "generated_state_count": 1,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": -0.05
+  },
+  "input_values": {
+    "u": 0.18
+  },
+  "max_order": 1,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.28,
+    "b": 0.13,
+    "c": 0.095,
+    "k": 0.195,
+    "m": 0.55
+  },
+  "sample_count": 110,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "syn_s1_d2_u1_f1",
+  "t_span": [
+    0.0,
+    3.5
+  ],
+  "tags": [
+    "legacy",
+    "synthetic",
+    "linear_dense_coupled"
+  ],
+  "tier": "tier1_verified"
+}

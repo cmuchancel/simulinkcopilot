@@ -49,6 +49,9 @@ def load_symbol_config(symbol_config: str | Path | Mapping[str, object] | None) 
     else:
         payload = dict(symbol_config)
 
+    if isinstance(payload, Mapping) and "symbols" in payload and isinstance(payload["symbols"], Mapping):
+        payload = dict(payload["symbols"])
+
     metadata: dict[str, SymbolMetadata] = {}
     for name, raw_entry in payload.items():
         if not isinstance(name, str) or not name.strip():

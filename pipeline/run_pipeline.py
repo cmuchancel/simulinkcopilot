@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import sympy
-
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from canonicalize.linearity_check import analyze_first_order_linearity
 from canonicalize.nonlinear_forms import build_explicit_system_form
@@ -32,8 +29,13 @@ from latex_frontend.translator import translate_file
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
+from states.classify_symbols import CONFIGURABLE_ROLES
 from states.extract_states import extract_states
 from pipeline.runtime_catalog import runtime_context_for_example
+from pipeline.gui_export import DEFAULT_GUI_REPORT_ROOT, export_results_to_gui_run
+from repo_paths import BEDILLION_DEMO_ROOT, REPORTS_ROOT
+
+DEFAULT_SIMULINK_OUTPUT_DIR = BEDILLION_DEMO_ROOT
 
 
 def default_runtime_context(stem: str, first_order_system: dict[str, object]) -> dict[str, object]:
@@ -104,6 +106,70 @@ def apply_runtime_override(
     return merged
 
 
+def _parse_assignment(argument_name: str, *, value_type=float, allowed_values: set[str] | None = None):
+    """Build an argparse parser for NAME=VALUE assignments."""
+
+    def _inner(raw: str) -> tuple[str, object]:
+        if "=" not in raw:
+            raise argparse.ArgumentTypeError(f"{argument_name} must use NAME=VALUE syntax.")
+        name, value = raw.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name:
+            raise argparse.ArgumentTypeError(f"{argument_name} requires a non-empty name before '='.")
+        if not value:
+            raise argparse.ArgumentTypeError(f"{argument_name} requires a non-empty value after '='.")
+        if value_type is str:
+            parsed_value = value
+        else:
+            try:
+                parsed_value = value_type(value)
+            except ValueError as exc:
+                raise argparse.ArgumentTypeError(
+                    f"{argument_name} value for {name!r} must parse as {value_type.__name__}."
+                ) from exc
+        if allowed_values is not None and parsed_value not in allowed_values:
+            allowed = ", ".join(sorted(allowed_values))
+            raise argparse.ArgumentTypeError(
+                f"{argument_name} value for {name!r} must be one of: {allowed}."
+            )
+        return name, parsed_value
+
+    return _inner
+
+
+def _merge_assignment_group(
+    target: dict[str, object] | None,
+    field: str,
+    entries: list[tuple[str, object]],
+) -> dict[str, object] | None:
+    """Merge repeated NAME=VALUE arguments into a runtime-override mapping."""
+    if not entries:
+        return target
+    merged = dict(target or {})
+    current = dict(merged.get(field, {}))  # type: ignore[arg-type]
+    current.update(dict(entries))
+    merged[field] = current
+    return merged
+
+
+def _validate_expected_states(actual_states: tuple[str, ...], expected_states: list[str]) -> None:
+    """Ensure CLI-declared states match the inferred state list."""
+    if not expected_states:
+        return
+    unique_expected = tuple(dict.fromkeys(expected_states))
+    if len(unique_expected) != len(actual_states) or set(unique_expected) != set(actual_states):
+        raise DeterministicCompileError(
+            "CLI-declared states do not match inferred states. "
+            f"Expected {list(unique_expected)}, inferred {list(actual_states)}."
+        )
+
+
+def _resolved_simulink_output_dir(path: str | Path | None) -> Path:
+    """Resolve the default Simulink output directory for CLI and API calls."""
+    return Path(path).resolve() if path is not None else DEFAULT_SIMULINK_OUTPUT_DIR.resolve()
+
+
 def _constant_input_values(runtime: dict[str, object], input_names: list[str]) -> dict[str, float]:
     """Resolve a deterministic constant input vector from the runtime input function."""
     input_function = runtime["input_function"]
@@ -146,6 +212,8 @@ def run_pipeline(
     validate_graph: bool = True,
     run_simulink: bool = False,
     runtime_override: dict[str, object] | None = None,
+    classification_mode: str | None = None,
+    symbol_config: str | Path | dict[str, object] | None = None,
     matlab_engine=None,
     simulink_output_dir: str | Path | None = None,
 ) -> dict[str, object]:
@@ -153,7 +221,8 @@ def run_pipeline(
     source_path = Path(path)
     equations = translate_file(source_path)
     equation_dicts = [equation_to_dict(equation) for equation in equations]
-    extraction = extract_states(equations)
+    resolved_mode = classification_mode or ("configured" if symbol_config is not None else "strict")
+    extraction = extract_states(equations, mode=resolved_mode, symbol_config=symbol_config)
     solved_derivatives = solve_for_highest_derivatives(equations)
     first_order = build_first_order_system(equations, extraction=extraction, solved_derivatives=solved_derivatives)
     explicit_form = build_explicit_system_form(first_order)
@@ -222,7 +291,7 @@ def run_pipeline(
             simulink_result = simulate_simulink_model(
                 eng,
                 simulink_model,
-                output_dir=simulink_output_dir or Path("generated_models") / "backend_models",
+                output_dir=_resolved_simulink_output_dir(simulink_output_dir),
             )
         finally:
             if owns_engine:
@@ -390,8 +459,79 @@ def _print_results(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the deterministic LaTeX ODE pipeline.")
-    parser.add_argument("--input", required=True, help="Path to a LaTeX equation file.")
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("--input", help="Path to a LaTeX equation file.")
+    source_group.add_argument("--equations", help="Raw LaTeX equations passed directly on the command line.")
+    parser.add_argument(
+        "--equations-name",
+        default="inline_equations",
+        help="Synthetic stem to use when --equations is provided. Controls report/model naming.",
+    )
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE, help="Validation tolerance.")
+    parser.add_argument(
+        "--classification-mode",
+        choices=("strict", "configured"),
+        help="Symbol-classification mode. Defaults to configured when symbol roles are provided.",
+    )
+    parser.add_argument(
+        "--symbol-role",
+        action="append",
+        default=[],
+        type=_parse_assignment("--symbol-role", value_type=str, allowed_values=CONFIGURABLE_ROLES),
+        metavar="NAME=ROLE",
+        help="Declare symbol metadata inline, for example m=parameter or u=input.",
+    )
+    parser.add_argument(
+        "--state",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Assert that the inferred state list includes exactly these states. Repeat for each state.",
+    )
+    parser.add_argument(
+        "--parameter",
+        action="append",
+        default=[],
+        type=_parse_assignment("--parameter"),
+        metavar="NAME=VALUE",
+        help="Override a parameter value inline.",
+    )
+    parser.add_argument(
+        "--initial",
+        action="append",
+        default=[],
+        type=_parse_assignment("--initial"),
+        metavar="NAME=VALUE",
+        help="Override an initial-condition value inline.",
+    )
+    parser.add_argument(
+        "--input-value",
+        action="append",
+        default=[],
+        type=_parse_assignment("--input-value"),
+        metavar="NAME=VALUE",
+        help="Override a constant input value inline.",
+    )
+    parser.add_argument(
+        "--t-span",
+        nargs=2,
+        type=float,
+        metavar=("START", "STOP"),
+        help="Override the simulation time span inline.",
+    )
+    parser.add_argument("--sample-count", type=int, help="Override the simulation sample count inline.")
+    parser.add_argument(
+        "--expected-linear",
+        dest="expected_linear",
+        action="store_true",
+        help="Override the runtime expectation to linear.",
+    )
+    parser.add_argument(
+        "--expected-nonlinear",
+        dest="expected_linear",
+        action="store_false",
+        help="Override the runtime expectation to nonlinear.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Write a verbose artifact bundle for this run.")
     parser.add_argument("--verbose-output-dir", help="Directory for verbose artifact outputs.")
     parser.add_argument("--show-ir", action="store_true", help="Print canonical equation dictionaries.")
@@ -401,25 +541,84 @@ def main() -> int:
     parser.add_argument("--validate-graph", action="store_true", help="Print graph-validation status.")
     parser.add_argument("--run-sim", dest="run_sim", action="store_true", help="Run simulation stages.")
     parser.add_argument("--skip-sim", dest="run_sim", action="store_false", help="Skip simulation stages.")
-    parser.add_argument("--simulink", action="store_true", help="Build and validate a Simulink model from the lowered graph.")
-    parser.add_argument("--simulink-output-dir", help="Directory for generated Simulink models.")
+    parser.add_argument(
+        "--simulink",
+        dest="simulink",
+        action="store_true",
+        help="Build and validate a Simulink model from the lowered graph. Enabled by default.",
+    )
+    parser.add_argument(
+        "--no-simulink",
+        dest="simulink",
+        action="store_false",
+        help="Disable Simulink model generation for parser-only or non-MATLAB runs.",
+    )
+    parser.add_argument(
+        "--simulink-output-dir",
+        help=f"Directory for generated Simulink models. Defaults to {DEFAULT_SIMULINK_OUTPUT_DIR}.",
+    )
     parser.add_argument("--runtime-json", help="Path to a JSON file overriding parameter values, initial conditions, and time settings.")
     parser.add_argument("--report-json", help="Write a JSON pipeline summary to a file.")
+    parser.add_argument(
+        "--export-gui-run",
+        action="store_true",
+        help=f"Export the completed run into {DEFAULT_GUI_REPORT_ROOT} so it can be reopened from the web app.",
+    )
+    parser.add_argument(
+        "--gui-report-root",
+        help=f"Directory for saved GUI runs. Defaults to {DEFAULT_GUI_REPORT_ROOT}.",
+    )
     parser.set_defaults(run_sim=True)
+    parser.set_defaults(expected_linear=None)
+    parser.set_defaults(simulink=True)
     args = parser.parse_args()
 
+    input_stem = Path(args.input).stem if args.input else args.equations_name
     verbose_requested = args.verbose or args.verbose_output_dir is not None
     verbose_output_dir = (
         Path(args.verbose_output_dir)
         if args.verbose_output_dir
-        else Path("reports") / "verbose" / Path(args.input).stem
+        else REPORTS_ROOT / "verbose" / input_stem
     )
 
     engine = None
+    temp_equation_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
+        input_path = args.input
+        if args.equations is not None:
+            temp_equation_dir = tempfile.TemporaryDirectory(prefix="simulinkcopilot_cli_")
+            input_path = str(Path(temp_equation_dir.name) / f"{args.equations_name}.tex")
+            Path(input_path).write_text(args.equations, encoding="utf-8")
+
         runtime_override = None
         if args.runtime_json:
             runtime_override = json.loads(Path(args.runtime_json).read_text(encoding="utf-8"))
+        runtime_override = _merge_assignment_group(runtime_override, "parameter_values", args.parameter)
+        runtime_override = _merge_assignment_group(runtime_override, "initial_conditions", args.initial)
+        runtime_override = _merge_assignment_group(runtime_override, "input_values", args.input_value)
+        if args.t_span is not None:
+            runtime_override = dict(runtime_override or {})
+            runtime_override["t_span"] = [float(args.t_span[0]), float(args.t_span[1])]
+        if args.sample_count is not None:
+            runtime_override = dict(runtime_override or {})
+            runtime_override["sample_count"] = int(args.sample_count)
+        if args.expected_linear is not None:
+            runtime_override = dict(runtime_override or {})
+            runtime_override["expected_linear"] = bool(args.expected_linear)
+
+        if args.sample_count is not None and args.sample_count < 2:
+            parser.error("--sample-count must be at least 2.")
+        if args.simulink and not args.run_sim:
+            parser.error("--skip-sim cannot be combined with default Simulink generation. Use --no-simulink if needed.")
+        if args.export_gui_run and not args.simulink:
+            parser.error("--export-gui-run requires Simulink generation to be enabled.")
+
+        symbol_config = dict(args.symbol_role)
+        classification_mode = args.classification_mode
+        if symbol_config and classification_mode == "strict":
+            parser.error("--classification-mode strict cannot be combined with --symbol-role.")
+        if symbol_config and classification_mode is None:
+            classification_mode = "configured"
 
         if args.simulink and verbose_requested:
             from simulink.engine import start_engine
@@ -427,15 +626,18 @@ def main() -> int:
             engine = start_engine(retries=1, retry_delay_seconds=1.0)
 
         results = run_pipeline(
-            args.input,
+            input_path,
             tolerance=args.tolerance,
             run_sim=args.run_sim,
             validate_graph=True,
             run_simulink=args.simulink,
             runtime_override=runtime_override,
+            classification_mode=classification_mode,
+            symbol_config=symbol_config or None,
             matlab_engine=engine,
-            simulink_output_dir=args.simulink_output_dir,
+            simulink_output_dir=_resolved_simulink_output_dir(args.simulink_output_dir),
         )
+        _validate_expected_states(results["extraction"].states, args.state)
         _print_results(
             results,
             show_ir=args.show_ir,
@@ -464,6 +666,20 @@ def main() -> int:
                 if value is not None:
                     print(f"  {key}: {value}")
 
+        if args.export_gui_run:
+            raw_latex = Path(input_path).read_text(encoding="utf-8")
+            gui_export = export_results_to_gui_run(
+                results,
+                raw_latex=raw_latex,
+                gui_report_root=args.gui_report_root,
+                symbol_config=symbol_config or None,
+                input_values=dict((runtime_override or {}).get("input_values", {})),  # type: ignore[arg-type]
+            )
+            print("GUI run export:")
+            print(f"  run_name: {gui_export['run_name']}")
+            print(f"  artifact_dir: {gui_export['artifact_dir']}")
+            print(f"  load_url: /?run={gui_export['run_name']}")
+
         comparison = results["comparison"]
         if args.simulink and results["simulink_validation"] is not None:
             return 0 if results["simulink_validation"]["passes"] else 1
@@ -473,6 +689,8 @@ def main() -> int:
     finally:
         if engine is not None:
             engine.quit()
+        if temp_equation_dir is not None:
+            temp_equation_dir.cleanup()
 
 
 if __name__ == "__main__":

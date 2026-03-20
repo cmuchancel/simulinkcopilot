@@ -51,6 +51,29 @@ class SymbolClassificationTests(unittest.TestCase):
         self.assertEqual(result.inputs, ("f",))
         self.assertEqual(result.parameters, ("m",))
 
+    def test_configured_mode_accepts_gui_metadata_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "gui_metadata.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "latex": r"m\dot{x}=f",
+                        "symbols": {
+                            "f": {"role": "input"},
+                            "m": {"role": "parameter"},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = extract_states(
+                translate_latex(r"m\dot{x}=f"),
+                mode="configured",
+                symbol_config=config_path,
+            )
+        self.assertEqual(result.inputs, ("f",))
+        self.assertEqual(result.parameters, ("m",))
+
     def test_configured_mode_resolves_function_wrapped_symbols(self) -> None:
         result = extract_states(
             translate_latex(r"\dot{x}=\exp(-ax)+\ln(b)+u"),

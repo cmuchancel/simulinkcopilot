@@ -2,6 +2,19 @@
 
 This repo is a deterministic symbolic compiler backend for restricted LaTeX ODEs. It is designed to be reproducible, inspectable, and strict enough to support a later deterministic Simulink graph builder.
 
+## Repo Layout
+
+- `backend/`, `canonicalize/`, `eqn2sim_gui/`, `ir/`, `latex_frontend/`, `pipeline/`, `simulate/`, `simucompilebench/`, `simulink/`, `states/`
+  Core implementation modules.
+- `scripts/`
+  Supported CLI entrypoints. Run these with `python3 -m scripts.<name>`.
+- `workspace/`
+  Non-code assets, bundled examples, generated models, reports, benchmark data, demos, and the manuscript bundle.
+- `tests/`
+  Cross-cutting integration and smoke tests.
+
+Repo conventions are documented in [CODING_STANDARDS.md](/Users/chancelavoie/Desktop/simulinkcopilot/CODING_STANDARDS.md).
+
 The current pipeline:
 
 1. normalizes supported LaTeX variants into a narrow grammar
@@ -166,7 +179,13 @@ Current backend constraints:
 Run the full pipeline:
 
 ```bash
-python3 pipeline/run_pipeline.py --input examples/mass_spring_damper.tex
+python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.tex
+```
+
+Or pass the LaTeX directly:
+
+```bash
+python3 -m pipeline.run_pipeline --equations $'m\\ddot{x}+c\\dot{x}+kx=u'
 ```
 
 Useful flags:
@@ -177,16 +196,53 @@ Useful flags:
 - `--write-graph-json /tmp/model_graph.json`
 - `--validate-graph`
 - `--run-sim`
-- `--simulink`
-- `--simulink-output-dir generated_models/backend_models`
+- `--simulink` (default)
+- `--no-simulink`
+- `--runtime-json /tmp/runtime.json`
+- `--equations $'m\\ddot{x}+c\\dot{x}+kx=u'`
+- `--equations-name inline_system`
+- `--parameter m_1=10.0 --parameter k=100.0`
+- `--initial x=1.0 --initial x_dot=0.0`
+- `--input-value u=1.5`
+- `--t-span 0 10 --sample-count 1000`
+- `--symbol-role F_drive=input --symbol-role m_cart=parameter`
+- `--state theta --state theta_dot --state x --state x_dot`
+- `--simulink-output-dir /repo/root/workspace/bedillion_demo`
 - `--report-json /tmp/pipeline_report.json`
+
+Example with fully inline CLI runtime overrides:
+
+```bash
+python3 -m pipeline.run_pipeline \
+  --equations $'(m_1 + m_2)\\ddot{x} + \\frac{m_2 l}{2}\\cos(\\theta)\\ddot{\\theta} - \\frac{m_2 l}{2}\\sin(\\theta)\\dot{\\theta}^2 + kx = 0\n\\frac{m_2 l}{2}\\cos(\\theta)\\ddot{x} + \\frac{1}{4}(m_2 l^2 + 4I)\\ddot{\\theta} + \\frac{m_2 g l}{2}\\sin(\\theta) = 0' \
+  --equations-name cart_pendulum_inline \
+  --parameter m_1=10.0 \
+  --parameter m_2=2.0 \
+  --parameter l=1.0 \
+  --parameter I=0.17 \
+  --parameter g=9.81 \
+  --parameter k=100.0 \
+  --initial x=1.0 \
+  --initial x_dot=0.0 \
+  --initial theta=0.7853981633974483 \
+  --initial theta_dot=0.0 \
+  --state theta \
+  --state theta_dot \
+  --state x \
+  --state x_dot \
+  --t-span 0 10 \
+  --sample-count 1000 \
+  --simulink-output-dir /repo/root/workspace/bedillion_demo
+```
+
+If you want a parser-only run without generating the `.slx`, add `--no-simulink`.
 
 Examples:
 
 ```bash
-python3 pipeline/run_pipeline.py --input examples/mass_spring_damper.tex --show-ir --write-graph-json reports/mass_spring_graph.json
-python3 pipeline/run_pipeline.py --input examples/nonlinear_pendulum.tex --show-first-order --validate-graph
-python3 pipeline/run_pipeline.py --input examples/mass_spring_damper.tex --simulink --simulink-output-dir generated_models/backend_models
+python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.tex --show-ir --write-graph-json workspace/reports/mass_spring_graph.json
+python3 -m pipeline.run_pipeline --input workspace/examples/nonlinear_pendulum.tex --show-first-order --validate-graph
+python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.tex --simulink-output-dir workspace/bedillion_demo
 ```
 
 ## Tests
@@ -202,7 +258,7 @@ python3 -m unittest discover -v
 Run all curated examples:
 
 ```bash
-python3 examples/run_examples.py
+python3 -m scripts.run_examples
 ```
 
 Examples include:
@@ -219,18 +275,18 @@ Examples include:
 
 ## Regression Report
 
-Generate the Phase 2 benchmark-style report:
+Generate the bundled regression-report set:
 
 ```bash
-python3 reports/generate_phase3_report.py
+python3 -m scripts.generate_regression_reports
 ```
 
 This writes:
 
-- `reports/phase2_report.json`
-- `reports/phase2_report.md`
-- `reports/phase3_report.json`
-- `reports/phase3_report.md`
+- `workspace/reports/phase2_report.json`
+- `workspace/reports/phase2_report.md`
+- `workspace/reports/phase3_report.json`
+- `workspace/reports/phase3_report.md`
 
 ## Limitations and Next Steps
 

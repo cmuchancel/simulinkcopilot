@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from repo_paths import EXAMPLES_ROOT
 from simulate.ode_sim import constant_inputs
 
 
@@ -97,8 +98,7 @@ EXAMPLE_SPECS: dict[str, ExampleSpec] = {
 
 def example_paths() -> list[Path]:
     """Return bundled example files in deterministic order."""
-    example_dir = Path(__file__).resolve().parents[1] / "examples"
-    return [example_dir / f"{name}.tex" for name in sorted(EXAMPLE_SPECS)]
+    return [EXAMPLES_ROOT / f"{name}.tex" for name in sorted(EXAMPLE_SPECS)]
 
 
 def runtime_context_for_example(stem: str, first_order_system: dict[str, object]) -> dict[str, object]:

@@ -58,33 +58,7 @@ def tokenize(text: str) -> list[Token]:
 
         if char.isalpha():
             start = i
-            name = char
-            i += 1
-            if i < len(text) and text[i] == "_":
-                name += text[i]
-                i += 1
-                if i < len(text) and text[i] == "{":
-                    name += text[i]
-                    i += 1
-                    while i < len(text) and text[i] != "}":
-                        if not (text[i].isalnum() or text[i] == "_"):
-                            raise UnsupportedSyntaxError(
-                                f"Unsupported character {text[i]!r} inside subscript at position {i}."
-                            )
-                        name += text[i]
-                        i += 1
-                    if i >= len(text):
-                        raise UnsupportedSyntaxError("Unterminated subscript brace.")
-                    name += "}"
-                    i += 1
-                else:
-                    while i < len(text) and (text[i].isalnum() or text[i] == "_"):
-                        name += text[i]
-                        i += 1
-            elif i < len(text) and text[i].isdigit():
-                while i < len(text) and text[i].isdigit():
-                    name += text[i]
-                    i += 1
+            name, i = _consume_identifier(text, i)
             tokens.append(Token("IDENT", name, start))
             continue
 
@@ -120,3 +94,46 @@ def tokenize(text: str) -> list[Token]:
 
     tokens.append(Token("EOF", "", len(text)))
     return tokens
+
+
+def _consume_identifier(text: str, start: int) -> tuple[str, int]:
+    """Consume a full identifier including repeated subscript segments."""
+    i = start
+    while i < len(text) and text[i].isalpha():
+        i += 1
+
+    if i - start == 2 and (i >= len(text) or text[i] not in "_0123456789"):
+        return text[start], start + 1
+
+    name = [text[start:i]]
+
+    while i < len(text) and text[i].isdigit():
+        name.append(text[i])
+        i += 1
+
+    while i < len(text) and text[i] == "_":
+        name.append(text[i])
+        i += 1
+        if i < len(text) and text[i] == "{":
+            name.append(text[i])
+            i += 1
+            while i < len(text) and text[i] != "}":
+                if not (text[i].isalnum() or text[i] == "_"):
+                    raise UnsupportedSyntaxError(
+                        f"Unsupported character {text[i]!r} inside subscript at position {i}."
+                    )
+                name.append(text[i])
+                i += 1
+            if i >= len(text):
+                raise UnsupportedSyntaxError("Unterminated subscript brace.")
+            name.append(text[i])
+            i += 1
+            continue
+
+        if i >= len(text) or not (text[i].isalnum() or text[i] == "_"):
+            raise UnsupportedSyntaxError(f"Malformed identifier subscript at position {i}.")
+        while i < len(text) and (text[i].isalnum() or text[i] == "_"):
+            name.append(text[i])
+            i += 1
+
+    return "".join(name), i

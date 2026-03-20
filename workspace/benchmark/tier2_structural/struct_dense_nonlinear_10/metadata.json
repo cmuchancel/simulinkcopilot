@@ -1,0 +1,56 @@
+{
+  "classification_mode": "configured",
+  "depth": 5,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "state_count_target": 10,
+    "supports_state_space": false
+  },
+  "family": "scaled_dense_nonlinear",
+  "generated_state_count": 10,
+  "graph_fault": null,
+  "includes_trig": true,
+  "initial_conditions": {
+    "x_1": -0.01,
+    "x_10": 0.01,
+    "x_2": 0.01,
+    "x_3": 0.03,
+    "x_4": -0.03,
+    "x_5": -0.01,
+    "x_6": 0.01,
+    "x_7": 0.03,
+    "x_8": -0.03,
+    "x_9": -0.01
+  },
+  "input_values": {
+    "u": 0.08
+  },
+  "max_order": 1,
+  "nonlinear": true,
+  "parameter_values": {
+    "a": 0.4
+  },
+  "sample_count": 160,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "u": "input"
+  },
+  "system_id": "struct_dense_nonlinear_10",
+  "t_span": [
+    0.0,
+    2.5
+  ],
+  "tags": [
+    "structural",
+    "nonlinear",
+    "trig",
+    "high_state",
+    "coupled",
+    "input"
+  ],
+  "tier": "tier2_structural"
+}

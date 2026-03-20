@@ -25,6 +25,7 @@ from ir.graph_lowering import lower_first_order_system_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
+from repo_paths import GENERATED_MODELS_ROOT, REPORTS_ROOT
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.ode_sim import InputFunction, constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
@@ -269,7 +270,7 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         category="Category 11 - Nonlinear Physical Systems",
         latex=r"\ddot{\theta}+\frac{g}{l}\sin(\theta)=0",
         parameter_values={"g": 9.81, "l": 1.0},
-        initial_conditions={"q": 0.3, "q_dot": 0.0},
+        initial_conditions={"theta": 0.3, "theta_dot": 0.0},
         expected_linear=False,
         t_span=(0.0, 4.0),
         sample_count=320,
@@ -683,7 +684,7 @@ def run_full_system_benchmark(
                         build_info = build_simulink_model(
                             eng,
                             model,
-                            output_dir=Path("generated_models") / "benchmark_models",
+                            output_dir=GENERATED_MODELS_ROOT / "benchmark_models",
                         )
                         prepare_workspace_variables(eng, model)
                         metrics["simulink_build_time_sec"] = time.perf_counter() - build_start
@@ -806,7 +807,7 @@ def render_full_system_benchmark_markdown(report: dict[str, object]) -> str:
 
 
 def write_full_system_benchmark_reports(
-    output_dir: str | Path = "reports",
+    output_dir: str | Path = REPORTS_ROOT,
     *,
     selected_cases: list[str] | None = None,
     tolerance: float = DEFAULT_TOLERANCE,

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from ir.simulink_dict import example_model
+from repo_paths import GENERATED_MODELS_ROOT
 from simulink.builder import build_model
 from simulink.engine import start_engine
 from simulink.utils import sanitize_block_name
@@ -32,7 +29,7 @@ def _connection_exists(eng, model_name: str, src_block: str, src_port: str, dst_
 def main() -> int:
     eng = start_engine(retries=3, retry_delay_seconds=3.0)
     model_dict = example_model("dict_round_trip_model")
-    output_dir = Path(__file__).resolve().parents[1] / "generated_models"
+    output_dir = GENERATED_MODELS_ROOT
 
     try:
         build_result = build_model(

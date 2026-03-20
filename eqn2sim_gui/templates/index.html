@@ -1,0 +1,1351 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Eqn2Sim Local GUI</title>
+    <style>
+      :root {
+        --bg-top: #f6f1e8;
+        --bg-bottom: #e7eef4;
+        --panel: rgba(255, 255, 255, 0.9);
+        --panel-border: rgba(90, 102, 123, 0.18);
+        --ink: #172033;
+        --muted: #5c6475;
+        --accent: #0f766e;
+        --accent-strong: #115e59;
+        --warm: #a16207;
+        --danger: #b42318;
+        --success-bg: #edfdf4;
+        --success-border: #84cc9f;
+        --info-bg: #eef7ff;
+        --info-border: #93c5fd;
+        --warn-bg: #fff7ed;
+        --warn-border: #fdba74;
+        --error-bg: #fff1f2;
+        --error-border: #fda4af;
+        --shadow: 0 18px 42px rgba(23, 32, 51, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 30%),
+          linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      }
+
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 28px 20px 56px;
+      }
+
+      h1, h2, h3 {
+        margin: 0;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      code, pre, textarea, input, select {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+      }
+
+      .hero {
+        margin-bottom: 18px;
+      }
+
+      .hero-shell {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+      }
+
+      .hero-copy {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .hero h1 {
+        font-size: 2.2rem;
+        letter-spacing: -0.04em;
+        margin-bottom: 8px;
+      }
+
+      .hero p {
+        max-width: 760px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .hero-actions {
+        margin-top: 16px;
+      }
+
+      .hero-side {
+        display: grid;
+        gap: 12px;
+        justify-items: end;
+        min-width: 320px;
+      }
+
+      .run-browser {
+        width: min(380px, 100%);
+        border-radius: 18px;
+        border: 1px solid rgba(90, 102, 123, 0.18);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 12px 30px rgba(23, 32, 51, 0.06);
+        padding: 16px;
+      }
+
+      .run-browser-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .run-browser-id {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .run-browser-id code {
+        display: block;
+        margin-top: 4px;
+      }
+
+      .run-browser-meta {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .run-browser-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .run-browser-nav {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .button-link.disabled-link {
+        opacity: 0.45;
+        pointer-events: none;
+      }
+
+      .panel {
+        background: var(--panel);
+        backdrop-filter: blur(16px);
+        border: 1px solid var(--panel-border);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        padding: 22px;
+        margin-bottom: 18px;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .panel-header p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--warm);
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        border-radius: 16px;
+        border: 1px solid rgba(90, 102, 123, 0.24);
+        background: rgba(248, 250, 252, 0.92);
+        color: var(--ink);
+        padding: 14px 16px;
+        font-size: 14px;
+        line-height: 1.5;
+        resize: vertical;
+      }
+
+      input[type="text"], select {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(90, 102, 123, 0.24);
+        background: #ffffff;
+        color: var(--ink);
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+
+      button,
+      .button-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: none;
+        border-radius: 999px;
+        padding: 11px 18px;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #ffffff;
+        color: var(--ink);
+        border: 1px solid rgba(90, 102, 123, 0.24);
+      }
+
+      .button-link.secondary-link {
+        background: #ffffff;
+        color: var(--ink);
+        border: 1px solid rgba(90, 102, 123, 0.24);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .status-panel,
+      .inline-status {
+        border-radius: 16px;
+        padding: 14px 16px;
+        line-height: 1.5;
+      }
+
+      .inline-status {
+        padding: 10px 12px;
+      }
+
+      .success {
+        background: var(--success-bg);
+        border: 1px solid var(--success-border);
+      }
+
+      .info {
+        background: var(--info-bg);
+        border: 1px solid var(--info-border);
+      }
+
+      .warning {
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-border);
+      }
+
+      .error {
+        background: var(--error-bg);
+        border: 1px solid var(--error-border);
+        color: #7f1d1d;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .subpanel {
+        border-radius: 18px;
+        border: 1px solid rgba(90, 102, 123, 0.16);
+        background: rgba(247, 250, 252, 0.88);
+        padding: 18px;
+      }
+
+      .subpanel h3 {
+        margin-bottom: 8px;
+      }
+
+      .subpanel pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .preview svg {
+        width: 100%;
+        height: auto;
+      }
+
+      .trajectory-plot svg {
+        width: 100%;
+        height: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 16px;
+        overflow: hidden;
+        background: white;
+      }
+
+      th, td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(90, 102, 123, 0.12);
+        vertical-align: top;
+        text-align: left;
+        font-size: 14px;
+      }
+
+      th {
+        background: rgba(237, 242, 247, 0.9);
+      }
+
+      .field-note {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .stage-pill {
+        white-space: nowrap;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .ready-pill {
+        background: rgba(15, 118, 110, 0.12);
+        color: var(--accent-strong);
+      }
+
+      .wait-pill {
+        background: rgba(161, 98, 7, 0.12);
+        color: #92400e;
+      }
+
+      .path-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .path-list code {
+        display: block;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .blocker-list {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+
+      .blocker-list li {
+        margin-bottom: 6px;
+      }
+
+      details summary {
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      #working-banner {
+        display: none;
+        position: sticky;
+        top: 18px;
+        z-index: 10;
+      }
+
+      .progress-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .progress-meta {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--accent-strong);
+      }
+
+      .progress-shell {
+        margin-top: 14px;
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.12);
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        width: 0%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent) 0%, #14b8a6 100%);
+        transition: width 0.5s ease;
+      }
+
+      .progress-stage-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .progress-stage {
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        background: rgba(90, 102, 123, 0.08);
+        color: var(--muted);
+      }
+
+      .progress-stage-active {
+        background: rgba(15, 118, 110, 0.14);
+        color: var(--accent-strong);
+      }
+
+      .progress-stage-done {
+        background: rgba(15, 118, 110, 0.09);
+        color: var(--accent);
+      }
+
+      .client-error {
+        margin-top: 14px;
+      }
+
+      @media (max-width: 980px) {
+        .hero-shell {
+          flex-direction: column;
+        }
+
+        .hero-side,
+        .run-browser {
+          width: 100%;
+          min-width: 0;
+        }
+
+        .run-browser-form {
+          grid-template-columns: 1fr;
+        }
+
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+
+        .panel-header {
+          flex-direction: column;
+        }
+
+        table, thead, tbody, tr, th, td {
+          display: block;
+          width: 100%;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tr {
+          border-bottom: 1px solid rgba(90, 102, 123, 0.12);
+          padding: 12px 0;
+        }
+
+        td {
+          padding: 8px 0;
+          border: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <div class="eyebrow">Eqn2Sim Workflow</div>
+            <h1>Raw text to downloadable Simulink model</h1>
+            <p>
+              Start with plain-English dynamics, generate a structured draft, inspect the rendered equations,
+              confirm every symbol definition deterministically, then build and download the `.slx`.
+            </p>
+            <div class="actions hero-actions">
+              <a class="button-link secondary-link" href="{{ url_for('index') }}">Reset All</a>
+            </div>
+          </div>
+          <div class="hero-side">
+            {% if recent_runs %}
+            <div class="run-browser">
+              <div class="eyebrow">Run Browser</div>
+              <div class="run-browser-head">
+                <div class="run-browser-id">
+                  <strong>{% if active_run_name %}Selected run{% else %}Saved runs{% endif %}</strong>
+                  <code>{% if active_run_name %}{{ active_run_name }}{% else %}No run selected{% endif %}</code>
+                </div>
+                <div class="run-browser-meta">
+                  {% if active_run_index is not none %}
+                  {{ active_run_index + 1 }} / {{ recent_runs|length }}
+                  {% else %}
+                  {{ recent_runs|length }} saved
+                  {% endif %}
+                </div>
+              </div>
+              <form method="get" class="run-browser-form">
+                <select name="run" aria-label="Load saved run">
+                  <option value="">Choose a run id</option>
+                  {% for run in recent_runs %}
+                  <option value="{{ run.run_name }}" {% if run.run_name == active_run_name %}selected{% endif %}>{{ run.run_name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="secondary">Load</button>
+              </form>
+              <div class="run-browser-nav">
+                <a class="button-link secondary-link {% if not run_prev_url %}disabled-link{% endif %}" href="{{ run_prev_url or '#' }}">Prev</a>
+                <a class="button-link secondary-link {% if not run_next_url %}disabled-link{% endif %}" href="{{ run_next_url or '#' }}">Next</a>
+                {% if active_run_download_url %}
+                <a class="button-link" href="{{ active_run_download_url }}">Download</a>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      {% if error_message %}
+      <div class="panel error">{{ error_message }}</div>
+      {% endif %}
+
+      {% if info_message %}
+      <div class="panel info">{{ info_message }}</div>
+      {% endif %}
+
+      {% if debug_request_id %}
+      <details class="panel">
+        <summary>Backend debug trace</summary>
+        <div class="path-list" style="margin-top: 16px;">
+          <div>
+            <strong>Request ID</strong>
+            <code>{{ debug_request_id }}</code>
+          </div>
+          <div>
+            <strong>Trace file</strong>
+            <code>{{ debug_trace_path }}</code>
+          </div>
+          <div class="actions">
+            {% if debug_download_url %}
+            <a class="button-link secondary-link" href="{{ debug_download_url }}">Download debug JSON</a>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+      {% endif %}
+
+      {% if download_url %}
+      <div class="panel success">
+        <strong>Simulink model ready.</strong>
+        <div class="actions">
+          <a class="button-link" href="{{ download_url }}">Download .slx</a>
+        </div>
+        <div class="path-list">
+          <div>
+            <strong>Artifact directory</strong>
+            <code>{{ artifact_dir }}</code>
+          </div>
+          <div>
+            <strong>Validated spec</strong>
+            <code>{{ validated_spec_path }}</code>
+          </div>
+          <div>
+            <strong>Model dictionary</strong>
+            <code>{{ model_dict_path }}</code>
+          </div>
+          <div>
+            <strong>Simulink file</strong>
+            <code>{{ simulink_model_path }}</code>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if recent_runs %}
+      <details class="panel">
+        <summary>Recent runs</summary>
+        <div class="path-list" style="margin-top: 16px;">
+          {% for run in recent_runs %}
+          <div class="subpanel">
+            <div>
+              <strong>{{ run.run_name }}</strong>
+              <span class="field-note">Updated {{ run.updated_at }}</span>
+            </div>
+            <div>
+              <strong>Status</strong>
+              {% if run.has_model %}Model ready{% else %}Saved metadata only{% endif %}
+            </div>
+            <div>
+              <strong>Equations</strong>
+              {{ run.equation_count }}
+            </div>
+            {% if run.latex_preview %}
+            <div>
+              <strong>Preview</strong>
+              <code>{{ run.latex_preview }}</code>
+            </div>
+            {% endif %}
+            <div>
+              <strong>Artifact directory</strong>
+              <code>{{ run.artifact_dir }}</code>
+            </div>
+            {% if run.download_url %}
+            <div class="actions">
+              <a class="button-link secondary-link" href="{{ run.download_url }}">Download .slx</a>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+
+      <div id="working-banner" class="panel info" aria-live="polite">
+        <div class="progress-head">
+          <div>
+            <div class="eyebrow">In Progress</div>
+            <h2 id="working-title">Processing request</h2>
+          </div>
+          <div id="working-progress-label" class="progress-meta">0%</div>
+        </div>
+        <p id="working-stage-text" class="muted" style="margin-top: 10px;">Preparing request...</p>
+        <div class="progress-shell">
+          <div id="working-progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="working-stage-list" class="progress-stage-list"></div>
+      </div>
+
+      <form method="post" id="eqn2sim-form">
+        <input type="hidden" name="debug_request_id" id="debug-request-id" value="{{ debug_request_id }}">
+        <textarea name="structured_output_json" hidden>{{ structured_output_json }}</textarea>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 1</div>
+              <h2>Describe the system in raw text</h2>
+              <p>Paste the problem statement or a rough system description. The LLM will return structured equations and symbol metadata.</p>
+            </div>
+          </div>
+          <textarea
+            name="raw_text"
+            placeholder="Example: A cart of mass m is attached to a spring k and damper c. The cart position is x. An external force u acts on the cart."
+          >{{ raw_text }}</textarea>
+          <div class="actions">
+            <button
+              type="submit"
+              name="action"
+              value="draft_structured"
+              data-busy-text="Generating structured output..."
+              data-progress-title="Generating structured output"
+              data-progress-stages="Sending raw text to the LLM|Validating structured response|Preparing equation review"
+            >Generate Structured Output</button>
+          </div>
+        </section>
+
+        {% if structured_output_json %}
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 2</div>
+              <h2>Structured output</h2>
+              <p>This is the exact structured draft returned by the LLM before deterministic parsing takes over.</p>
+            </div>
+          </div>
+          <div class="subpanel">
+            <pre>{{ structured_output_json }}</pre>
+          </div>
+        </section>
+        {% endif %}
+
+        {% if show_latex_stage or latex_text %}
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 3</div>
+              <h2>Review the generated equations</h2>
+              <p>Edit the LaTeX if needed. The deterministic symbol inventory refreshes from this box.</p>
+            </div>
+            <div class="stage-pill {% if can_generate_model %}ready-pill{% else %}wait-pill{% endif %}">
+              {% if can_generate_model %}Ready for model generation{% else %}Definitions still needed{% endif %}
+            </div>
+          </div>
+          <textarea name="latex" placeholder="Generated LaTeX equations will appear here.">{{ latex_text }}</textarea>
+          <div class="actions">
+            <button
+              type="submit"
+              class="secondary"
+              name="action"
+              value="refresh_equations"
+              data-busy-text="Refreshing deterministic extraction..."
+              data-progress-title="Refreshing deterministic extraction"
+              data-progress-stages="Normalizing LaTeX|Parsing equations|Refreshing symbol inventory"
+            >Refresh Deterministic Extraction</button>
+            <button
+              type="submit"
+              id="auto-refresh-button"
+              name="action"
+              value="refresh_equations"
+              data-busy-text="Refreshing deterministic extraction..."
+              data-progress-title="Refreshing deterministic extraction"
+              data-progress-stages="Normalizing LaTeX|Parsing equations|Refreshing symbol inventory"
+              style="display:none;"
+            >Auto Refresh</button>
+          </div>
+
+          <div class="grid-2" style="margin-top: 18px;">
+            <div class="subpanel preview">
+              <h3>Rendered equations</h3>
+              <p class="muted" style="margin-bottom: 12px;">This is the equation set the system currently understands from the editor above.</p>
+              {% if preview_svg %}
+                {{ preview_svg | safe }}
+              {% elif preview_error %}
+                <div class="inline-status warning">{{ preview_error }}</div>
+              {% else %}
+                <div class="inline-status info">No rendered equation preview is available yet.</div>
+              {% endif %}
+            </div>
+            <div class="subpanel">
+              <h3>Normalized LaTeX</h3>
+              <p class="muted" style="margin-bottom: 12px;">This normalized form is what the deterministic frontend is validating.</p>
+              <pre>{{ normalized_latex }}</pre>
+            </div>
+          </div>
+        </section>
+        {% endif %}
+
+        {% if inventory %}
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 4</div>
+              <h2>Deterministic symbol extraction</h2>
+              <p>Every symbol below comes directly from the equation set. Fill in the required values so generation can proceed.</p>
+            </div>
+          </div>
+
+          {% if can_generate_model %}
+          <div class="status-panel success">
+            <strong>Definition check passed.</strong> Every detected symbol and state currently has the information required to build the Simulink model.
+          </div>
+          {% else %}
+          <div class="status-panel warning">
+            <strong>Generation is still locked.</strong> Finish the remaining definitions below.
+            {% if readiness_blockers %}
+            <ul class="blocker-list">
+              {% for blocker in readiness_blockers %}
+              <li>{{ blocker }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div style="margin-top: 16px; overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Detected order</th>
+                  <th>Role</th>
+                  <th>Description</th>
+                  <th>Units</th>
+                  <th>Value</th>
+                  <th>Input handling</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for entry in inventory %}
+                {% set values = symbol_values.get(entry.name, {}) %}
+                <tr class="symbol-row" data-derivative-order="{{ entry.max_derivative_order }}">
+                  <td><code>{{ entry.name }}</code></td>
+                  <td>{{ entry.max_derivative_order }}</td>
+                  <td>
+                    <select name="symbol_role__{{ entry.name }}" data-field="role">
+                      {% for role in gui_symbol_roles %}
+                      <option value="{{ role }}" {% if values.get('role', entry.suggested_role) == role %}selected{% endif %}>{{ role }}</option>
+                      {% endfor %}
+                    </select>
+                    <span class="field-note">Suggested role: {{ entry.suggested_role }}</span>
+                  </td>
+                  <td>
+                    <input type="text" name="symbol_description__{{ entry.name }}" value="{{ values.get('description', '') }}">
+                  </td>
+                  <td>
+                    <input type="text" name="symbol_units__{{ entry.name }}" value="{{ values.get('units', '') }}">
+                  </td>
+                  <td>
+                    <input type="text" name="symbol_value__{{ entry.name }}" value="{{ values.get('value', '') }}" data-field="value">
+                    <span class="field-note">Required for inputs, parameters, and known constants.</span>
+                  </td>
+                  <td>
+                    <select name="symbol_input_kind__{{ entry.name }}" data-field="input-kind">
+                      {% for kind in ['constant', 'inport'] %}
+                      <option value="{{ kind }}" {% if values.get('input_kind', 'constant') == kind %}selected{% endif %}>{{ kind }}</option>
+                      {% endfor %}
+                    </select>
+                    <span class="field-note">Ignored unless this symbol is marked as an input.</span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 5</div>
+              <h2>State initial conditions</h2>
+              <p>Each derived state must have a numeric initial condition before model generation is allowed.</p>
+            </div>
+          </div>
+          <div class="grid-3">
+            {% for state in state_chain %}
+            <label class="subpanel">
+              <strong>{{ state }}</strong>
+              <input class="state-ic-field" type="text" name="state_ic__{{ state }}" value="{{ state_initials.get(state, '0.0') }}" style="margin-top: 10px;">
+            </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 6</div>
+              <h2>Build and download</h2>
+              <p>The Simulink build stays disabled until the deterministic checks above are complete.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button
+              type="submit"
+              id="generate-model-button"
+              name="action"
+              value="generate_model"
+              data-busy-text="Generating Simulink model..."
+              data-progress-title="Generating Simulink model"
+              data-progress-stages="Validating symbol definitions|Lowering equations into the backend|Building the Simulink artifact|Running ODE and Simulink previews|Preparing the download"
+              data-timeout-ms="300000"
+              {% if not can_generate_model %}disabled{% endif %}
+            >Generate Simulink Model</button>
+            {% if download_url %}
+            <a class="button-link" href="{{ download_url }}">Download .slx</a>
+            {% endif %}
+          </div>
+        </section>
+        {% endif %}
+
+        {% if summary %}
+        <details class="panel">
+          <summary>Validated representation details</summary>
+          <div class="grid-2" style="margin-top: 16px;">
+            <div class="subpanel">
+              <h3>Equations</h3>
+              <pre>{{ summary.equations | tojson(indent=2) }}</pre>
+            </div>
+            <div class="subpanel">
+              <h3>States</h3>
+              <pre>{{ summary.states | tojson(indent=2) }}</pre>
+            </div>
+          </div>
+          <div class="subpanel" style="margin-top: 16px;">
+            <h3>Symbol metadata</h3>
+            <pre>{{ summary.symbols | tojson(indent=2) }}</pre>
+          </div>
+          <div class="subpanel" style="margin-top: 16px;">
+            <h3>Canonical equation dicts</h3>
+            <pre>{{ summary.equation_dicts | tojson(indent=2) }}</pre>
+          </div>
+        </details>
+        {% endif %}
+
+        {% if state_trajectory_svg or state_trajectory_error %}
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Simulation Preview</div>
+              <h2>State trajectories over time</h2>
+              <p>
+                {% if state_trajectory_summary %}
+                {% if state_trajectory_summary.simulink_available %}
+                Overlaid ODE and Simulink trajectories from {{ state_trajectory_summary.t_start }}s to {{ state_trajectory_summary.t_stop }}s
+                with {{ state_trajectory_summary.sample_count }} samples.
+                {% else %}
+                ODE trajectory preview from {{ state_trajectory_summary.t_start }}s to {{ state_trajectory_summary.t_stop }}s
+                with {{ state_trajectory_summary.sample_count }} samples.
+                {% endif %}
+                {% else %}
+                State trajectory preview using the current parameter values and initial conditions.
+                {% endif %}
+              </p>
+            </div>
+          </div>
+          {% if state_trajectory_error %}
+          <div class="status-panel warning">
+            <strong>Simulink overlay unavailable.</strong> {{ state_trajectory_error }}
+          </div>
+          {% endif %}
+          {% if state_trajectory_svg %}
+          <div class="subpanel trajectory-plot" style="margin-top: 16px;">
+            {{ state_trajectory_svg | safe }}
+          </div>
+          {% endif %}
+          {% if state_trajectory_summary or state_trajectory_plot_path or state_trajectory_data_path %}
+          <div class="path-list">
+            {% if state_trajectory_summary %}
+            <div>
+              <strong>States plotted</strong>
+              <code>{{ state_trajectory_summary.state_names | join(', ') }}</code>
+            </div>
+            <div>
+              <strong>Series</strong>
+              <code>{{ state_trajectory_summary.series_labels | join(', ') }}</code>
+            </div>
+            {% endif %}
+            {% if state_trajectory_plot_path %}
+            <div>
+              <strong>Plot artifact</strong>
+              <code>{{ state_trajectory_plot_path }}</code>
+            </div>
+            {% endif %}
+            {% if state_trajectory_data_path %}
+            <div>
+              <strong>Trajectory data</strong>
+              <code>{{ state_trajectory_data_path }}</code>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </section>
+        {% endif %}
+      </form>
+    </main>
+
+    <script>
+      (function () {
+        const form = document.getElementById("eqn2sim-form");
+        const banner = document.getElementById("working-banner");
+        const workingTitle = document.getElementById("working-title");
+        const workingStageText = document.getElementById("working-stage-text");
+        const workingProgressLabel = document.getElementById("working-progress-label");
+        const workingProgressFill = document.getElementById("working-progress-fill");
+        const workingStageList = document.getElementById("working-stage-list");
+        const debugRequestIdField = document.getElementById("debug-request-id");
+        const latexField = form ? form.querySelector('textarea[name="latex"]') : null;
+        const autoRefreshButton = document.getElementById("auto-refresh-button");
+        const buildButton = document.getElementById("generate-model-button");
+        const submitButtons = form ? form.querySelectorAll('button[type="submit"]') : [];
+        const debugRootHint = "{{ debug_root_hint }}";
+
+        if (!form || !banner) {
+          return;
+        }
+
+        let autoRefreshTimer = null;
+        let progressTimer = null;
+        let lastAnalyzedLatex = latexField ? latexField.value : "";
+        let activeSubmitter = null;
+        let requestController = null;
+        let requestTimeoutTimer = null;
+        const defaultRequestTimeoutMs = 45000;
+
+        function isNumeric(value) {
+          if (!value.trim()) {
+            return false;
+          }
+          return !Number.isNaN(Number(value));
+        }
+
+        function updateBuildReadiness() {
+          if (!buildButton) {
+            return;
+          }
+
+          const rows = form.querySelectorAll(".symbol-row");
+          if (!rows.length) {
+            buildButton.disabled = true;
+            return;
+          }
+
+          let ready = true;
+
+          rows.forEach(function (row) {
+            const roleField = row.querySelector('[data-field="role"]');
+            const valueField = row.querySelector('[data-field="value"]');
+            const inputKindField = row.querySelector('[data-field="input-kind"]');
+            const derivativeOrder = Number(row.dataset.derivativeOrder || "0");
+            const role = roleField ? roleField.value : "";
+            const value = valueField ? valueField.value : "";
+            const inputKind = inputKindField ? inputKindField.value : "constant";
+
+            if (!role) {
+              ready = false;
+              return;
+            }
+            if (derivativeOrder > 0 && role !== "state") {
+              ready = false;
+            }
+            if (derivativeOrder === 0 && role === "state") {
+              ready = false;
+            }
+            if (["parameter", "known_constant", "input"].includes(role) && !isNumeric(value)) {
+              ready = false;
+            }
+            if (role === "input" && !["constant", "inport"].includes(inputKind)) {
+              ready = false;
+            }
+          });
+
+          form.querySelectorAll(".state-ic-field").forEach(function (field) {
+            if (!isNumeric(field.value)) {
+              ready = false;
+            }
+          });
+
+          buildButton.disabled = !ready;
+        }
+
+        function progressPercent(stageIndex, stageCount) {
+          if (stageCount <= 1) {
+            return 90;
+          }
+          const checkpoints = [18, 42, 66, 82, 92];
+          if (stageCount <= checkpoints.length) {
+            return checkpoints[Math.min(stageIndex, checkpoints.length - 1)];
+          }
+          return Math.min(92, 18 + Math.round((74 * stageIndex) / (stageCount - 1)));
+        }
+
+        function renderProgressStages(stages, activeIndex) {
+          if (!workingStageList) {
+            return;
+          }
+          workingStageList.innerHTML = "";
+          stages.forEach(function (stage, index) {
+            const item = document.createElement("div");
+            item.className = "progress-stage";
+            if (index < activeIndex) {
+              item.classList.add("progress-stage-done");
+            } else if (index === activeIndex) {
+              item.classList.add("progress-stage-active");
+            }
+            item.textContent = stage;
+            workingStageList.appendChild(item);
+          });
+        }
+
+        function clearProgressTimer() {
+          if (progressTimer) {
+            window.clearInterval(progressTimer);
+            progressTimer = null;
+          }
+        }
+
+        function clearRequestTimers() {
+          if (requestTimeoutTimer) {
+            window.clearTimeout(requestTimeoutTimer);
+            requestTimeoutTimer = null;
+          }
+          if (requestController) {
+            requestController = null;
+          }
+        }
+
+        function getRequestTimeoutMs(submitter) {
+          const rawValue = submitter && submitter.getAttribute("data-timeout-ms");
+          const parsedValue = rawValue ? Number.parseInt(rawValue, 10) : NaN;
+          if (Number.isFinite(parsedValue) && parsedValue > 0) {
+            return parsedValue;
+          }
+          return defaultRequestTimeoutMs;
+        }
+
+        function removeClientError() {
+          const existing = document.getElementById("client-error-panel");
+          if (existing) {
+            existing.remove();
+          }
+        }
+
+        function ensureDebugRequestId(forceNew) {
+          if (!debugRequestIdField) {
+            return "";
+          }
+          const existing = !forceNew ? (debugRequestIdField.value || "").trim() : "";
+          if (existing) {
+            return existing;
+          }
+          let generated = "";
+          if (window.crypto && window.crypto.randomUUID) {
+            generated = window.crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+          } else {
+            generated = (Date.now().toString(16) + Math.random().toString(16).slice(2)).slice(0, 12);
+          }
+          debugRequestIdField.value = generated;
+          return generated;
+        }
+
+        function showClientError(message) {
+          removeClientError();
+          const panel = document.createElement("div");
+          panel.id = "client-error-panel";
+          panel.className = "panel error client-error";
+          panel.textContent = message;
+          form.parentNode.insertBefore(panel, form);
+        }
+
+        function configureProgress(submitter) {
+          const title = submitter
+            ? (submitter.getAttribute("data-progress-title") || submitter.textContent || "Processing request")
+            : "Processing request";
+          const rawStages = submitter ? (submitter.getAttribute("data-progress-stages") || "") : "";
+          const stages = rawStages
+            ? rawStages.split("|").map(function (item) { return item.trim(); }).filter(Boolean)
+            : ["Processing request"];
+          let activeIndex = 0;
+          let pulseToggle = false;
+
+          clearProgressTimer();
+          banner.style.display = "block";
+          if (workingTitle) {
+            workingTitle.textContent = title;
+          }
+          if (workingStageText) {
+            workingStageText.textContent = stages[0];
+          }
+          if (workingProgressFill) {
+            workingProgressFill.style.width = progressPercent(0, stages.length) + "%";
+          }
+          if (workingProgressLabel) {
+            workingProgressLabel.textContent = progressPercent(0, stages.length) + "%";
+          }
+          renderProgressStages(stages, activeIndex);
+
+          progressTimer = window.setInterval(function () {
+            if (activeIndex < stages.length - 1) {
+              activeIndex += 1;
+              const percent = progressPercent(activeIndex, stages.length);
+              if (workingStageText) {
+                workingStageText.textContent = stages[activeIndex];
+              }
+              if (workingProgressFill) {
+                workingProgressFill.style.width = percent + "%";
+              }
+              if (workingProgressLabel) {
+                workingProgressLabel.textContent = percent + "%";
+              }
+              renderProgressStages(stages, activeIndex);
+              return;
+            }
+
+            pulseToggle = !pulseToggle;
+            if (workingProgressFill) {
+              workingProgressFill.style.width = pulseToggle ? "92%" : "88%";
+            }
+            if (workingProgressLabel) {
+              workingProgressLabel.textContent = "Working...";
+            }
+          }, 900);
+        }
+
+        function setBusyState(submitter) {
+          const effectiveSubmitter = submitter || activeSubmitter;
+          const busyText = effectiveSubmitter
+            ? (effectiveSubmitter.getAttribute("data-busy-text") || "Working...")
+            : "Working...";
+          removeClientError();
+          configureProgress(effectiveSubmitter);
+          if (workingStageText && effectiveSubmitter && !effectiveSubmitter.getAttribute("data-progress-stages")) {
+            workingStageText.textContent = busyText;
+          }
+          submitButtons.forEach(function (button) {
+            button.disabled = true;
+            if (button === effectiveSubmitter) {
+              if (!button.dataset.originalText) {
+                button.dataset.originalText = button.textContent;
+              }
+              button.textContent = busyText;
+            }
+          });
+        }
+
+        function clearBusyState() {
+          clearProgressTimer();
+          clearRequestTimers();
+          banner.style.display = "none";
+          submitButtons.forEach(function (button) {
+            button.disabled = false;
+            if (button.dataset.originalText) {
+              button.textContent = button.dataset.originalText;
+            }
+          });
+          updateBuildReadiness();
+        }
+
+        async function submitForm(event) {
+          event.preventDefault();
+          const submitter = event.submitter || activeSubmitter;
+          activeSubmitter = submitter;
+          setBusyState(submitter);
+          clearRequestTimers();
+          const debugRequestId = ensureDebugRequestId(true);
+
+          const formData = new FormData(form);
+          if (submitter && submitter.name) {
+            formData.set(submitter.name, submitter.value);
+          }
+          const submitUrl =
+            (submitter && submitter.getAttribute("formaction")) ||
+            form.getAttribute("action") ||
+            window.location.pathname ||
+            window.location.href;
+          const submitMethod = (
+            (submitter && submitter.getAttribute("formmethod")) ||
+            form.getAttribute("method") ||
+            "post"
+          ).toUpperCase();
+          const requestTimeoutMs = getRequestTimeoutMs(submitter);
+          const requestTimeoutSeconds = Math.round(requestTimeoutMs / 1000);
+
+          requestController = new AbortController();
+          requestTimeoutTimer = window.setTimeout(function () {
+            if (requestController) {
+              requestController.abort();
+            }
+          }, requestTimeoutMs);
+
+          try {
+            const response = await window.fetch(submitUrl, {
+              method: submitMethod,
+              body: formData,
+              signal: requestController.signal,
+              headers: {
+                "X-Requested-With": "Eqn2SimGUI",
+              },
+            });
+            const html = await response.text();
+            document.open();
+            document.write(html);
+            document.close();
+          } catch (error) {
+            clearBusyState();
+            if (error && error.name === "AbortError") {
+              showClientError(
+                "The request took longer than "
+                + requestTimeoutSeconds
+                + " seconds. "
+                + "Debug request id: "
+                + debugRequestId
+                + ". "
+                + "Check the backend trace in "
+                + debugRootHint
+                + " or retry and download the debug JSON."
+              );
+              return;
+            }
+            showClientError(
+              "The request failed before the page could refresh. "
+              + "Debug request id: "
+              + debugRequestId
+              + ". "
+              + "Check the backend trace in "
+              + debugRootHint
+              + " and the terminal for server errors."
+            );
+          }
+        }
+
+        form.addEventListener("submit", submitForm);
+
+        submitButtons.forEach(function (button) {
+          button.addEventListener("click", function () {
+            activeSubmitter = button;
+          });
+        });
+
+        form.addEventListener("input", updateBuildReadiness);
+        form.addEventListener("change", updateBuildReadiness);
+        updateBuildReadiness();
+
+        if (latexField && autoRefreshButton) {
+          latexField.addEventListener("input", function () {
+            updateBuildReadiness();
+            if (autoRefreshTimer) {
+              window.clearTimeout(autoRefreshTimer);
+            }
+            autoRefreshTimer = window.setTimeout(function () {
+              if (!latexField.value.trim() || latexField.value === lastAnalyzedLatex) {
+                return;
+              }
+              lastAnalyzedLatex = latexField.value;
+              activeSubmitter = autoRefreshButton;
+              if (typeof form.requestSubmit === "function") {
+                form.requestSubmit(autoRefreshButton);
+              } else {
+                autoRefreshButton.click();
+              }
+            }, 700);
+          });
+        }
+
+        window.addEventListener("pageshow", function () {
+          clearBusyState();
+        });
+      }());
+    </script>
+  </body>
+</html>

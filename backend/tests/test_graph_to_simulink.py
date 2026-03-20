@@ -81,6 +81,18 @@ class GraphToSimulinkTests(unittest.TestCase):
         self.assertIn("TrigonometricFunction", block_types)
         self.assertIn("Divide", block_types)
 
+    def test_abs_and_sqrt_graph_map_to_backend_blocks(self) -> None:
+        equations = translate_latex(r"\dot{x}=\sqrt{x}+\lvert x \rvert")
+        first_order = build_first_order_system(equations)
+        graph = lower_first_order_system_graph(first_order, name="abs_sqrt_blocks")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+        )
+        block_types = {spec["type"] for spec in model["blocks"].values()}
+        self.assertIn("MathFunction", block_types)
+        self.assertIn("Abs", block_types)
+
     def test_non_integer_power_uses_math_function_chain(self) -> None:
         first_order = build_first_order_system(translate_latex(r"\dot{x}=x^{\frac{1}{2}}"))
         graph = lower_first_order_system_graph(first_order, name="fractional_power")

@@ -9,6 +9,7 @@ from typing import Any
 import matlab
 
 from ir.simulink_dict import validate_model_dict
+from repo_paths import GENERATED_MODELS_ROOT
 from simulink.constants import (
     DEFAULT_BLOCK_POSITION,
     DEFAULT_HORIZONTAL_SPACING,
@@ -69,7 +70,7 @@ def build_model(
     """Create, connect, save, and optionally simulate a Simulink model."""
     normalized_model = validate_model_dict(model_dict)
     model_name = sanitize_block_name(normalized_model["name"])
-    output_root = ensure_output_dir(output_dir or Path.cwd() / "generated_models")
+    output_root = ensure_output_dir(output_dir or GENERATED_MODELS_ROOT)
     model_file = output_root / f"{model_name}.slx"
 
     LOGGER.info("Building Simulink model %s", model_name)

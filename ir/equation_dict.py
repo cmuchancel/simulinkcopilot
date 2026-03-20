@@ -31,6 +31,7 @@ from latex_frontend.symbols import (
 
 
 _SYMPY_FUNCTIONS: dict[str, object] = {
+    "abs": sympy.Abs,
     "sin": sympy.sin,
     "cos": sympy.cos,
     "tan": sympy.tan,
@@ -51,6 +52,7 @@ _SYMPY_FUNCTIONS: dict[str, object] = {
     "atanh": sympy.atanh,
     "exp": sympy.exp,
     "log": sympy.log,
+    "sqrt": sympy.sqrt,
 }
 _SYMPY_FUNCTIONS_REVERSE = {value: key for key, value in _SYMPY_FUNCTIONS.items()}
 

@@ -1,0 +1,54 @@
+{
+  "classification_mode": "configured",
+  "depth": 3,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "source": "simulate.synthetic_benchmark"
+  },
+  "family": "legacy::nonlinear_polynomial",
+  "generated_state_count": 6,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": -0.06,
+    "x_2": 0.07,
+    "x_3": -0.04,
+    "x_4": 0.05,
+    "x_5": -0.06,
+    "x_6": 0.07
+  },
+  "input_values": {},
+  "max_order": 1,
+  "nonlinear": true,
+  "parameter_values": {
+    "a": 0.22,
+    "b": 0.09,
+    "c": 0.065,
+    "k": 0.12,
+    "m": 0.7
+  },
+  "sample_count": 110,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "syn_s6_d3_u0_f2",
+  "t_span": [
+    0.0,
+    3.5
+  ],
+  "tags": [
+    "legacy",
+    "synthetic",
+    "nonlinear_polynomial"
+  ],
+  "tier": "tier1_verified"
+}

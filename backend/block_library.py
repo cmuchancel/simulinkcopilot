@@ -56,6 +56,10 @@ BLOCK_LIBRARY = {
         "path": "simulink/Math Operations/Math Function",
         "ports": ["in", "out"],
     },
+    "Abs": {
+        "path": "simulink/Math Operations/Abs",
+        "ports": ["in", "out"],
+    },
     "Subsystem": {
         "path": "simulink/Ports & Subsystems/Subsystem",
         "ports": ["in", "out"],
@@ -85,6 +89,8 @@ GRAPH_OP_TO_BLOCK = {
     "asinh": "TrigonometricFunction",
     "acosh": "TrigonometricFunction",
     "atanh": "TrigonometricFunction",
+    "abs": "Abs",
     "exp": "MathFunction",
     "log": "MathFunction",
+    "sqrt": "MathFunction",
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 import matlab
 
 from backend.simulink_dict import ROOT_SYSTEM, BackendSimulinkModelDict, validate_simulink_model_dict
+from repo_paths import GENERATED_MODELS_ROOT
 from simulink.utils import ensure_output_dir, format_position, matlab_param_value, sanitize_block_name
 
 
@@ -73,7 +74,7 @@ def build_simulink_model(
     """Build a hierarchical backend model and validate that all blocks exist."""
     normalized = validate_simulink_model_dict(model_dict)
     model_name = sanitize_block_name(normalized["name"])
-    output_root = ensure_output_dir(output_dir or Path.cwd() / "generated_models")
+    output_root = ensure_output_dir(output_dir or GENERATED_MODELS_ROOT)
     model_file = output_root / f"{model_name}.slx"
 
     eng.load_system("simulink", nargout=0)

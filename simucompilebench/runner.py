@@ -25,6 +25,7 @@ from ir.equation_dict import equation_to_string
 from ir.graph_lowering import lower_first_order_system_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.translator import translate_latex
+from repo_paths import GENERATED_MODELS_ROOT
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
@@ -416,7 +417,7 @@ def run_extended_benchmark(
                             build_info = build_simulink_model(
                                 eng,
                                 model,
-                                output_dir=Path("generated_models") / "simucompilebench_models",
+                                output_dir=GENERATED_MODELS_ROOT / "simucompilebench_models",
                             )
                             simulink_build_time_sec = time.perf_counter() - build_start
                             model_name = str(build_info["model_name"])

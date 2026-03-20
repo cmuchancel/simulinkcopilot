@@ -1,7 +1,16 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-generated_models/
+.env
+workspace/generated_models/
+workspace/bedillion_demo/
+workspace/reports/
+workspace/paper/*.aux
+workspace/paper/*.bbl
+workspace/paper/*.blg
+workspace/paper/*.fdb_latexmk
+workspace/paper/*.fls
+workspace/paper/*.log
 *.slx
 *.slxc
 slprj/

@@ -6,6 +6,7 @@ import json
 import shutil
 from pathlib import Path
 
+from repo_paths import BENCHMARK_ROOT, DATA_ROOT
 from simulate.synthetic_benchmark import (
     DEFAULT_SYNTHETIC_SEED,
     DEFAULT_SYNTHETIC_SYSTEM_COUNT,
@@ -798,8 +799,8 @@ def build_simucompilebench_specs(
 def write_benchmark_dataset(
     specs: list[BenchmarkSystemSpec],
     *,
-    root_dir: str | Path = "benchmark",
-    data_path: str | Path = "data/simucompilebench_systems.json",
+    root_dir: str | Path = BENCHMARK_ROOT,
+    data_path: str | Path = DATA_ROOT / "simucompilebench_systems.json",
 ) -> dict[str, object]:
     """Write the benchmark dataset to a tiered on-disk structure."""
     root = Path(root_dir)

@@ -1,0 +1,52 @@
+{
+  "classification_mode": "configured",
+  "depth": 2,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "source": "simulate.synthetic_benchmark"
+  },
+  "family": "legacy::linear_mixed_order",
+  "generated_state_count": 3,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": 0.07,
+    "x_1_dot": 0.01,
+    "x_2": -0.04,
+    "x_3": 0.05
+  },
+  "input_values": {},
+  "max_order": 2,
+  "nonlinear": false,
+  "parameter_values": {
+    "a": 0.31,
+    "b": 0.11,
+    "c": 0.065,
+    "k": 0.145,
+    "m": 0.6
+  },
+  "sample_count": 110,
+  "simulink_expected": true,
+  "symbol_config": {
+    "a": "parameter",
+    "b": "parameter",
+    "c": "parameter",
+    "k": "parameter",
+    "m": "parameter",
+    "u": "input"
+  },
+  "system_id": "syn_s3_d2_u0_f4",
+  "t_span": [
+    0.0,
+    3.0
+  ],
+  "tags": [
+    "legacy",
+    "synthetic",
+    "linear_mixed_order"
+  ],
+  "tier": "tier1_verified"
+}

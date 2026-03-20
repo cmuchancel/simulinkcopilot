@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
+from repo_paths import GENERATED_MODELS_ROOT
 from simulink.constants import CONSTANT_BLOCK, GAIN_BLOCK, SCOPE_BLOCK
 from simulink.engine import start_engine
 from simulink.utils import ensure_output_dir, format_position
@@ -15,7 +12,7 @@ from simulink.utils import ensure_output_dir, format_position
 
 def main() -> int:
     eng = start_engine(retries=3, retry_delay_seconds=3.0)
-    output_dir = ensure_output_dir(Path(__file__).resolve().parents[1] / "generated_models")
+    output_dir = ensure_output_dir(GENERATED_MODELS_ROOT)
     model_name = "basic_python_simulink_model"
     model_file = output_dir / f"{model_name}.slx"
 

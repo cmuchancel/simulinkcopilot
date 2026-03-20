@@ -213,6 +213,10 @@ class GraphToSimulinkLowerer:
                 value = float(math.exp(child_values[0]))
             elif op == "log":
                 value = float(math.log(child_values[0]))
+            elif op == "sqrt":
+                value = float(math.sqrt(child_values[0]))
+            elif op == "abs":
+                value = float(abs(child_values[0]))
             else:
                 value = None
 
@@ -656,6 +660,24 @@ class GraphToSimulinkLowerer:
             self.local_source_cache[node_id] = source
             self.add_connection(owner, (one_id, "1"), div_id, 1, label="1")
             self.add_connection(owner, (trig_id, "1"), div_id, 2, label=f"{base_op}({self.node_expressions[child_id]})")
+            return source
+
+        if op == "abs":
+            block_id = self.add_block(
+                f"abs_{node_id}",
+                "Abs",
+                system=owner,
+                name=f"abs_{_sanitize_for_id(node_id)}",
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": self.node_expressions[node_id],
+                },
+            )
+            source = (block_id, "1")
+            self.local_source_cache[node_id] = source
+            child_id = node["inputs"][0]
+            self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
             return source
 
         if op in DIRECT_SIMULINK_MATH_FUNCTIONS:

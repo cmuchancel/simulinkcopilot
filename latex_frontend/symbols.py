@@ -20,6 +20,7 @@ class DeterministicCompileError(ValueError):
 _DERIVATIVE_PATTERN = re.compile(r"^D(?P<order>\d+)_(?P<base>[A-Za-z][A-Za-z0-9_]*)$")
 
 LATEX_FUNCTION_ALIASES: dict[str, str] = {
+    "abs": "abs",
     "sin": "sin",
     "cos": "cos",
     "tan": "tan",
@@ -47,10 +48,26 @@ LATEX_FUNCTION_ALIASES: dict[str, str] = {
     "exp": "exp",
     "ln": "log",
     "log": "log",
+    "sqrt": "sqrt",
 }
 
 SUPPORTED_FUNCTION_NAMES = frozenset(LATEX_FUNCTION_ALIASES.values())
 SUPPORTED_LATEX_COMMANDS = frozenset({"dot", "ddot", "frac", "deriv"} | set(LATEX_FUNCTION_ALIASES))
+RESERVED_LATEX_COMMANDS = frozenset(
+    set(SUPPORTED_LATEX_COMMANDS)
+    | {
+        "left",
+        "right",
+        "lvert",
+        "rvert",
+        "begin",
+        "end",
+        "label",
+        "nonumber",
+        "quad",
+        "qquad",
+    }
+)
 DIRECT_SIMULINK_TRIG_FUNCTIONS = frozenset(
     {"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh"}
 )
@@ -62,7 +79,7 @@ RECIPROCAL_FUNCTION_BASES: dict[str, str] = {
     "csch": "sinh",
     "coth": "tanh",
 }
-DIRECT_SIMULINK_MATH_FUNCTIONS = frozenset({"exp", "log"})
+DIRECT_SIMULINK_MATH_FUNCTIONS = frozenset({"exp", "log", "sqrt"})
 
 
 def derivative_symbol_name(base: str, order: int) -> str:

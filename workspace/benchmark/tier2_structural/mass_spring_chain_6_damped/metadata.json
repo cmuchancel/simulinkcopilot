@@ -1,0 +1,68 @@
+{
+  "classification_mode": "configured",
+  "depth": 4,
+  "expected_failure_category": null,
+  "expected_failure_stage": null,
+  "expected_failure_substring": null,
+  "expected_properties": {
+    "expected_behavior": "pass",
+    "supports_state_space": true
+  },
+  "family": "physical_mass_spring",
+  "generated_state_count": 6,
+  "graph_fault": null,
+  "includes_trig": false,
+  "initial_conditions": {
+    "x_1": 0.15,
+    "x_1_dot": 0.0,
+    "x_2": 0.12,
+    "x_2_dot": 0.0,
+    "x_3": 0.09,
+    "x_3_dot": 0.0,
+    "x_4": 0.06,
+    "x_4_dot": 0.0,
+    "x_5": 0.03,
+    "x_5_dot": 0.0,
+    "x_6": 0.0,
+    "x_6_dot": 0.0
+  },
+  "input_values": {},
+  "max_order": 2,
+  "nonlinear": false,
+  "parameter_values": {
+    "c": 0.18,
+    "k": 1.4,
+    "m_1": 0.9500000000000001,
+    "m_2": 1.0,
+    "m_3": 1.05,
+    "m_4": 1.1,
+    "m_5": 1.15,
+    "m_6": 1.2000000000000002
+  },
+  "sample_count": 180,
+  "simulink_expected": true,
+  "symbol_config": {
+    "c": "parameter",
+    "k": "parameter",
+    "m_1": "parameter",
+    "m_2": "parameter",
+    "m_3": "parameter",
+    "m_4": "parameter",
+    "m_5": "parameter",
+    "m_6": "parameter"
+  },
+  "system_id": "mass_spring_chain_6_damped",
+  "t_span": [
+    0.0,
+    4.0
+  ],
+  "tags": [
+    "structural",
+    "physical",
+    "mass_spring",
+    "linear",
+    "high_state",
+    "damped"
+  ],
+  "tier": "tier2_structural"
+}
