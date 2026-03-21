@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from canonicalize.algebraic_substitution import inline_algebraic_definitions
+from canonicalize.algebraic_substitution import classify_algebraic_equations, inline_algebraic_definitions
 from ir.equation_dict import equation_to_string
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
@@ -58,3 +58,37 @@ def test_inline_algebraic_definitions_rejects_duplicate_helper_definitions() -> 
 
     with pytest.raises(DeterministicCompileError, match="defined algebraically more than once"):
         inline_algebraic_definitions(equations)
+
+
+def test_classify_algebraic_equations_distinguishes_helpers_from_constraints() -> None:
+    equations = translate_latex(
+        "\n".join(
+            [
+                "u=kx",
+                "x+y=1",
+                r"\dot{x}=u-y",
+            ]
+        )
+    )
+
+    classification = classify_algebraic_equations(equations)
+
+    assert set(classification.helper_definitions) == {"u"}
+    assert [equation_to_string(equation) for equation in classification.algebraic_constraints] == ["x + y = 1"]
+    assert [equation_to_string(equation) for equation in classification.dynamic_equations] == ["D1_x = u - y"]
+
+
+def test_inline_algebraic_definitions_preserves_algebraic_constraints_after_helper_substitution() -> None:
+    equations = translate_latex(
+        "\n".join(
+            [
+                "u=kx",
+                "x+y=u",
+                r"\dot{x}=u-y",
+            ]
+        )
+    )
+
+    result = inline_algebraic_definitions(equations)
+
+    assert [equation_to_string(equation) for equation in result.algebraic_constraints] == ["x + y = k*x"]

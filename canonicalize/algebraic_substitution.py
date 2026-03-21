@@ -13,35 +13,65 @@ from states.rules import collect_derivative_orders
 
 
 @dataclass(frozen=True)
+class AlgebraicEquationClassification:
+    """Partition equations into helper definitions, algebraic constraints, and dynamic equations."""
+
+    helper_definitions: dict[str, EquationNode]
+    algebraic_constraints: list[EquationNode]
+    dynamic_equations: list[EquationNode]
+
+
+@dataclass(frozen=True)
 class AlgebraicSubstitutionResult:
     """Expanded equation set plus the resolved helper definitions that were inlined."""
 
     equations: list[EquationNode]
     resolved_definitions: dict[str, EquationNode]
+    algebraic_constraints: list[EquationNode]
+
+
+def classify_algebraic_equations(equations: list[EquationNode]) -> AlgebraicEquationClassification:
+    """Identify explicit helper definitions separately from genuine algebraic constraints."""
+    helper_definitions: dict[str, EquationNode] = {}
+    algebraic_constraints: list[EquationNode] = []
+    dynamic_equations: list[EquationNode] = []
+
+    for equation in equations:
+        if _is_algebraic_definition(equation):
+            assert isinstance(equation.lhs, SymbolNode)  # narrowed by _is_algebraic_definition
+            symbol_name = equation.lhs.name
+            if symbol_name in helper_definitions:
+                raise DeterministicCompileError(
+                    f"Symbol {symbol_name!r} is defined algebraically more than once."
+                )
+            helper_definitions[symbol_name] = equation
+            continue
+        if _is_algebraic_constraint(equation):
+            algebraic_constraints.append(equation)
+            continue
+        dynamic_equations.append(equation)
+
+    return AlgebraicEquationClassification(
+        helper_definitions=helper_definitions,
+        algebraic_constraints=algebraic_constraints,
+        dynamic_equations=dynamic_equations,
+    )
 
 
 def inline_algebraic_definitions(equations: list[EquationNode]) -> AlgebraicSubstitutionResult:
     """Inline plain-symbol algebraic definitions into the remaining equations."""
-    derivative_orders = collect_derivative_orders(equations)
+    classification = classify_algebraic_equations(equations)
     definitions: dict[str, sympy.Expr] = {}
-    passthrough: list[EquationNode] = []
+    passthrough = [*classification.dynamic_equations, *classification.algebraic_constraints]
 
-    for equation in equations:
-        if _is_algebraic_definition(equation, derivative_orders):
-            assert isinstance(equation.lhs, SymbolNode)  # narrowed by _is_algebraic_definition
-            symbol_name = equation.lhs.name
-            if symbol_name in definitions:
-                raise DeterministicCompileError(
-                    f"Symbol {symbol_name!r} is defined algebraically more than once."
-                )
-            definitions[symbol_name] = sympy.simplify(equation_to_sympy(equation).rhs)
-            continue
-        passthrough.append(equation)
+    for symbol_name, equation in classification.helper_definitions.items():
+        definitions[symbol_name] = sympy.simplify(equation_to_sympy(equation).rhs)
 
     if not definitions:
         return AlgebraicSubstitutionResult(
             equations=list(equations),
             resolved_definitions={},
+            algebraic_constraints=list(classification.algebraic_constraints),
         )
 
     resolved_exprs: dict[str, sympy.Expr] = {}
@@ -94,6 +124,11 @@ def inline_algebraic_definitions(equations: list[EquationNode]) -> AlgebraicSubs
         )
         for equation in passthrough
     ]
+    expanded_constraints = [
+        equation
+        for equation in expanded_equations
+        if _is_algebraic_constraint(equation)
+    ]
     resolved_definitions = {
         symbol_name: EquationNode(
             lhs=SymbolNode(symbol_name),
@@ -104,15 +139,24 @@ def inline_algebraic_definitions(equations: list[EquationNode]) -> AlgebraicSubs
     return AlgebraicSubstitutionResult(
         equations=expanded_equations,
         resolved_definitions=resolved_definitions,
+        algebraic_constraints=expanded_constraints,
     )
 
 
-def _is_algebraic_definition(equation: EquationNode, derivative_orders: dict[str, int]) -> bool:
+def _equation_has_derivatives(equation: EquationNode) -> bool:
+    return bool(collect_derivative_orders([equation]))
+
+
+def _is_algebraic_definition(equation: EquationNode) -> bool:
     if not isinstance(equation.lhs, SymbolNode):
         return False
     if equation.lhs.name == "t":
         return False
-    return derivative_orders.get(equation.lhs.name, 0) == 0
+    return not _equation_has_derivatives(equation)
+
+
+def _is_algebraic_constraint(equation: EquationNode) -> bool:
+    return not _equation_has_derivatives(equation) and not _is_algebraic_definition(equation)
 
 
 def _substitute(*, expression: sympy.Expr, substitutions: dict[sympy.Symbol, sympy.Expr]) -> sympy.Expr:

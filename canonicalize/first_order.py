@@ -24,7 +24,17 @@ def build_first_order_system(
         solved_derivatives = analysis.solved_derivatives
 
     extraction = extraction or extract_states(equations)
-    solved_derivatives = solved_derivatives or solve_for_highest_derivatives(equations)
+    if solved_derivatives is None:
+        protected_symbols = {
+            *extraction.inputs,
+            *extraction.parameters,
+        }
+        if extraction.independent_variable is not None:
+            protected_symbols.add(extraction.independent_variable)
+        solved_derivatives = solve_for_highest_derivatives(
+            equations,
+            protected_symbols=protected_symbols,
+        )
 
     solved_map = {
         (item.base, item.order): expression_to_sympy(item.equation.rhs)

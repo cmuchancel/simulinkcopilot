@@ -4,6 +4,7 @@ import pytest
 import sympy
 
 from canonicalize import solve_for_derivatives as solve_module
+from ir.equation_dict import expression_to_sympy
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 
@@ -19,9 +20,21 @@ def test_solve_for_highest_derivatives_rejects_underdetermined_and_algebraic_con
     with pytest.raises(DeterministicCompileError, match="Underdetermined system"):
         solve_module.solve_for_highest_derivatives(underdetermined)
 
-    dae_like = translate_latex("x+y=1\n\\dot{x}=y")
-    with pytest.raises(DeterministicCompileError, match="does not contain a highest-order derivative target"):
+    dae_like = translate_latex("y^2-x=0\n\\dot{x}=y")
+    with pytest.raises(DeterministicCompileError, match="Algebraic/DAE-like constraints are unsupported"):
         solve_module.solve_for_highest_derivatives(dae_like)
+
+
+def test_solve_for_highest_derivatives_reduces_reducible_semi_explicit_dae() -> None:
+    equations = translate_latex("y-x=0\n\\dot{x}=-y")
+
+    solved = solve_module.solve_for_highest_derivatives(equations)
+
+    assert len(solved) == 1
+    assert str(solved[0].base) == "x"
+    assert sympy.simplify(
+        expression_to_sympy(solved[0].equation.rhs) + sympy.Symbol("x")
+    ) == 0
 
 
 def test_solve_for_highest_derivatives_converts_sympy_edge_cases_to_compile_errors(monkeypatch: pytest.MonkeyPatch) -> None:

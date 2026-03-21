@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ir.equation_dict import equation_to_dict
 from ir.operation_catalog import validate_supported_node
+from latex_frontend.matrix_expansion import expand_matrix_syntax
 from latex_frontend.normalize import normalize_latex
 from latex_frontend.parser import Parser
 from latex_frontend.tokenizer import tokenize
@@ -13,7 +14,8 @@ from latex_frontend.tokenizer import tokenize
 
 def translate_latex(text: str):
     """Translate LaTeX equations into deterministic IR nodes."""
-    parser = Parser(tokenize(normalize_latex(text)))
+    scalarized = expand_matrix_syntax(text)
+    parser = Parser(tokenize(normalize_latex(scalarized)))
     equations = parser.parse_document()
     for equation in equations:
         validate_supported_node(equation)

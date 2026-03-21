@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Collection
 
 import sympy
 
-from canonicalize.algebraic_substitution import inline_algebraic_definitions
-from ir.equation_dict import equation_to_residual, sympy_to_expression
+from canonicalize.dae_reduction import reduce_semi_explicit_dae
+from ir.equation_dict import equation_to_residual, equation_to_string, sympy_to_expression
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError, derivative_symbol_name
 from states.rules import collect_derivative_orders
@@ -31,10 +32,26 @@ class SolvedDerivative:
         }
 
 
-def solve_for_highest_derivatives(equations: list[EquationNode]) -> list[SolvedDerivative]:
+def solve_for_highest_derivatives(
+    equations: list[EquationNode],
+    *,
+    protected_symbols: Collection[str] = (),
+) -> list[SolvedDerivative]:
     """Solve the system for the highest-order derivative of each base state."""
-    resolved_equations = inline_algebraic_definitions(equations).equations
+    reduction = reduce_semi_explicit_dae(equations, protected_symbols=protected_symbols)
+    resolved_equations = reduction.equations
     derivative_orders = collect_derivative_orders(resolved_equations)
+    if not derivative_orders:
+        raise DeterministicCompileError("No derivatives found to solve for.")
+    if reduction.residual_constraints:
+        constraint_summary = "; ".join(
+            equation_to_string(equation)
+            for equation in reduction.residual_constraints
+        )
+        raise DeterministicCompileError(
+            "Algebraic/DAE-like constraints are unsupported in the explicit ODE pipeline: "
+            + constraint_summary
+        )
     targets = [
         (base, order, sympy.Symbol(derivative_symbol_name(base, order)))
         for base, order in sorted(derivative_orders.items())
@@ -50,14 +67,6 @@ def solve_for_highest_derivatives(equations: list[EquationNode]) -> list[SolvedD
         raise DeterministicCompileError(
             "Underdetermined system: fewer equations than highest-order derivative targets."
         )
-
-    residual_target_sets = [set(residual.free_symbols) & set(target_symbols) for residual in residuals]
-    for index, symbols in enumerate(residual_target_sets):
-        if not symbols:
-            raise DeterministicCompileError(
-                f"Equation {index} does not contain a highest-order derivative target; "
-                "algebraic/DAE-like constraints are unsupported."
-            )
 
     try:
         solutions = sympy.solve(

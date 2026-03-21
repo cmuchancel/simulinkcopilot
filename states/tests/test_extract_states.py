@@ -31,6 +31,22 @@ class ExtractStatesTests(unittest.TestCase):
         self.assertEqual(list(result.parameters), ["c", "k", "m"])
         self.assertNotIn("u", result.symbol_metadata)
 
+    def test_reducible_semi_explicit_dae_eliminates_algebraic_variable_before_classification(self) -> None:
+        result = extract_states(
+            translate_latex(
+                "\n".join(
+                    [
+                        "y-x=0",
+                        r"\dot{x}=-y",
+                    ]
+                )
+            )
+        )
+        self.assertEqual(list(result.states), ["x"])
+        self.assertEqual(list(result.inputs), [])
+        self.assertEqual(list(result.parameters), [])
+        self.assertNotIn("y", result.symbol_metadata)
+
     def test_ambiguous_input_parameter_split_raises(self) -> None:
         with self.assertRaises(DeterministicCompileError):
             extract_states(translate_latex(r"\dot{x}=ab"))

@@ -117,6 +117,32 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["extraction"].parameters, ("c", "k", "m"))
         self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
 
+    def test_pipeline_reduces_reducible_semi_explicit_dae_before_ode_simulation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "semi_explicit_dae.tex"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "y-x=0",
+                        r"\dot{x}=-y",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = run_pipeline(
+                input_path,
+                runtime_override={
+                    "initial_conditions": {"x": 1.0},
+                    "t_span": [0.0, 1.0],
+                    "sample_count": 30,
+                },
+            )
+        self.assertEqual(result["extraction"].states, ("x",))
+        self.assertEqual(result["extraction"].inputs, ())
+        self.assertEqual(result["extraction"].parameters, ())
+        self.assertTrue(result["comparison"]["passes"])
+        self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
+
     def test_pipeline_supports_declared_independent_variable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "time_varying.tex"

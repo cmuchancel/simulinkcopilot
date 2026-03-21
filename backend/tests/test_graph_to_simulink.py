@@ -91,6 +91,28 @@ class GraphToSimulinkTests(unittest.TestCase):
         )
         block_types = {spec["type"] for spec in model["blocks"].values()}
         self.assertIn("Clock", block_types)
+        visible_names = {spec["name"] for spec in model["blocks"].values()}
+        self.assertIn("t", visible_names)
+        self.assertIn("u", visible_names)
+
+    def test_parameter_and_input_blocks_use_user_facing_symbol_names(self) -> None:
+        first_order = build_first_order_system(translate_latex(r"\dot{x}=-a x+u"))
+        graph = lower_first_order_system_graph(first_order, name="symbol_labels")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+            parameter_values={"a": 0.5},
+            input_values={"u": 1.0},
+        )
+        root_names = {
+            spec["name"]
+            for spec in model["blocks"].values()
+            if spec["system"] == "root"
+        }
+        self.assertIn("a", root_names)
+        self.assertIn("u", root_names)
+        self.assertNotIn("symbol_a", root_names)
+        self.assertNotIn("input_u", root_names)
 
     def test_sine_graph_maps_to_trigonometric_block(self) -> None:
         first_order = build_first_order_system(translate_latex(r"\ddot{\theta}+\frac{g}{l}\sin(\theta)=0"))

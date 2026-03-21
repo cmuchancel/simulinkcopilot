@@ -259,7 +259,7 @@ class GraphToSimulinkLowerer:
                 f"time_{_sanitize_for_id(symbol_name)}",
                 "Clock",
                 system=ROOT_SYSTEM,
-                name=f"time_{symbol_name}",
+                name=symbol_name,
                 metadata=metadata,
             )
         elif symbol_name in self.symbol_values:
@@ -267,7 +267,7 @@ class GraphToSimulinkLowerer:
                 f"symbol_{_sanitize_for_id(symbol_name)}",
                 "Constant",
                 system=ROOT_SYSTEM,
-                name=f"symbol_{symbol_name}",
+                name=symbol_name,
                 params={"Value": _numeric_string(self.symbol_values[symbol_name])},
                 metadata=metadata,
             )
@@ -278,7 +278,7 @@ class GraphToSimulinkLowerer:
                 f"input_{_sanitize_for_id(symbol_name)}",
                 "Inport",
                 system=ROOT_SYSTEM,
-                name=f"input_{symbol_name}",
+                name=symbol_name,
                 params={"Port": port},
                 metadata=metadata,
             )
@@ -299,7 +299,7 @@ class GraphToSimulinkLowerer:
                 f"input_{_sanitize_for_id(symbol_name)}",
                 "FromWorkspace",
                 system=ROOT_SYSTEM,
-                name=f"input_{symbol_name}",
+                name=symbol_name,
                 params={"VariableName": workspace_name},
                 metadata=metadata,
             )

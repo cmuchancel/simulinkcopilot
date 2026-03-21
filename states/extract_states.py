@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Mapping
 
-from canonicalize.algebraic_substitution import inline_algebraic_definitions
+from canonicalize.dae_reduction import DaeReductionResult, reduce_semi_explicit_dae
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError
-from states.classify_symbols import classify_symbols
+from states.classify_symbols import classify_symbols, load_symbol_config
 from states.rules import ExtractionResult, collect_derivative_orders, derive_state_list
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ class StateExtractionAnalysis:
     extraction: ExtractionResult
     resolved_equations: list[EquationNode]
     solved_derivatives: list[SolvedDerivative] | None
+    dae_reduction: DaeReductionResult
 
 
 def analyze_state_extraction(
@@ -32,7 +33,12 @@ def analyze_state_extraction(
     symbol_config: str | Path | Mapping[str, object] | None = None,
 ) -> StateExtractionAnalysis:
     """Analyze equations once for state metadata and optional solved-derivative reuse."""
-    resolved_equations = inline_algebraic_definitions(equations).equations
+    configured_symbols = load_symbol_config(symbol_config)
+    reduction = reduce_semi_explicit_dae(
+        equations,
+        protected_symbols=set(configured_symbols),
+    )
+    resolved_equations = reduction.equations
     derivative_orders = collect_derivative_orders(resolved_equations)
     states = derive_state_list(derivative_orders)
 
@@ -40,7 +46,10 @@ def analyze_state_extraction(
     try:
         from canonicalize.solve_for_derivatives import solve_for_highest_derivatives
 
-        solved_derivatives = solve_for_highest_derivatives(resolved_equations)
+        solved_derivatives = solve_for_highest_derivatives(
+            resolved_equations,
+            protected_symbols=set(configured_symbols),
+        )
         analysis_equations = [item.equation for item in solved_derivatives]
     except DeterministicCompileError:
         analysis_equations = resolved_equations
@@ -82,6 +91,7 @@ def analyze_state_extraction(
         extraction=extraction,
         resolved_equations=resolved_equations,
         solved_derivatives=solved_derivatives,
+        dae_reduction=reduction,
     )
 
 
