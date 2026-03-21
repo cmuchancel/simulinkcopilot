@@ -15,10 +15,10 @@ from canonicalize.solve_for_derivatives import SolvedDerivative, solve_for_highe
 from canonicalize.state_space import build_state_space_system
 from ir.equation_dict import equation_to_dict
 from ir.expression_nodes import EquationNode
-from ir.graph_lowering import lower_first_order_system_graph
+from ir.graph_lowering import lower_first_order_system_graph, lower_semi_explicit_dae_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import DeterministicCompileError
-from states.extract_states import ExtractionResult, analyze_state_extraction
+from states.extract_states import ExtractionResult, StateExtractionAnalysis, analyze_state_extraction
 
 
 class SymbolicCompilationStageError(DeterministicCompileError):
@@ -69,6 +69,19 @@ class DescriptorCompilationResult:
     descriptor_system: dict[str, object]
 
 
+@dataclass(frozen=True)
+class PreservedDaeCompilationResult:
+    """Typed preserved-DAE artifacts for nonlinear semi-explicit DAE execution paths."""
+
+    equations: list[EquationNode]
+    equation_dicts: list[dict[str, object]]
+    extraction: ExtractionResult
+    resolved_equations: list[EquationNode]
+    dae_system: SemiExplicitDaeSystem
+    graph: dict[str, object]
+    validated_graph: dict[str, object] | None
+
+
 def compile_symbolic_system(
     equations: list[EquationNode],
     *,
@@ -77,9 +90,7 @@ def compile_symbolic_system(
     symbol_config: str | Path | Mapping[str, object] | None = None,
     validate_graph: bool = False,
 ) -> SymbolicCompilationResult:
-    """Compile parsed equations through the shared symbolic backend stages."""
-    equation_dicts = [equation_to_dict(equation) for equation in equations]
-
+    """Compile parsed equations through the shared explicit-ODE backend stages."""
     try:
         analysis = analyze_state_extraction(
             equations,
@@ -89,6 +100,23 @@ def compile_symbolic_system(
     except Exception as exc:
         raise SymbolicCompilationStageError("state_extraction", str(exc)) from exc
 
+    return compile_symbolic_system_from_analysis(
+        analysis,
+        equations=equations,
+        graph_name=graph_name,
+        validate_graph=validate_graph,
+    )
+
+
+def compile_symbolic_system_from_analysis(
+    analysis: StateExtractionAnalysis,
+    *,
+    equations: list[EquationNode],
+    graph_name: str,
+    validate_graph: bool = False,
+) -> SymbolicCompilationResult:
+    """Compile explicit/reducible systems from precomputed symbolic analysis."""
+    equation_dicts = [equation_to_dict(equation) for equation in equations]
     solved_derivatives = analysis.solved_derivatives
     if solved_derivatives is None:
         try:
@@ -183,7 +211,6 @@ def compile_descriptor_system(
     symbol_config: str | Path | Mapping[str, object] | None = None,
 ) -> DescriptorCompilationResult:
     """Compile the descriptor-only artifacts for a non-reduced linear DAE."""
-    equation_dicts = [equation_to_dict(equation) for equation in equations]
     try:
         analysis = analyze_state_extraction(
             equations,
@@ -193,6 +220,16 @@ def compile_descriptor_system(
     except Exception as exc:
         raise SymbolicCompilationStageError("state_extraction", str(exc)) from exc
 
+    return compile_descriptor_system_from_analysis(analysis, equations=equations)
+
+
+def compile_descriptor_system_from_analysis(
+    analysis: StateExtractionAnalysis,
+    *,
+    equations: list[EquationNode],
+) -> DescriptorCompilationResult:
+    """Compile descriptor-only artifacts from precomputed symbolic analysis."""
+    equation_dicts = [equation_to_dict(equation) for equation in equations]
     if analysis.descriptor_system is None:
         raise SymbolicCompilationStageError(
             "descriptor_system",
@@ -207,4 +244,77 @@ def compile_descriptor_system(
         resolved_equations=analysis.resolved_equations,
         dae_system=analysis.dae_system,
         descriptor_system=analysis.descriptor_system,
+    )
+
+
+def compile_preserved_dae_system(
+    equations: list[EquationNode],
+    *,
+    graph_name: str,
+    classification_mode: str = "strict",
+    symbol_config: str | Path | Mapping[str, object] | None = None,
+    validate_graph: bool = False,
+) -> PreservedDaeCompilationResult:
+    """Compile preserved semi-explicit DAE artifacts for the nonlinear DAE route."""
+    try:
+        analysis = analyze_state_extraction(
+            equations,
+            mode=classification_mode,
+            symbol_config=symbol_config,
+        )
+    except Exception as exc:
+        raise SymbolicCompilationStageError("state_extraction", str(exc)) from exc
+
+    return compile_preserved_dae_system_from_analysis(
+        analysis,
+        equations=equations,
+        graph_name=graph_name,
+        validate_graph=validate_graph,
+    )
+
+
+def compile_preserved_dae_system_from_analysis(
+    analysis: StateExtractionAnalysis,
+    *,
+    equations: list[EquationNode],
+    graph_name: str,
+    validate_graph: bool = False,
+) -> PreservedDaeCompilationResult:
+    """Compile preserved semi-explicit DAE artifacts from precomputed symbolic analysis."""
+    equation_dicts = [equation_to_dict(equation) for equation in equations]
+    if analysis.dae_system.preserved_form is None or analysis.dae_system.classification.kind == "unsupported_dae":
+        raise SymbolicCompilationStageError(
+            "preserved_dae",
+            analysis.dae_system.classification.diagnostic or "Preserved DAE form is unavailable for this system.",
+            completed_stages=("state_extraction",),
+        )
+
+    try:
+        graph = lower_semi_explicit_dae_graph(analysis.dae_system, name=graph_name)
+    except Exception as exc:
+        raise SymbolicCompilationStageError(
+            "graph_lowering",
+            str(exc),
+            completed_stages=("state_extraction",),
+        ) from exc
+
+    validated_graph = None
+    if validate_graph:
+        try:
+            validated_graph = validate_graph_dict(graph)
+        except Exception as exc:
+            raise SymbolicCompilationStageError(
+                "graph_validation",
+                str(exc),
+                completed_stages=("state_extraction", "graph_lowering"),
+            ) from exc
+
+    return PreservedDaeCompilationResult(
+        equations=equations,
+        equation_dicts=equation_dicts,
+        extraction=analysis.extraction,
+        resolved_equations=analysis.resolved_equations,
+        dae_system=analysis.dae_system,
+        graph=graph,
+        validated_graph=validated_graph,
     )

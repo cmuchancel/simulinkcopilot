@@ -83,6 +83,23 @@ def validate_graph_dict(graph: dict[str, object]) -> dict[str, object]:
                 f"Integrator {integrator_id!r} must point to the RHS node {rhs_id!r}."
             )
 
+    for entry in normalized.get("algebraic_chains", []):
+        signal_id = entry["signal"]
+        residual_id = entry["residual"]
+        if signal_id not in node_map or residual_id not in node_map:
+            raise DeterministicCompileError(
+                f"Algebraic chain for {entry['variable']!r} references missing nodes."
+            )
+        signal_node = node_map[signal_id]
+        if signal_node["op"] != "symbol_input" or signal_node.get("symbol_role") != "algebraic_variable":
+            raise DeterministicCompileError(
+                f"Algebraic chain signal {signal_id!r} is not an algebraic-variable source."
+            )
+        if signal_node.get("name") != entry["variable"]:
+            raise DeterministicCompileError(
+                f"Algebraic chain for {entry['variable']!r} is inconsistent with signal node {signal_id!r}."
+            )
+
     for output_name, output_id in normalized.get("outputs", {}).items():
         if output_id not in node_map:
             raise DeterministicCompileError(

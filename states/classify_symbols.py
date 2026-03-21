@@ -147,12 +147,13 @@ def _collect_external_symbols(
     explicit_rhs: list[sympy.Expr],
     state_like_symbols: set[sympy.Symbol],
     metadata: Mapping[str, SymbolMetadata],
+    reserved_symbols: set[str],
 ) -> set[sympy.Symbol]:
     free_symbols = set().union(*(expr.free_symbols for expr in explicit_rhs)) if explicit_rhs else set()
     return {
         symbol
         for symbol in free_symbols
-        if symbol not in state_like_symbols and symbol.name not in metadata
+        if symbol not in state_like_symbols and symbol.name not in metadata and symbol.name not in reserved_symbols
     }
 
 
@@ -288,6 +289,7 @@ def classify_symbols(
     state_names: tuple[str, ...],
     mode: str = "strict",
     symbol_config: str | Path | Mapping[str, object] | None = None,
+    reserved_symbols: set[str] | None = None,
 ) -> dict[str, SymbolMetadata]:
     """Classify states, inputs, parameters, and related symbols deterministically."""
     configured = load_symbol_config(symbol_config)
@@ -301,7 +303,12 @@ def classify_symbols(
 
     explicit_rhs = [sympy.simplify(expression_to_sympy(equation.rhs)) for equation in equations]
     state_like_symbols = _build_state_like_symbols(derivative_orders, state_names)
-    external_symbols = _collect_external_symbols(explicit_rhs, state_like_symbols, metadata)
+    external_symbols = _collect_external_symbols(
+        explicit_rhs,
+        state_like_symbols,
+        metadata,
+        set(reserved_symbols or set()),
+    )
 
     parameter_names = {
         entry.name

@@ -33,6 +33,8 @@ def canonicalize_graph_dict(graph: dict[str, object]) -> dict[str, object]:
     )
     if "state_chains" in normalized:
         normalized["state_chains"] = sorted(normalized["state_chains"], key=lambda entry: entry["state"])
+    if "algebraic_chains" in normalized:
+        normalized["algebraic_chains"] = sorted(normalized["algebraic_chains"], key=lambda entry: entry["variable"])
     if "outputs" in normalized:
         normalized["outputs"] = {
             key: normalized["outputs"][key]

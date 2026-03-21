@@ -313,3 +313,87 @@ def execute_simulink_descriptor(
                 eng.close_system(model_name, 0, nargout=0)
             except Exception:  # pragma: no cover - cleanup best effort
                 pass
+
+
+def execute_simulink_preserved_dae_graph(
+    eng,
+    *,
+    graph: dict[str, object],
+    name: str,
+    output_names: list[str],
+    parameter_values: dict[str, float],
+    differential_initial_conditions: dict[str, float],
+    algebraic_initial_conditions: dict[str, float],
+    t_span: tuple[float, float],
+    t_eval,
+    input_values: dict[str, float] | None = None,
+    input_signals: dict[str, dict[str, list[float]]] | None = None,
+    output_dir: str | Path | None = None,
+    open_after_build: bool = False,
+    close_after_run: bool = False,
+    numeric_result_validator=None,
+) -> SimulinkExecutionResult:
+    """Lower and simulate a preserved semi-explicit DAE graph."""
+    model = graph_to_simulink_model(
+        graph,
+        name=name,
+        state_names=output_names,
+        parameter_values=parameter_values,
+        input_values=input_values,
+        input_signals=input_signals,
+        initial_conditions=differential_initial_conditions,
+        algebraic_initial_conditions=algebraic_initial_conditions,
+        model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
+    )
+
+    model_name: str | None = None
+    try:
+        try:
+            build_start = time.perf_counter()
+            build_info = build_simulink_model(
+                eng,
+                model,
+                output_dir=output_dir,
+                open_after_build=open_after_build,
+            )
+            build_time_sec = time.perf_counter() - build_start
+            model_name = str(build_info["model_name"])
+        except Exception as exc:
+            raise SimulinkExecutionStageError("simulink_build", str(exc)) from exc
+
+        try:
+            prepare_workspace_variables(eng, model)
+            simulation_start = time.perf_counter()
+            sim_output = eng.sim(model_name, "ReturnWorkspaceOutputs", "on", nargout=1)
+            extracted = extract_simulink_signals(
+                eng,
+                sim_output,
+                output_names=[entry["name"] for entry in model["outputs"]],
+            )
+            simulation_time_sec = time.perf_counter() - simulation_start
+            simulation = {
+                **build_info,
+                **extracted,
+            }
+        except Exception as exc:
+            raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
+
+        if numeric_result_validator is not None:
+            try:
+                numeric_result_validator("Simulink simulation", simulation)
+            except Exception as exc:
+                raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
+
+        return SimulinkExecutionResult(
+            model=model,
+            simulation=simulation,
+            validation=None,
+            build_time_sec=build_time_sec,
+            simulation_time_sec=simulation_time_sec,
+        )
+    finally:
+        if close_after_run and model_name is not None:
+            try:
+                eng.close_system(model_name, 0, nargout=0)
+            except Exception:  # pragma: no cover - cleanup best effort
+                pass

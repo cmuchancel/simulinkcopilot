@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from ir.equation_dict import expression_to_dict
+from ir.equation_dict import equation_to_residual, expression_to_dict, sympy_to_expression
 from ir.graph_dict import canonicalize_graph_dict
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import DeterministicCompileError, SUPPORTED_FUNCTION_NAMES, state_name
@@ -20,6 +20,7 @@ class GraphBuilder:
     kind: str
     name: str
     state_names: set[str] = field(default_factory=set)
+    algebraic_variable_names: set[str] = field(default_factory=set)
     input_names: set[str] = field(default_factory=set)
     parameter_names: set[str] = field(default_factory=set)
     independent_variable_names: set[str] = field(default_factory=set)
@@ -72,6 +73,14 @@ class GraphBuilder:
                 "state_signal",
                 [source_id],
                 state=name,
+            )
+        if name in self.algebraic_variable_names:
+            return self._emit_node(
+                f"algebraic_{_sanitize(name)}",
+                "symbol_input",
+                [],
+                name=name,
+                symbol_role="algebraic_variable",
             )
         if name in self.independent_variable_names:
             return self._emit_node(
@@ -173,6 +182,7 @@ def lower_expression_graph(
         kind="expression_graph",
         name=name,
         state_names=set(state_names or set()),
+        algebraic_variable_names=set(),
         input_names=set(input_names or set()),
         parameter_names=set(parameter_names or set()),
         independent_variable_names=set(independent_variable_names or set()),
@@ -190,6 +200,7 @@ def lower_first_order_system_graph(first_order_system: dict[str, object], *, nam
         kind="first_order_system_graph",
         name=name,
         state_names=set(states),
+        algebraic_variable_names=set(),
         input_names=inputs,
         parameter_names=parameters,
         independent_variable_names=(
@@ -224,3 +235,73 @@ def lower_first_order_system_graph(first_order_system: dict[str, object], *, nam
         )
 
     return builder.to_graph(outputs=outputs, state_chains=state_chains)
+
+
+def lower_semi_explicit_dae_graph(
+    dae_system: object,
+    *,
+    name: str = "semi_explicit_dae_graph",
+) -> dict[str, object]:
+    """Lower a preserved semi-explicit DAE into a deterministic graph dictionary."""
+    preserved_form = getattr(dae_system, "preserved_form", None)
+    if preserved_form is None:
+        raise DeterministicCompileError("Preserved DAE graph lowering requires a preserved semi-explicit form.")
+
+    differential_states = list(getattr(dae_system, "differential_states"))
+    algebraic_variables = list(getattr(dae_system, "algebraic_variables"))
+    inputs = set(getattr(dae_system, "inputs"))
+    parameters = set(getattr(dae_system, "parameters"))
+    independent_variable = getattr(dae_system, "independent_variable")
+    builder = GraphBuilder(
+        kind="semi_explicit_dae_graph",
+        name=name,
+        state_names=set(differential_states),
+        algebraic_variable_names=set(algebraic_variables),
+        input_names=inputs,
+        parameter_names=parameters,
+        independent_variable_names={str(independent_variable)} if independent_variable else set(),
+    )
+
+    for state in differential_states:
+        integrator_id = f"integrator_{_sanitize(state)}"
+        builder._emit_node(integrator_id, "integrator", ["__pending__"], state=state)
+        builder._emit_node(f"state_{_sanitize(state)}", "state_signal", [integrator_id], state=state)
+
+    outputs: dict[str, str] = {}
+    state_chains: list[dict[str, str]] = []
+    for state in differential_states:
+        equation = preserved_form.differential_rhs[state]
+        rhs_id = builder.lower_expression(expression_to_dict(equation.rhs))
+        integrator_id = f"integrator_{_sanitize(state)}"
+        builder.nodes[integrator_id]["inputs"] = [rhs_id]
+        signal_id = f"state_{_sanitize(state)}"
+        outputs[state] = signal_id
+        outputs[f"rhs_{state}"] = rhs_id
+        state_chains.append(
+            {
+                "state": state,
+                "signal": signal_id,
+                "integrator": integrator_id,
+                "rhs": rhs_id,
+            }
+        )
+
+    algebraic_chains: list[dict[str, str]] = []
+    for variable in algebraic_variables:
+        signal_id = builder._lower_symbol(variable)
+        residual_equation = preserved_form.algebraic_constraint_map[variable]
+        residual_expression = sympy_to_expression(equation_to_residual(residual_equation))
+        residual_id = builder.lower_expression(expression_to_dict(residual_expression))
+        outputs[variable] = signal_id
+        outputs[f"constraint_{variable}"] = residual_id
+        algebraic_chains.append(
+            {
+                "variable": variable,
+                "signal": signal_id,
+                "residual": residual_id,
+            }
+        )
+
+    graph = builder.to_graph(outputs=outputs, state_chains=state_chains)
+    graph["algebraic_chains"] = algebraic_chains
+    return validate_graph_dict(canonicalize_graph_dict(graph))

@@ -19,12 +19,18 @@ from ir.equation_dict import (
     matrix_from_dict,
 )
 from latex_frontend.translator import translate_file
-from pipeline.compilation import SymbolicCompilationStageError, compile_descriptor_system, compile_symbolic_system
+from pipeline.compilation import (
+    compile_descriptor_system_from_analysis,
+    compile_preserved_dae_system_from_analysis,
+    compile_symbolic_system_from_analysis,
+)
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.dae_init import ConsistentInitializationResult, consistent_initialize_dae
+from simulate.dae_validate import initialize_preserved_dae, validate_preserved_semi_explicit_dae
 from simulate.input_sources import resolve_input_sources
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
+from states.extract_states import analyze_state_extraction
 from states.classify_symbols import CONFIGURABLE_ROLES
 from pipeline.runtime_catalog import runtime_context_for_example
 from pipeline.gui_export import DEFAULT_GUI_REPORT_ROOT, export_results_to_gui_run
@@ -53,6 +59,32 @@ def default_descriptor_runtime_context(
         "t_span": (0.0, 10.0),
         "t_eval": np.linspace(0.0, 10.0, 101),
         "expected_linear": True,
+    }
+
+
+def _supported_dae_rejection_message(classification: dict[str, object]) -> str:
+    diagnostic = classification.get("diagnostic")
+    supported = ", ".join(
+        [
+            "explicit ODE",
+            "reducible semi-explicit DAE",
+            "linear descriptor/semi-explicit DAE",
+            "nonlinear preserved semi-explicit DAE",
+        ]
+    )
+    message = f"Unsupported DAE class {classification['kind']!r}. Supported classes: {supported}."
+    if diagnostic:
+        message += f" Diagnostic: {diagnostic}"
+    return message
+
+
+def _simulink_subset_result(simulink_result: dict[str, object], state_names: list[str]) -> dict[str, object]:
+    """Build a comparison-ready subset of a Simulink result by output name."""
+    signal_map = simulink_result["signals"]  # type: ignore[index]
+    return {
+        "t": simulink_result["t"],
+        "states": np.column_stack([signal_map[name] for name in state_names]),
+        "state_names": list(state_names),
     }
 
 
@@ -200,13 +232,19 @@ def run_pipeline(
     source_path = Path(path)
     equations = translate_file(source_path)
     resolved_mode = classification_mode or ("configured" if symbol_config is not None else "strict")
+    analysis = analyze_state_extraction(
+        equations,
+        mode=resolved_mode,
+        symbol_config=symbol_config,
+    )
+    classification = analysis.dae_system.classification.to_dict()
     descriptor_only = False
-    try:
-        compilation = compile_symbolic_system(
-            equations,
+    preserved_dae_only = False
+    if classification["kind"] in {"explicit_ode", "reducible_semi_explicit_dae"}:
+        compilation = compile_symbolic_system_from_analysis(
+            analysis,
+            equations=equations,
             graph_name=source_path.stem,
-            classification_mode=resolved_mode,
-            symbol_config=symbol_config,
             validate_graph=validate_graph,
         )
         extraction = compilation.extraction
@@ -220,13 +258,10 @@ def run_pipeline(
         validated_graph = compilation.validated_graph or compilation.graph
         equation_dicts = compilation.equation_dicts
         runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
-    except SymbolicCompilationStageError as exc:
-        if not run_simulink or exc.stage != "solve":
-            raise
-        descriptor_compilation = compile_descriptor_system(
-            equations,
-            classification_mode=resolved_mode,
-            symbol_config=symbol_config,
+    elif classification["kind"] == "linear_descriptor_dae":
+        descriptor_compilation = compile_descriptor_system_from_analysis(
+            analysis,
+            equations=equations,
         )
         extraction = descriptor_compilation.extraction
         solved_derivatives = []
@@ -243,7 +278,32 @@ def run_pipeline(
             runtime_override,
         )
         descriptor_only = True
+    elif classification["kind"] == "nonlinear_preserved_semi_explicit_dae":
+        preserved_compilation = compile_preserved_dae_system_from_analysis(
+            analysis,
+            equations=equations,
+            graph_name=source_path.stem,
+            validate_graph=validate_graph,
+        )
+        extraction = preserved_compilation.extraction
+        solved_derivatives = []
+        dae_system = preserved_compilation.dae_system
+        descriptor_system = None
+        first_order = None
+        explicit_form = None
+        linearity = {"is_linear": False, "offending_entries": []}
+        state_space = None
+        validated_graph = preserved_compilation.validated_graph or preserved_compilation.graph
+        equation_dicts = preserved_compilation.equation_dicts
+        runtime = apply_runtime_override(
+            default_descriptor_runtime_context(extraction, dae_system),
+            runtime_override,
+        )
+        preserved_dae_only = True
+    else:
+        raise DeterministicCompileError(_supported_dae_rejection_message(classification))
 
+    dae_validation = None
     if dae_system.reduced_to_explicit:
         consistent_initialization = consistent_initialize_dae(
             dae_system,
@@ -254,15 +314,17 @@ def run_pipeline(
             t0=float(runtime["t_span"][0]),  # type: ignore[index]
         )
     else:
+        initialization_diagnostics = initialize_preserved_dae(
+            dae_system,
+            parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+            differential_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+            algebraic_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+            input_function=runtime["input_function"],  # type: ignore[arg-type]
+            t0=float(runtime["t_span"][0]),  # type: ignore[index]
+        )
         consistent_initialization = ConsistentInitializationResult(
-            differential_initial_conditions={
-                state: float(runtime["initial_conditions"].get(state, 0.0))  # type: ignore[index]
-                for state in dae_system.differential_states
-            },
-            algebraic_initial_conditions={
-                name: float(runtime["initial_conditions"].get(name, 0.0))  # type: ignore[index]
-                for name in dae_system.algebraic_variables
-            },
+            differential_initial_conditions=initialization_diagnostics.differential_initial_conditions,
+            algebraic_initial_conditions=initialization_diagnostics.algebraic_initial_conditions,
             reduced_to_explicit=False,
         )
 
@@ -291,9 +353,32 @@ def run_pipeline(
                 t_eval=runtime["t_eval"],  # type: ignore[arg-type]
             )
             comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
+        dae_validation = {
+            "classification": classification,
+            "initialization": consistent_initialization.to_dict(),
+            "simulation_success": True,
+            "residual_norm_max": 0.0,
+            "residual_norm_final": 0.0,
+            "comparison": comparison,
+        }
+    elif run_sim and (descriptor_only or preserved_dae_only):
+        validated_dae = validate_preserved_semi_explicit_dae(
+            dae_system,
+            parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+            differential_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+            algebraic_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+            input_function=runtime["input_function"],  # type: ignore[arg-type]
+            t_span=runtime["t_span"],  # type: ignore[arg-type]
+            t_eval=runtime["t_eval"],  # type: ignore[arg-type]
+        )
+        dae_validation = validated_dae.to_dict()
 
     if run_simulink:
-        from backend.simulate_simulink import execute_simulink_descriptor, execute_simulink_graph
+        from backend.simulate_simulink import (
+            execute_simulink_descriptor,
+            execute_simulink_graph,
+            execute_simulink_preserved_dae_graph,
+        )
         from simulink.engine import start_engine
 
         input_names = list(extraction.inputs)
@@ -321,6 +406,21 @@ def run_pipeline(
                     input_signals=resolved_inputs.signal_samples,
                     output_dir=_resolved_simulink_output_dir(simulink_output_dir),
                 )
+            elif preserved_dae_only:
+                execution = execute_simulink_preserved_dae_graph(
+                    eng,
+                    graph=validated_graph,
+                    name=f"{source_path.stem}_simulink",
+                    output_names=[*dae_system.differential_states, *dae_system.algebraic_variables],
+                    parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+                    differential_initial_conditions=consistent_initialization.differential_initial_conditions,
+                    algebraic_initial_conditions=consistent_initialization.algebraic_initial_conditions,
+                    t_span=runtime["t_span"],  # type: ignore[arg-type]
+                    t_eval=runtime["t_eval"],  # type: ignore[arg-type]
+                    input_values=resolved_inputs.constant_values,
+                    input_signals=resolved_inputs.signal_samples,
+                    output_dir=_resolved_simulink_output_dir(simulink_output_dir),
+                )
             else:
                 execution = execute_simulink_graph(
                     eng,
@@ -341,10 +441,26 @@ def run_pipeline(
             simulink_model = execution.model
             simulink_result = execution.simulation
             simulink_validation = execution.validation
+            if simulink_validation is None and dae_validation is not None and (descriptor_only or preserved_dae_only):
+                reference_state_names = list(dae_system.differential_states)
+                reference_result = {
+                    "t": np.asarray(dae_validation["t"], dtype=float),  # type: ignore[index]
+                    "states": np.asarray(dae_validation["differential_states"], dtype=float),  # type: ignore[index]
+                    "state_names": reference_state_names,
+                }
+                vs_dae_python = compare_simulations(
+                    reference_result,
+                    _simulink_subset_result(simulink_result, reference_state_names),  # type: ignore[arg-type]
+                    tolerance=tolerance,
+                )
+                simulink_validation = {
+                    "vs_dae_python": vs_dae_python,
+                    "passes": vs_dae_python["passes"],
+                }
         finally:
             if owns_engine:
                 eng.quit()
-        if not descriptor_only and simulink_validation is None:
+        if not descriptor_only and not preserved_dae_only and simulink_validation is None:
             raise DeterministicCompileError("Simulink validation requires the direct ODE simulation result.")
 
     return {
@@ -353,9 +469,11 @@ def run_pipeline(
         "equation_dicts": equation_dicts if equation_dicts is not None else [equation_to_dict(equation) for equation in equations],
         "extraction": extraction,
         "solved_derivatives": solved_derivatives,
+        "dae_classification": classification,
         "dae_system": dae_system,
         "descriptor_system": descriptor_system,
         "consistent_initialization": consistent_initialization,
+        "dae_validation": dae_validation,
         "first_order": first_order,
         "explicit_form": explicit_form,
         "linearity": linearity,
@@ -385,9 +503,11 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
         "equation_dicts": results["equation_dicts"],
         "extraction": results["extraction"].to_dict(),  # type: ignore[union-attr]
         "solved_derivatives": [item.to_dict() for item in results["solved_derivatives"]],  # type: ignore[index]
+        "dae_classification": results["dae_classification"],
         "dae_system": results["dae_system"].to_dict(),  # type: ignore[union-attr]
         "descriptor_system": results["descriptor_system"],
         "consistent_initialization": results["consistent_initialization"].to_dict(),  # type: ignore[union-attr]
+        "dae_validation": results["dae_validation"],
         "first_order": results["first_order"],
         "explicit_form": None if explicit_form is None else {
             "form": explicit_form["form"],  # type: ignore[index]
@@ -432,6 +552,7 @@ def _print_results(
     equations = results["equations"]
     extraction = results["extraction"]
     solved_derivatives = results["solved_derivatives"]
+    dae_classification = results["dae_classification"]
     first_order = results["first_order"]
     state_space = results["state_space"]
     descriptor_system = results["descriptor_system"]
@@ -439,6 +560,7 @@ def _print_results(
     graph = results["graph"]
     simulink_result = results["simulink_result"]
     simulink_validation = results["simulink_validation"]
+    dae_validation = results["dae_validation"]
 
     print("Parsed equations:")
     for equation in equations:  # type: ignore[assignment]
@@ -457,6 +579,9 @@ def _print_results(
     print("Solved derivatives:")
     for item in solved_derivatives:  # type: ignore[assignment]
         print(f"  {equation_to_string(item.equation)}")
+
+    print("DAE classification:")
+    print(json.dumps(dae_classification, indent=2))
 
     if show_first_order or True:
         print("First-order system:")
@@ -513,14 +638,22 @@ def _print_results(
         print(f"  model_name: {simulink_result['model_name']}")
         print(f"  model_file: {simulink_result['model_file']}")
         if simulink_validation is None:
-            print("  validation: unavailable for descriptor-only Simulink path")
+            print("  validation: unavailable")
         else:
-            print(f"  vs_ode_rmse: {simulink_validation['vs_ode']['rmse']}")
-            print(f"  vs_ode_max_abs_error: {simulink_validation['vs_ode']['max_abs_error']}")
-            if simulink_validation["vs_state_space"] is not None:
-                print(f"  vs_state_space_rmse: {simulink_validation['vs_state_space']['rmse']}")
-                print(f"  vs_state_space_max_abs_error: {simulink_validation['vs_state_space']['max_abs_error']}")
+            if "vs_ode" in simulink_validation:
+                print(f"  vs_ode_rmse: {simulink_validation['vs_ode']['rmse']}")
+                print(f"  vs_ode_max_abs_error: {simulink_validation['vs_ode']['max_abs_error']}")
+                if simulink_validation["vs_state_space"] is not None:
+                    print(f"  vs_state_space_rmse: {simulink_validation['vs_state_space']['rmse']}")
+                    print(f"  vs_state_space_max_abs_error: {simulink_validation['vs_state_space']['max_abs_error']}")
+            if "vs_dae_python" in simulink_validation:
+                print(f"  vs_dae_python_rmse: {simulink_validation['vs_dae_python']['rmse']}")
+                print(f"  vs_dae_python_max_abs_error: {simulink_validation['vs_dae_python']['max_abs_error']}")
             print(f"  passes: {simulink_validation['passes']}")
+
+    if dae_validation is not None:
+        print("DAE validation:")
+        print(json.dumps(dae_validation, indent=2))
 
 
 def main() -> int:

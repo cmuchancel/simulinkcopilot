@@ -5,9 +5,9 @@ import unittest
 
 from canonicalize.first_order import build_first_order_system
 from backend.graph_to_simulink import graph_to_simulink_model
-from ir.graph_lowering import lower_first_order_system_graph
+from ir.graph_lowering import lower_first_order_system_graph, lower_semi_explicit_dae_graph
 from latex_frontend.translator import translate_latex
-from states.extract_states import extract_states
+from states.extract_states import analyze_state_extraction, extract_states
 
 
 class GraphToSimulinkTests(unittest.TestCase):
@@ -180,6 +180,22 @@ class GraphToSimulinkTests(unittest.TestCase):
         )
         duplicates = {key: count for key, count in destination_counts.items() if count > 1}
         self.assertFalse(duplicates)
+
+    def test_preserved_nonlinear_dae_graph_maps_to_algebraic_constraint_blocks(self) -> None:
+        analysis = analyze_state_extraction(
+            translate_latex("\n".join([r"\dot{x}=-z", r"z+\sin(z)-x=0"])),
+            mode="strict",
+        )
+        graph = lower_semi_explicit_dae_graph(analysis.dae_system, name="nonlinear_dae")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=["x", "z"],
+            initial_conditions={"x": 0.2},
+            algebraic_initial_conditions={"z": 0.2},
+        )
+        block_types = {spec["type"] for spec in model["blocks"].values()}
+        self.assertIn("AlgebraicConstraint", block_types)
+        self.assertEqual([entry["name"] for entry in model["outputs"]], ["x", "z"])
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ class GraphToSimulinkLowerer:
     symbol_values: dict[str, float] = field(default_factory=dict)
     input_signals: dict[str, dict[str, list[float]]] = field(default_factory=dict)
     initial_conditions: dict[str, float] = field(default_factory=dict)
+    algebraic_initial_conditions: dict[str, float] = field(default_factory=dict)
     input_mode: str = "constant"
     blocks: dict[str, dict[str, object]] = field(default_factory=dict)
     connections: list[dict[str, object]] = field(default_factory=list)
@@ -59,6 +60,10 @@ class GraphToSimulinkLowerer:
         self.state_chain_map = {
             entry["state"]: entry
             for entry in self.graph.get("state_chains", [])  # type: ignore[index]
+        }
+        self.algebraic_chain_map = {
+            entry["variable"]: entry
+            for entry in self.graph.get("algebraic_chains", [])  # type: ignore[index]
         }
         self.node_expressions = build_node_expressions(self.graph)
         plan = build_graph_subsystem_plan(
@@ -260,6 +265,18 @@ class GraphToSimulinkLowerer:
                 "Clock",
                 system=ROOT_SYSTEM,
                 name=symbol_name,
+                metadata=metadata,
+            )
+        elif symbol_role == "algebraic_variable":
+            params: dict[str, object] = {}
+            if symbol_name in self.algebraic_initial_conditions:
+                params["InitialGuess"] = _numeric_string(self.algebraic_initial_conditions[symbol_name])
+            block_id = self.add_block(
+                f"algebraic_{_sanitize_for_id(symbol_name)}",
+                "AlgebraicConstraint",
+                system=ROOT_SYSTEM,
+                name=symbol_name,
+                params=params,
                 metadata=metadata,
             )
         elif symbol_name in self.symbol_values:
@@ -823,15 +840,33 @@ class GraphToSimulinkLowerer:
 
         raise DeterministicCompileError(f"Unsupported graph op {op!r} in Simulink lowering.")
 
+    def _wire_algebraic_constraints(self) -> None:
+        for variable, chain in self.algebraic_chain_map.items():
+            source = self.resolve_for_system(chain["signal"], ROOT_SYSTEM)
+            residual_source = self.resolve_for_system(chain["residual"], ROOT_SYSTEM)
+            self.add_connection(
+                ROOT_SYSTEM,
+                residual_source,
+                source[0],
+                1,
+                label=self.node_expressions[chain["residual"]],
+            )
+
     def lower(self, state_names: list[str] | None = None, model_params: dict[str, object] | None = None) -> BackendSimulinkModelDict:
         """Lower the graph to a hierarchical, labeled, and laid-out Simulink model dictionary."""
-        output_states = state_names or list(self.state_chain_map)
+        requested_outputs = state_names or [*self.state_chain_map, *self.algebraic_chain_map]
+        self._wire_algebraic_constraints()
         outputs: list[dict[str, str]] = []
 
-        for index, state in enumerate(output_states, start=1):
-            if state not in self.state_chain_map:
-                raise DeterministicCompileError(f"Requested Simulink output {state!r} not found in graph state chains.")
-            signal_id = self.state_chain_map[state]["signal"]
+        for index, state in enumerate(requested_outputs, start=1):
+            if state in self.state_chain_map:
+                signal_id = self.state_chain_map[state]["signal"]
+            elif state in self.algebraic_chain_map:
+                signal_id = self.algebraic_chain_map[state]["signal"]
+            else:
+                raise DeterministicCompileError(
+                    f"Requested Simulink output {state!r} not found in graph state or algebraic chains."
+                )
             signal_source = self.resolve_for_system(signal_id, ROOT_SYSTEM)
             out_block_id = self.add_block(
                 f"out_{_sanitize_for_id(state)}",
@@ -857,7 +892,8 @@ class GraphToSimulinkLowerer:
                 "workspace_variables": dict(self.workspace_variables),
                 "metadata": {
                     "graph_name": self.graph["name"],
-                    "state_names": list(output_states),
+                    "state_names": [name for name in requested_outputs if name in self.state_chain_map],
+                    "algebraic_variables": [name for name in requested_outputs if name in self.algebraic_chain_map],
                     "node_expressions": self.node_expressions,
                     "state_groups": self.state_groups,
                 },
@@ -876,6 +912,7 @@ def graph_to_simulink_model(
     input_values: dict[str, float] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     initial_conditions: dict[str, float] | None = None,
+    algebraic_initial_conditions: dict[str, float] | None = None,
     model_params: dict[str, object] | None = None,
     input_mode: str = "constant",
 ) -> BackendSimulinkModelDict:
@@ -888,6 +925,7 @@ def graph_to_simulink_model(
         symbol_values=symbol_values,
         input_signals=dict(input_signals or {}),
         initial_conditions=dict(initial_conditions or {}),
+        algebraic_initial_conditions=dict(algebraic_initial_conditions or {}),
         input_mode=input_mode,
     )
     return lowerer.lower(state_names=state_names, model_params=model_params)

@@ -145,6 +145,33 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(result["comparison"]["passes"])
         self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
 
+    def test_pipeline_runs_preserved_nonlinear_semi_explicit_dae_validation_route(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "preserved_nonlinear_dae.tex"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        r"\dot{x}=-z",
+                        r"z+\sin(z)-x=0",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = run_pipeline(
+                input_path,
+                run_simulink=False,
+                runtime_override={
+                    "initial_conditions": {"x": 0.2, "z": 0.2},
+                    "t_span": [0.0, 0.5],
+                    "sample_count": 6,
+                },
+            )
+        self.assertEqual(result["dae_classification"]["kind"], "nonlinear_preserved_semi_explicit_dae")
+        self.assertIsNone(result["first_order"])
+        self.assertIsNotNone(result["graph"])
+        self.assertTrue(result["dae_validation"]["simulation_success"])
+        self.assertLess(float(result["dae_validation"]["residual_norm_max"]), 1e-8)
+
     def test_pipeline_supports_declared_independent_variable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             input_path = Path(temp_dir) / "time_varying.tex"

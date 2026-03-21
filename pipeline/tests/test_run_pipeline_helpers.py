@@ -307,6 +307,16 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
         differential_states=("x",),
         algebraic_variables=("y",),
         reduced_to_explicit=False,
+        classification=SimpleNamespace(
+            to_dict=lambda: {
+                "kind": "linear_descriptor_dae",
+                "route": "descriptor_dae",
+                "supported": True,
+                "python_validation_supported": True,
+                "simulink_lowering_supported": True,
+                "diagnostic": None,
+            }
+        ),
         to_dict=lambda: {
             "differential_states": ["x"],
             "algebraic_variables": ["y"],
@@ -317,6 +327,14 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
             "reduced_equations": [],
             "reduced_to_explicit": False,
         },
+    )
+    analysis = SimpleNamespace(
+        extraction=extraction,
+        resolved_equations=[],
+        solved_derivatives=None,
+        dae_reduction=None,
+        dae_system=dae_system,
+        descriptor_system={"form": "linear_descriptor"},
     )
     descriptor_compilation = SimpleNamespace(
         equation_dicts=[],
@@ -330,18 +348,20 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
         },
     )
 
+    monkeypatch.setattr(pipeline_module, "analyze_state_extraction", lambda *args, **kwargs: analysis)
     monkeypatch.setattr(
         pipeline_module,
-        "compile_symbolic_system",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            pipeline_module.SymbolicCompilationStageError(
-                "solve",
-                "dae solve unsupported",
-                completed_stages=("state_extraction",),
-            )
+        "compile_descriptor_system_from_analysis",
+        lambda *args, **kwargs: descriptor_compilation,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "initialize_preserved_dae",
+        lambda *args, **kwargs: SimpleNamespace(
+            differential_initial_conditions={"x": 1.0},
+            algebraic_initial_conditions={"y": 0.0},
         ),
     )
-    monkeypatch.setattr(pipeline_module, "compile_descriptor_system", lambda *args, **kwargs: descriptor_compilation)
 
     fake_backend_module = types.SimpleNamespace(
         execute_simulink_descriptor=lambda *args, **kwargs: SimpleNamespace(
@@ -350,6 +370,9 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
             validation=None,
         ),
         execute_simulink_graph=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("graph path should not run")),
+        execute_simulink_preserved_dae_graph=lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("preserved DAE graph path should not run")
+        ),
     )
     fake_engine_module = types.SimpleNamespace(start_engine=lambda **kwargs: SimpleNamespace(quit=lambda: None))
     monkeypatch.setitem(sys.modules, "backend.simulate_simulink", fake_backend_module)

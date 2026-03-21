@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from typing import Mapping
 
 from canonicalize.descriptor_system import build_descriptor_system_from_dae
-from canonicalize.dae_system import SemiExplicitDaeSystem, build_semi_explicit_dae_system
+from canonicalize.dae_system import SemiExplicitDaeSystem, build_semi_explicit_dae_system, finalize_dae_support
 from canonicalize.dae_reduction import DaeReductionResult, reduce_semi_explicit_dae
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError
@@ -64,6 +64,7 @@ def analyze_state_extraction(
         state_names=states,
         mode=mode,
         symbol_config=symbol_config,
+        reserved_symbols=set(reduction.algebraic_variables),
     )
     inputs = tuple(
         name
@@ -96,6 +97,7 @@ def analyze_state_extraction(
         descriptor_system = build_descriptor_system_from_dae(dae_system, extraction)
     except DeterministicCompileError:
         descriptor_system = None
+    dae_system = finalize_dae_support(dae_system, descriptor_system=descriptor_system)
     return StateExtractionAnalysis(
         extraction=extraction,
         resolved_equations=resolved_equations,
