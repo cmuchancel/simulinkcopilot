@@ -191,3 +191,74 @@ def test_execute_simulink_graph_raises_stage_aware_errors(monkeypatch) -> None:
         assert exc.stage == "simulink_build"
     else:  # pragma: no cover - defensive
         raise AssertionError("Expected SimulinkExecutionStageError")
+
+
+def test_execute_simulink_descriptor_returns_timings(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    monkeypatch.setattr(
+        module,
+        "descriptor_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "descriptor_model", "model_file": "/tmp/descriptor.slx"},
+    )
+    monkeypatch.setattr(module, "prepare_workspace_variables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "extract_simulink_signals",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+
+    result = module.execute_simulink_descriptor(
+        engine,
+        descriptor_system={"form": "linear_descriptor"},
+        name="descriptor_model",
+        parameter_values={},
+        differential_initial_conditions={"x": 0.0},
+        algebraic_initial_conditions={"y": 0.0},
+        t_span=(0.0, 1.0),
+        t_eval=[0.0, 1.0],
+    )
+
+    assert result.model_file == "/tmp/descriptor.slx"
+    assert result.validation is None
+    assert result.block_count == 1
+    assert result.build_time_sec >= 0.0
+    assert result.simulation_time_sec >= 0.0
+
+
+def test_execute_simulink_descriptor_raises_stage_aware_errors(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    monkeypatch.setattr(
+        module,
+        "descriptor_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("build boom")),
+    )
+
+    try:
+        module.execute_simulink_descriptor(
+            engine,
+            descriptor_system={"form": "linear_descriptor"},
+            name="descriptor_model",
+            parameter_values={},
+            differential_initial_conditions={"x": 0.0},
+            algebraic_initial_conditions={"y": 0.0},
+            t_span=(0.0, 1.0),
+            t_eval=[0.0, 1.0],
+        )
+    except module.SimulinkExecutionStageError as exc:
+        assert exc.stage == "simulink_build"
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected SimulinkExecutionStageError")

@@ -12,15 +12,16 @@ import sympy
 
 from latex_frontend.symbols import DeterministicCompileError
 from ir.equation_dict import (
+    equation_to_dict,
     equation_to_string,
     expression_from_dict,
     expression_to_sympy,
     matrix_from_dict,
 )
 from latex_frontend.translator import translate_file
-from pipeline.compilation import compile_symbolic_system
+from pipeline.compilation import SymbolicCompilationStageError, compile_descriptor_system, compile_symbolic_system
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
-from simulate.dae_init import consistent_initialize_dae
+from simulate.dae_init import ConsistentInitializationResult, consistent_initialize_dae
 from simulate.input_sources import resolve_input_sources
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
@@ -35,6 +36,24 @@ DEFAULT_SIMULINK_OUTPUT_DIR = BEDILLION_DEMO_ROOT
 def default_runtime_context(stem: str, first_order_system: dict[str, object]) -> dict[str, object]:
     """Provide deterministic runtime defaults for the bundled examples."""
     return runtime_context_for_example(stem, first_order_system)
+
+
+def default_descriptor_runtime_context(
+    extraction,
+    dae_system,
+) -> dict[str, object]:
+    """Provide deterministic runtime defaults for descriptor-only DAE execution."""
+    return {
+        "parameter_values": {name: 0.0 for name in extraction.parameters},
+        "initial_conditions": {
+            **{name: 0.0 for name in extraction.states},
+            **{name: 0.0 for name in dae_system.algebraic_variables},
+        },
+        "input_function": constant_inputs({name: 0.0 for name in extraction.inputs}),
+        "t_span": (0.0, 10.0),
+        "t_eval": np.linspace(0.0, 10.0, 101),
+        "expected_linear": True,
+    }
 
 
 def apply_runtime_override(
@@ -181,31 +200,71 @@ def run_pipeline(
     source_path = Path(path)
     equations = translate_file(source_path)
     resolved_mode = classification_mode or ("configured" if symbol_config is not None else "strict")
-    compilation = compile_symbolic_system(
-        equations,
-        graph_name=source_path.stem,
-        classification_mode=resolved_mode,
-        symbol_config=symbol_config,
-        validate_graph=validate_graph,
-    )
-    extraction = compilation.extraction
-    solved_derivatives = compilation.solved_derivatives
-    dae_system = compilation.dae_system
-    descriptor_system = compilation.descriptor_system
-    first_order = compilation.first_order
-    explicit_form = compilation.explicit_form
-    linearity = compilation.linearity
-    state_space = compilation.state_space
-    validated_graph = compilation.validated_graph or compilation.graph
-    runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
-    consistent_initialization = consistent_initialize_dae(
-        dae_system,
-        parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
-        differential_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
-        input_function=runtime["input_function"],  # type: ignore[arg-type]
-        independent_variable=extraction.independent_variable,
-        t0=float(runtime["t_span"][0]),  # type: ignore[index]
-    )
+    descriptor_only = False
+    try:
+        compilation = compile_symbolic_system(
+            equations,
+            graph_name=source_path.stem,
+            classification_mode=resolved_mode,
+            symbol_config=symbol_config,
+            validate_graph=validate_graph,
+        )
+        extraction = compilation.extraction
+        solved_derivatives = compilation.solved_derivatives
+        dae_system = compilation.dae_system
+        descriptor_system = compilation.descriptor_system
+        first_order = compilation.first_order
+        explicit_form = compilation.explicit_form
+        linearity = compilation.linearity
+        state_space = compilation.state_space
+        validated_graph = compilation.validated_graph or compilation.graph
+        equation_dicts = compilation.equation_dicts
+        runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
+    except SymbolicCompilationStageError as exc:
+        if not run_simulink or exc.stage != "solve":
+            raise
+        descriptor_compilation = compile_descriptor_system(
+            equations,
+            classification_mode=resolved_mode,
+            symbol_config=symbol_config,
+        )
+        extraction = descriptor_compilation.extraction
+        solved_derivatives = []
+        dae_system = descriptor_compilation.dae_system
+        descriptor_system = descriptor_compilation.descriptor_system
+        first_order = None
+        explicit_form = None
+        linearity = {"is_linear": True, "offending_entries": []}
+        state_space = None
+        validated_graph = None
+        equation_dicts = descriptor_compilation.equation_dicts
+        runtime = apply_runtime_override(
+            default_descriptor_runtime_context(extraction, dae_system),
+            runtime_override,
+        )
+        descriptor_only = True
+
+    if dae_system.reduced_to_explicit:
+        consistent_initialization = consistent_initialize_dae(
+            dae_system,
+            parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+            differential_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+            input_function=runtime["input_function"],  # type: ignore[arg-type]
+            independent_variable=extraction.independent_variable,
+            t0=float(runtime["t_span"][0]),  # type: ignore[index]
+        )
+    else:
+        consistent_initialization = ConsistentInitializationResult(
+            differential_initial_conditions={
+                state: float(runtime["initial_conditions"].get(state, 0.0))  # type: ignore[index]
+                for state in dae_system.differential_states
+            },
+            algebraic_initial_conditions={
+                name: float(runtime["initial_conditions"].get(name, 0.0))  # type: ignore[index]
+                for name in dae_system.algebraic_variables
+            },
+            reduced_to_explicit=False,
+        )
 
     ode_result = None
     state_space_result = None
@@ -213,7 +272,7 @@ def run_pipeline(
     simulink_model = None
     simulink_result = None
     simulink_validation = None
-    if run_sim:
+    if run_sim and first_order is not None:
         ode_result = simulate_ode_system(
             first_order,
             parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
@@ -234,10 +293,10 @@ def run_pipeline(
             comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
 
     if run_simulink:
-        from backend.simulate_simulink import execute_simulink_graph
+        from backend.simulate_simulink import execute_simulink_descriptor, execute_simulink_graph
         from simulink.engine import start_engine
 
-        input_names = list(first_order["inputs"])  # type: ignore[index]
+        input_names = list(extraction.inputs)
         resolved_inputs = resolve_input_sources(
             runtime["input_function"],  # type: ignore[arg-type]
             input_names,
@@ -247,35 +306,51 @@ def run_pipeline(
         owns_engine = matlab_engine is None
         eng = matlab_engine or start_engine(retries=1, retry_delay_seconds=1.0)
         try:
-            execution = execute_simulink_graph(
-                eng,
-                graph=validated_graph,
-                name=f"{source_path.stem}_simulink",
-                state_names=list(first_order["states"]),  # type: ignore[index]
-                parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
-                initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
-                t_span=runtime["t_span"],  # type: ignore[arg-type]
-                t_eval=runtime["t_eval"],  # type: ignore[arg-type]
-                input_values=resolved_inputs.constant_values,
-                input_signals=resolved_inputs.signal_samples,
-                ode_result=ode_result,
-                state_space_result=state_space_result,
-                tolerance=tolerance,
-                output_dir=_resolved_simulink_output_dir(simulink_output_dir),
-            )
+            if descriptor_only:
+                execution = execute_simulink_descriptor(
+                    eng,
+                    descriptor_system=descriptor_system,
+                    name=f"{source_path.stem}_simulink",
+                    parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+                    differential_initial_conditions=consistent_initialization.differential_initial_conditions,
+                    algebraic_initial_conditions=consistent_initialization.algebraic_initial_conditions,
+                    t_span=runtime["t_span"],  # type: ignore[arg-type]
+                    t_eval=runtime["t_eval"],  # type: ignore[arg-type]
+                    output_names=[*dae_system.differential_states, *dae_system.algebraic_variables],
+                    input_values=resolved_inputs.constant_values,
+                    input_signals=resolved_inputs.signal_samples,
+                    output_dir=_resolved_simulink_output_dir(simulink_output_dir),
+                )
+            else:
+                execution = execute_simulink_graph(
+                    eng,
+                    graph=validated_graph,
+                    name=f"{source_path.stem}_simulink",
+                    state_names=list(first_order["states"]),  # type: ignore[index]
+                    parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+                    initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+                    t_span=runtime["t_span"],  # type: ignore[arg-type]
+                    t_eval=runtime["t_eval"],  # type: ignore[arg-type]
+                    input_values=resolved_inputs.constant_values,
+                    input_signals=resolved_inputs.signal_samples,
+                    ode_result=ode_result,
+                    state_space_result=state_space_result,
+                    tolerance=tolerance,
+                    output_dir=_resolved_simulink_output_dir(simulink_output_dir),
+                )
             simulink_model = execution.model
             simulink_result = execution.simulation
             simulink_validation = execution.validation
         finally:
             if owns_engine:
                 eng.quit()
-        if simulink_validation is None:
+        if not descriptor_only and simulink_validation is None:
             raise DeterministicCompileError("Simulink validation requires the direct ODE simulation result.")
 
     return {
         "source_path": str(source_path),
-        "equations": compilation.equations,
-        "equation_dicts": compilation.equation_dicts,
+        "equations": equations,
+        "equation_dicts": equation_dicts if equation_dicts is not None else [equation_to_dict(equation) for equation in equations],
         "extraction": extraction,
         "solved_derivatives": solved_derivatives,
         "dae_system": dae_system,
@@ -303,6 +378,7 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
     graph = results["graph"]
     simulink_result = results["simulink_result"]
     simulink_validation = results["simulink_validation"]
+    explicit_form = results["explicit_form"]
     return {
         "source_path": results["source_path"],
         "equations": [equation_to_string(equation) for equation in results["equations"]],  # type: ignore[index]
@@ -313,11 +389,11 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
         "descriptor_system": results["descriptor_system"],
         "consistent_initialization": results["consistent_initialization"].to_dict(),  # type: ignore[union-attr]
         "first_order": results["first_order"],
-        "explicit_form": {
-            "form": results["explicit_form"]["form"],  # type: ignore[index]
+        "explicit_form": None if explicit_form is None else {
+            "form": explicit_form["form"],  # type: ignore[index]
             "rhs": {
                 state: sympy.sstr(expr)
-                for state, expr in results["explicit_form"]["rhs"].items()  # type: ignore[index]
+                for state, expr in explicit_form["rhs"].items()  # type: ignore[index]
             },
         },
         "linearity": {
@@ -325,7 +401,7 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
             "offending_entries": results["linearity"]["offending_entries"],  # type: ignore[index]
         },
         "state_space": state_space,
-        "graph": {
+        "graph": None if graph is None else {
             "node_count": len(graph["nodes"]),  # type: ignore[index]
             "edge_count": len(graph["edges"]),  # type: ignore[index]
             "ops": sorted({node["op"] for node in graph["nodes"]}),  # type: ignore[index]
@@ -384,9 +460,12 @@ def _print_results(
 
     if show_first_order or True:
         print("First-order system:")
-        for entry in first_order["state_equations"]:  # type: ignore[index]
-            rhs = sympy.sstr(expression_to_sympy(expression_from_dict(entry["rhs"])))
-            print(f"  d/dt {entry['state']} = {rhs}")
+        if first_order is None:
+            print("  unavailable: descriptor-only Simulink path")
+        else:
+            for entry in first_order["state_equations"]:  # type: ignore[index]
+                rhs = sympy.sstr(expression_to_sympy(expression_from_dict(entry["rhs"])))
+                print(f"  d/dt {entry['state']} = {rhs}")
 
     print("Linearity:")
     print(f"  is_linear: {results['linearity']['is_linear']}")  # type: ignore[index]
@@ -407,9 +486,12 @@ def _print_results(
             print(f"  {name} = {matrix_from_dict(descriptor_system[name])}")  # type: ignore[index]
 
     print("Graph summary:")
-    print(f"  nodes: {len(graph['nodes'])}")  # type: ignore[index]
-    print(f"  edges: {len(graph['edges'])}")  # type: ignore[index]
-    print(f"  ops: {sorted({node['op'] for node in graph['nodes']})}")  # type: ignore[index]
+    if graph is None:
+        print("  unavailable: descriptor-only Simulink path")
+    else:
+        print(f"  nodes: {len(graph['nodes'])}")  # type: ignore[index]
+        print(f"  edges: {len(graph['edges'])}")  # type: ignore[index]
+        print(f"  ops: {sorted({node['op'] for node in graph['nodes']})}")  # type: ignore[index]
 
     if show_graph_validation:
         print("Graph validation:")
@@ -430,12 +512,15 @@ def _print_results(
     else:
         print(f"  model_name: {simulink_result['model_name']}")
         print(f"  model_file: {simulink_result['model_file']}")
-        print(f"  vs_ode_rmse: {simulink_validation['vs_ode']['rmse']}")
-        print(f"  vs_ode_max_abs_error: {simulink_validation['vs_ode']['max_abs_error']}")
-        if simulink_validation["vs_state_space"] is not None:
-            print(f"  vs_state_space_rmse: {simulink_validation['vs_state_space']['rmse']}")
-            print(f"  vs_state_space_max_abs_error: {simulink_validation['vs_state_space']['max_abs_error']}")
-        print(f"  passes: {simulink_validation['passes']}")
+        if simulink_validation is None:
+            print("  validation: unavailable for descriptor-only Simulink path")
+        else:
+            print(f"  vs_ode_rmse: {simulink_validation['vs_ode']['rmse']}")
+            print(f"  vs_ode_max_abs_error: {simulink_validation['vs_ode']['max_abs_error']}")
+            if simulink_validation["vs_state_space"] is not None:
+                print(f"  vs_state_space_rmse: {simulink_validation['vs_state_space']['rmse']}")
+                print(f"  vs_state_space_max_abs_error: {simulink_validation['vs_state_space']['max_abs_error']}")
+            print(f"  passes: {simulink_validation['passes']}")
 
 
 def main() -> int:

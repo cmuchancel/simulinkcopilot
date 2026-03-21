@@ -60,6 +60,10 @@ BLOCK_LIBRARY = {
         "path": "simulink/Math Operations/Math Function",
         "ports": ["in", "out"],
     },
+    "AlgebraicConstraint": {
+        "path": "simulink/Math Operations/Algebraic Constraint",
+        "ports": ["in", "out"],
+    },
     "Abs": {
         "path": "simulink/Math Operations/Abs",
         "ports": ["in", "out"],

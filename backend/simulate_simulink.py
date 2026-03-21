@@ -10,6 +10,7 @@ import matlab
 import numpy as np
 
 from backend.builder import build_simulink_model
+from backend.descriptor_to_simulink import descriptor_to_simulink_model
 from backend.extract_signals import extract_simulink_signals
 from backend.graph_to_simulink import graph_to_simulink_model
 from backend.simulink_dict import BackendSimulinkModelDict, validate_simulink_model_dict
@@ -219,6 +220,90 @@ def execute_simulink_graph(
             model=model,
             simulation=simulation,
             validation=validation,
+            build_time_sec=build_time_sec,
+            simulation_time_sec=simulation_time_sec,
+        )
+    finally:
+        if close_after_run and model_name is not None:
+            try:
+                eng.close_system(model_name, 0, nargout=0)
+            except Exception:  # pragma: no cover - cleanup best effort
+                pass
+
+
+def execute_simulink_descriptor(
+    eng,
+    *,
+    descriptor_system: dict[str, object],
+    name: str,
+    parameter_values: dict[str, float],
+    differential_initial_conditions: dict[str, float],
+    algebraic_initial_conditions: dict[str, float],
+    t_span: tuple[float, float],
+    t_eval,
+    output_names: list[str] | None = None,
+    input_values: dict[str, float] | None = None,
+    input_signals: dict[str, dict[str, list[float]]] | None = None,
+    output_dir: str | Path | None = None,
+    open_after_build: bool = False,
+    close_after_run: bool = False,
+    numeric_result_validator=None,
+) -> SimulinkExecutionResult:
+    """Build and simulate a linear descriptor-system model with preserved algebraic constraints."""
+    model = descriptor_to_simulink_model(
+        descriptor_system,
+        name=name,
+        parameter_values=parameter_values,
+        input_values=input_values,
+        input_signals=input_signals,
+        differential_initial_conditions=differential_initial_conditions,
+        algebraic_initial_conditions=algebraic_initial_conditions,
+        output_names=output_names,
+        model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
+    )
+
+    model_name: str | None = None
+    try:
+        try:
+            build_start = time.perf_counter()
+            build_info = build_simulink_model(
+                eng,
+                model,
+                output_dir=output_dir,
+                open_after_build=open_after_build,
+            )
+            build_time_sec = time.perf_counter() - build_start
+            model_name = str(build_info["model_name"])
+        except Exception as exc:
+            raise SimulinkExecutionStageError("simulink_build", str(exc)) from exc
+
+        try:
+            prepare_workspace_variables(eng, model)
+            simulation_start = time.perf_counter()
+            sim_output = eng.sim(model_name, "ReturnWorkspaceOutputs", "on", nargout=1)
+            extracted = extract_simulink_signals(
+                eng,
+                sim_output,
+                output_names=[entry["name"] for entry in model["outputs"]],
+            )
+            simulation_time_sec = time.perf_counter() - simulation_start
+            simulation = {
+                **build_info,
+                **extracted,
+            }
+        except Exception as exc:
+            raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
+
+        if numeric_result_validator is not None:
+            try:
+                numeric_result_validator("Simulink simulation", simulation)
+            except Exception as exc:
+                raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
+
+        return SimulinkExecutionResult(
+            model=model,
+            simulation=simulation,
+            validation=None,
             build_time_sec=build_time_sec,
             simulation_time_sec=simulation_time_sec,
         )

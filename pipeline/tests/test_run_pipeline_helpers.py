@@ -292,3 +292,83 @@ def test_main_exports_gui_run_and_returns_simulink_status(monkeypatch, tmp_path:
     assert exit_code == 0
     assert export_calls[0]["raw_latex"] == r"\dot{x}=0"
     assert export_calls[0]["gui_report_root"] == str(tmp_path / "gui_runs")
+
+
+def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monkeypatch, tmp_path: Path) -> None:
+    path = _write_equations(tmp_path, "\\dot{x}+y=u\nx+y=1")
+    extraction = SimpleNamespace(
+        states=("x",),
+        inputs=("u",),
+        parameters=(),
+        independent_variable=None,
+        to_dict=lambda: {"states": ["x"], "inputs": ["u"], "parameters": []},
+    )
+    dae_system = SimpleNamespace(
+        differential_states=("x",),
+        algebraic_variables=("y",),
+        reduced_to_explicit=False,
+        to_dict=lambda: {
+            "differential_states": ["x"],
+            "algebraic_variables": ["y"],
+            "differential_equations": [],
+            "algebraic_constraints": [],
+            "solved_algebraic_variables": {},
+            "residual_constraints": ["x + y = 1"],
+            "reduced_equations": [],
+            "reduced_to_explicit": False,
+        },
+    )
+    descriptor_compilation = SimpleNamespace(
+        equation_dicts=[],
+        extraction=extraction,
+        dae_system=dae_system,
+        descriptor_system={
+            "form": "linear_descriptor",
+            "variables": ["x", "y"],
+            "differential_states": ["x"],
+            "algebraic_variables": ["y"],
+        },
+    )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "compile_symbolic_system",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            pipeline_module.SymbolicCompilationStageError(
+                "solve",
+                "dae solve unsupported",
+                completed_stages=("state_extraction",),
+            )
+        ),
+    )
+    monkeypatch.setattr(pipeline_module, "compile_descriptor_system", lambda *args, **kwargs: descriptor_compilation)
+
+    fake_backend_module = types.SimpleNamespace(
+        execute_simulink_descriptor=lambda *args, **kwargs: SimpleNamespace(
+            model={"blocks": {"alg": {}}, "outputs": [{"name": "x"}, {"name": "y"}]},
+            simulation={"model_name": "dae_model", "model_file": "/tmp/dae_model.slx"},
+            validation=None,
+        ),
+        execute_simulink_graph=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("graph path should not run")),
+    )
+    fake_engine_module = types.SimpleNamespace(start_engine=lambda **kwargs: SimpleNamespace(quit=lambda: None))
+    monkeypatch.setitem(sys.modules, "backend.simulate_simulink", fake_backend_module)
+    monkeypatch.setitem(sys.modules, "simulink.engine", fake_engine_module)
+
+    result = pipeline_module.run_pipeline(
+        path,
+        run_sim=False,
+        run_simulink=True,
+        runtime_override={
+            "initial_conditions": {"x": 1.0, "y": 0.0},
+            "input_values": {"u": 0.5},
+            "t_span": [0.0, 1.0],
+            "sample_count": 5,
+        },
+    )
+
+    assert result["first_order"] is None
+    assert result["graph"] is None
+    assert result["simulink_result"]["model_name"] == "dae_model"
+    assert result["simulink_validation"] is None
+    assert result["consistent_initialization"].algebraic_initial_conditions == {"y": 0.0}

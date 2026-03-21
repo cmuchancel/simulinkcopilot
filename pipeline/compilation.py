@@ -57,6 +57,18 @@ class SymbolicCompilationResult:
     validated_graph: dict[str, object] | None
 
 
+@dataclass(frozen=True)
+class DescriptorCompilationResult:
+    """Typed descriptor-only artifacts for non-reduced linear DAE execution paths."""
+
+    equations: list[EquationNode]
+    equation_dicts: list[dict[str, object]]
+    extraction: ExtractionResult
+    resolved_equations: list[EquationNode]
+    dae_system: SemiExplicitDaeSystem
+    descriptor_system: dict[str, object]
+
+
 def compile_symbolic_system(
     equations: list[EquationNode],
     *,
@@ -161,4 +173,38 @@ def compile_symbolic_system(
         state_space=state_space,
         graph=graph,
         validated_graph=validated_graph,
+    )
+
+
+def compile_descriptor_system(
+    equations: list[EquationNode],
+    *,
+    classification_mode: str = "strict",
+    symbol_config: str | Path | Mapping[str, object] | None = None,
+) -> DescriptorCompilationResult:
+    """Compile the descriptor-only artifacts for a non-reduced linear DAE."""
+    equation_dicts = [equation_to_dict(equation) for equation in equations]
+    try:
+        analysis = analyze_state_extraction(
+            equations,
+            mode=classification_mode,
+            symbol_config=symbol_config,
+        )
+    except Exception as exc:
+        raise SymbolicCompilationStageError("state_extraction", str(exc)) from exc
+
+    if analysis.descriptor_system is None:
+        raise SymbolicCompilationStageError(
+            "descriptor_system",
+            "Descriptor-system form is unavailable for this system.",
+            completed_stages=("state_extraction",),
+        )
+
+    return DescriptorCompilationResult(
+        equations=equations,
+        equation_dicts=equation_dicts,
+        extraction=analysis.extraction,
+        resolved_equations=analysis.resolved_equations,
+        dae_system=analysis.dae_system,
+        descriptor_system=analysis.descriptor_system,
     )
