@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,6 +28,46 @@ def _spec(**overrides) -> BenchmarkSystemSpec:
     )
     payload = base.__dict__ | overrides
     return BenchmarkSystemSpec(**payload)
+
+
+def _compiled_linear_result() -> SymbolicCompilationResult:
+    extraction = type(
+        "Extraction",
+        (),
+        {"states": ("x",), "inputs": (), "parameters": (), "independent_variable": None},
+    )()
+    dae_system = SimpleNamespace(
+        to_dict=lambda: {
+            "differential_states": ["x"],
+            "algebraic_variables": [],
+            "differential_equations": ["D1_x = x"],
+            "algebraic_constraints": [],
+            "solved_algebraic_variables": {},
+            "residual_constraints": [],
+            "reduced_equations": ["D1_x = x"],
+            "reduced_to_explicit": True,
+        }
+    )
+    return SymbolicCompilationResult(
+        equations=[],
+        equation_dicts=[],
+        extraction=extraction,
+        resolved_equations=[],
+        solved_derivatives=[],
+        dae_system=dae_system,
+        descriptor_system=None,
+        first_order={
+            "states": ["x"],
+            "inputs": [],
+            "parameters": [],
+            "state_equations": [{"state": "x", "rhs": {"op": "symbol", "name": "x"}}],
+        },
+        explicit_form={"form": "explicit_first_order", "rhs": {"x": 0}},
+        linearity={"is_linear": True},
+        state_space={"A": [[-1.0]]},
+        graph={"nodes": [{"id": "n1"}], "edges": []},
+        validated_graph=None,
+    )
 
 
 @dataclass
@@ -127,19 +168,7 @@ def test_run_extended_benchmark_covers_state_space_failure_and_compare_failure(
     assert system["stages"]["state_space_simulation"]["status"] == "skipped"
 
     def _compiled_linear(*args, **kwargs):
-        return SymbolicCompilationResult(
-            equations=[],
-            equation_dicts=[],
-            extraction=type("Extraction", (), {"states": ("x",), "inputs": (), "parameters": (), "independent_variable": None})(),
-            resolved_equations=[],
-            solved_derivatives=[],
-            first_order={"states": ["x"], "inputs": [], "parameters": [], "state_equations": [{"state": "x", "rhs": {"op": "symbol", "name": "x"}}]},
-            explicit_form={"form": "explicit_first_order", "rhs": {"x": 0}},
-            linearity={"is_linear": True},
-            state_space={"A": [[-1.0]]},
-            graph={"nodes": [{"id": "n1"}], "edges": []},
-            validated_graph=None,
-        )
+        return _compiled_linear_result()
 
     monkeypatch.setattr(runner_module, "compile_symbolic_system", _compiled_linear)
     monkeypatch.setattr(
@@ -166,19 +195,7 @@ def test_run_extended_benchmark_covers_simulink_success_and_failure_paths(
     monkeypatch.setattr(
         runner_module,
         "compile_symbolic_system",
-        lambda *args, **kwargs: SymbolicCompilationResult(
-            equations=[],
-            equation_dicts=[],
-            extraction=type("Extraction", (), {"states": ("x",), "inputs": (), "parameters": (), "independent_variable": None})(),
-            resolved_equations=[],
-            solved_derivatives=[],
-            first_order={"states": ["x"], "inputs": [], "parameters": [], "state_equations": [{"state": "x", "rhs": {"op": "symbol", "name": "x"}}]},
-            explicit_form={"form": "explicit_first_order", "rhs": {"x": 0}},
-            linearity={"is_linear": True},
-            state_space={"A": [[-1.0]]},
-            graph={"nodes": [{"id": "n1"}], "edges": []},
-            validated_graph=None,
-        ),
+        lambda *args, **kwargs: _compiled_linear_result(),
     )
     monkeypatch.setattr(runner_module, "simulate_state_space_system", lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]})
     monkeypatch.setattr(runner_module, "compare_simulations", lambda *args, **kwargs: {"passes": True, "rmse": 0.0, "max_abs_error": 0.0})

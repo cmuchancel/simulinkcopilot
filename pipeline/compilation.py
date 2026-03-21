@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from canonicalize.descriptor_system import build_descriptor_system_from_first_order
+from canonicalize.dae_system import SemiExplicitDaeSystem
 from canonicalize.first_order import build_first_order_system
 from canonicalize.linearity_check import analyze_first_order_linearity
 from canonicalize.nonlinear_forms import build_explicit_system_form
@@ -45,6 +47,8 @@ class SymbolicCompilationResult:
     extraction: ExtractionResult
     resolved_equations: list[EquationNode]
     solved_derivatives: list[SolvedDerivative]
+    dae_system: SemiExplicitDaeSystem
+    descriptor_system: dict[str, object] | None
     first_order: dict[str, object]
     explicit_form: dict[str, object]
     linearity: dict[str, object]
@@ -109,6 +113,18 @@ def compile_symbolic_system(
             completed_stages=("state_extraction", "solve", "first_order"),
         ) from exc
 
+    descriptor_system = analysis.descriptor_system
+    if descriptor_system is None and linearity["is_linear"]:
+        try:
+            descriptor_system = build_descriptor_system_from_first_order(first_order)
+        except Exception as exc:
+            raise SymbolicCompilationStageError(
+                "descriptor_system",
+                str(exc),
+                completed_stages=("state_extraction", "solve", "first_order", "state_space"),
+                linearity=linearity,
+            ) from exc
+
     try:
         graph = lower_first_order_system_graph(first_order, name=graph_name)
     except Exception as exc:
@@ -137,6 +153,8 @@ def compile_symbolic_system(
         extraction=analysis.extraction,
         resolved_equations=analysis.resolved_equations,
         solved_derivatives=solved_derivatives,
+        dae_system=analysis.dae_system,
+        descriptor_system=descriptor_system,
         first_order=first_order,
         explicit_form=explicit_form,
         linearity=linearity,

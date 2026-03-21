@@ -23,6 +23,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["extraction"].states, ("x", "x_dot"))
         self.assertTrue(result["comparison"]["passes"])
         self.assertIsNotNone(result["graph"])
+        self.assertIsNotNone(result["descriptor_system"])
 
     def test_nonlinear_pipeline_skips_state_space_comparison(self) -> None:
         result = run_pipeline(EXAMPLES_ROOT / "nonlinear_pendulum.tex")
@@ -140,6 +141,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["extraction"].states, ("x",))
         self.assertEqual(result["extraction"].inputs, ())
         self.assertEqual(result["extraction"].parameters, ())
+        self.assertEqual(result["consistent_initialization"].algebraic_initial_conditions, {"y": 1.0})
         self.assertTrue(result["comparison"]["passes"])
         self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
 

@@ -44,12 +44,34 @@ def _fake_results(*, with_comparison: bool = False, with_simulink: bool = False)
         parameters=("a",),
         to_dict=lambda: {"states": ["x"], "inputs": [], "parameters": ["a"]},
     )
+    dae_system = SimpleNamespace(
+        to_dict=lambda: {
+            "differential_states": ["x"],
+            "algebraic_variables": [],
+            "differential_equations": ["D1_x = x"],
+            "algebraic_constraints": [],
+            "solved_algebraic_variables": {},
+            "residual_constraints": [],
+            "reduced_equations": ["D1_x = x"],
+            "reduced_to_explicit": True,
+        }
+    )
+    consistent_initialization = SimpleNamespace(
+        to_dict=lambda: {
+            "differential_initial_conditions": {"x": 0.0},
+            "algebraic_initial_conditions": {},
+            "reduced_to_explicit": True,
+        }
+    )
     return {
         "source_path": "/tmp/inline_equations.tex",
         "equations": [],
         "equation_dicts": [],
         "extraction": extraction,
         "solved_derivatives": [],
+        "dae_system": dae_system,
+        "descriptor_system": None,
+        "consistent_initialization": consistent_initialization,
         "first_order": {"states": ["x"], "inputs": [], "state_equations": [{"state": "x", "rhs": {"op": "symbol", "name": "x"}}]},
         "explicit_form": {"form": "explicit_first_order", "rhs": {"x": 1}},
         "linearity": {"is_linear": False, "offending_entries": []},

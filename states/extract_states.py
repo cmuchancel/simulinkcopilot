@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Mapping
 
+from canonicalize.descriptor_system import build_descriptor_system_from_dae
+from canonicalize.dae_system import SemiExplicitDaeSystem, build_semi_explicit_dae_system
 from canonicalize.dae_reduction import DaeReductionResult, reduce_semi_explicit_dae
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError
@@ -25,6 +27,8 @@ class StateExtractionAnalysis:
     resolved_equations: list[EquationNode]
     solved_derivatives: list[SolvedDerivative] | None
     dae_reduction: DaeReductionResult
+    dae_system: SemiExplicitDaeSystem
+    descriptor_system: dict[str, object] | None
 
 
 def analyze_state_extraction(
@@ -87,11 +91,18 @@ def analyze_state_extraction(
         derivative_orders=derivative_orders,
         symbol_metadata=symbol_metadata,
     )
+    dae_system = build_semi_explicit_dae_system(extraction, reduction)
+    try:
+        descriptor_system = build_descriptor_system_from_dae(dae_system, extraction)
+    except DeterministicCompileError:
+        descriptor_system = None
     return StateExtractionAnalysis(
         extraction=extraction,
         resolved_equations=resolved_equations,
         solved_derivatives=solved_derivatives,
         dae_reduction=reduction,
+        dae_system=dae_system,
+        descriptor_system=descriptor_system,
     )
 
 

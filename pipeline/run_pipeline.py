@@ -20,6 +20,7 @@ from ir.equation_dict import (
 from latex_frontend.translator import translate_file
 from pipeline.compilation import compile_symbolic_system
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
+from simulate.dae_init import consistent_initialize_dae
 from simulate.input_sources import resolve_input_sources
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
@@ -189,12 +190,22 @@ def run_pipeline(
     )
     extraction = compilation.extraction
     solved_derivatives = compilation.solved_derivatives
+    dae_system = compilation.dae_system
+    descriptor_system = compilation.descriptor_system
     first_order = compilation.first_order
     explicit_form = compilation.explicit_form
     linearity = compilation.linearity
     state_space = compilation.state_space
     validated_graph = compilation.validated_graph or compilation.graph
     runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
+    consistent_initialization = consistent_initialize_dae(
+        dae_system,
+        parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+        differential_initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+        input_function=runtime["input_function"],  # type: ignore[arg-type]
+        independent_variable=extraction.independent_variable,
+        t0=float(runtime["t_span"][0]),  # type: ignore[index]
+    )
 
     ode_result = None
     state_space_result = None
@@ -267,6 +278,9 @@ def run_pipeline(
         "equation_dicts": compilation.equation_dicts,
         "extraction": extraction,
         "solved_derivatives": solved_derivatives,
+        "dae_system": dae_system,
+        "descriptor_system": descriptor_system,
+        "consistent_initialization": consistent_initialization,
         "first_order": first_order,
         "explicit_form": explicit_form,
         "linearity": linearity,
@@ -295,6 +309,9 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
         "equation_dicts": results["equation_dicts"],
         "extraction": results["extraction"].to_dict(),  # type: ignore[union-attr]
         "solved_derivatives": [item.to_dict() for item in results["solved_derivatives"]],  # type: ignore[index]
+        "dae_system": results["dae_system"].to_dict(),  # type: ignore[union-attr]
+        "descriptor_system": results["descriptor_system"],
+        "consistent_initialization": results["consistent_initialization"].to_dict(),  # type: ignore[union-attr]
         "first_order": results["first_order"],
         "explicit_form": {
             "form": results["explicit_form"]["form"],  # type: ignore[index]
@@ -341,6 +358,7 @@ def _print_results(
     solved_derivatives = results["solved_derivatives"]
     first_order = results["first_order"]
     state_space = results["state_space"]
+    descriptor_system = results["descriptor_system"]
     comparison = results["comparison"]
     graph = results["graph"]
     simulink_result = results["simulink_result"]
@@ -380,6 +398,13 @@ def _print_results(
     else:
         print("State-space matrices:")
         print("  unavailable: nonlinear explicit system")
+
+    print("Descriptor system:")
+    if descriptor_system is None:
+        print("  unavailable: descriptor form unavailable for this system")
+    else:
+        for name in ["E", "A", "B", "offset"]:
+            print(f"  {name} = {matrix_from_dict(descriptor_system[name])}")  # type: ignore[index]
 
     print("Graph summary:")
     print(f"  nodes: {len(graph['nodes'])}")  # type: ignore[index]

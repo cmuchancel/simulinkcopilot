@@ -19,9 +19,13 @@ class DaeReductionResult:
     """Reduced equation set plus any helper/algebraic substitutions applied."""
 
     equations: list[EquationNode]
+    dynamic_equations: list[EquationNode]
+    reduced_dynamic_equations: list[EquationNode]
+    algebraic_constraints: list[EquationNode]
     resolved_helper_definitions: dict[str, EquationNode]
     solved_algebraic_variables: dict[str, EquationNode]
     residual_constraints: list[EquationNode]
+    algebraic_variables: tuple[str, ...]
 
 
 def reduce_semi_explicit_dae(
@@ -35,9 +39,13 @@ def reduce_semi_explicit_dae(
     if not classification.algebraic_constraints:
         return DaeReductionResult(
             equations=substitution.equations,
+            dynamic_equations=list(classification.dynamic_equations),
+            reduced_dynamic_equations=list(classification.dynamic_equations),
+            algebraic_constraints=[],
             resolved_helper_definitions=substitution.resolved_definitions,
             solved_algebraic_variables={},
             residual_constraints=[],
+            algebraic_variables=(),
         )
 
     candidate_names = _candidate_algebraic_variables(
@@ -48,9 +56,13 @@ def reduce_semi_explicit_dae(
     if not candidate_names:
         return DaeReductionResult(
             equations=substitution.equations,
+            dynamic_equations=list(classification.dynamic_equations),
+            reduced_dynamic_equations=list(classification.dynamic_equations),
+            algebraic_constraints=list(classification.algebraic_constraints),
             resolved_helper_definitions=substitution.resolved_definitions,
             solved_algebraic_variables={},
             residual_constraints=list(classification.algebraic_constraints),
+            algebraic_variables=(),
         )
 
     solved_algebraic_variables = _solve_algebraic_variables(
@@ -60,9 +72,13 @@ def reduce_semi_explicit_dae(
     if not solved_algebraic_variables:
         return DaeReductionResult(
             equations=substitution.equations,
+            dynamic_equations=list(classification.dynamic_equations),
+            reduced_dynamic_equations=list(classification.dynamic_equations),
+            algebraic_constraints=list(classification.algebraic_constraints),
             resolved_helper_definitions=substitution.resolved_definitions,
             solved_algebraic_variables={},
             residual_constraints=list(classification.algebraic_constraints),
+            algebraic_variables=tuple(candidate_names),
         )
 
     substitution_map = {
@@ -84,9 +100,13 @@ def reduce_semi_explicit_dae(
 
     return DaeReductionResult(
         equations=[*reduced_dynamic, *reduced_constraints],
+        dynamic_equations=list(classification.dynamic_equations),
+        reduced_dynamic_equations=reduced_dynamic,
+        algebraic_constraints=list(classification.algebraic_constraints),
         resolved_helper_definitions=substitution.resolved_definitions,
         solved_algebraic_variables=solved_algebraic_variables,
         residual_constraints=reduced_constraints,
+        algebraic_variables=tuple(candidate_names),
     )
 
 
