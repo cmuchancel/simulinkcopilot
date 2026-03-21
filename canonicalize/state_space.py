@@ -30,6 +30,7 @@ def build_state_space_system(first_order_system: dict[str, object]) -> dict[str,
         "states": states,
         "inputs": inputs,
         "parameters": list(first_order_system["parameters"]),  # type: ignore[index]
+        "independent_variable": first_order_system.get("independent_variable"),
         "A": matrix_to_dict(A),
         "B": matrix_to_dict(B),
         "C": matrix_to_dict(C),

@@ -54,6 +54,44 @@ class GraphToSimulinkTests(unittest.TestCase):
         self.assertIn("FromWorkspace", block_types)
         self.assertTrue(model["workspace_variables"])
 
+    def test_multi_input_sources_map_cleanly_to_backend_blocks(self) -> None:
+        equations = translate_latex(r"\dot{x}=a x+b u_1+c u_2")
+        extraction = extract_states(
+            equations,
+            mode="configured",
+            symbol_config={"a": "parameter", "b": "parameter", "c": "parameter", "u_1": "input", "u_2": "input"},
+        )
+        first_order = build_first_order_system(equations, extraction=extraction)
+        graph = lower_first_order_system_graph(first_order, name="mimo_driven")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+            parameter_values={"a": -0.4, "b": 2.0, "c": -1.0},
+            input_values={"u_1": 1.5},
+            input_signals={"u_2": {"time": [0.0, 1.0], "values": [0.0, 1.0]}},
+        )
+        block_types = [spec["type"] for spec in model["blocks"].values()]
+        self.assertIn("Constant", block_types)
+        self.assertIn("FromWorkspace", block_types)
+        self.assertIn("u_2", "".join(model["workspace_variables"].keys()))
+
+    def test_declared_independent_variable_maps_to_clock_block(self) -> None:
+        equations = translate_latex(r"\dot{x}=-t x+u")
+        extraction = extract_states(
+            equations,
+            mode="configured",
+            symbol_config={"t": "independent_variable", "u": "input"},
+        )
+        first_order = build_first_order_system(equations, extraction=extraction)
+        graph = lower_first_order_system_graph(first_order, name="time_varying")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+            input_values={"u": 1.0},
+        )
+        block_types = {spec["type"] for spec in model["blocks"].values()}
+        self.assertIn("Clock", block_types)
+
     def test_sine_graph_maps_to_trigonometric_block(self) -> None:
         first_order = build_first_order_system(translate_latex(r"\ddot{\theta}+\frac{g}{l}\sin(\theta)=0"))
         graph = lower_first_order_system_graph(first_order, name="pendulum")

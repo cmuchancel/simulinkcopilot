@@ -16,5 +16,6 @@ def build_explicit_system_form(first_order_system: dict[str, object]) -> dict[st
         "states": list(first_order_system["states"]),  # type: ignore[index]
         "inputs": list(first_order_system["inputs"]),  # type: ignore[index]
         "parameters": list(first_order_system["parameters"]),  # type: ignore[index]
+        "independent_variable": first_order_system.get("independent_variable"),
         "rhs": rhs,
     }

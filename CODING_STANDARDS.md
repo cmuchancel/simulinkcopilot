@@ -35,6 +35,7 @@ This document defines the repo conventions for implementation, review, and refac
 2. Deterministic compiler changes should add or update unit coverage near the touched subsystem.
 3. MATLAB-dependent tests should stay focused and opt for reuse over redundant end-to-end coverage.
 4. Refactors are not complete until imports, docs, and CLI usage examples all match the new structure.
+5. The default local test command is `python3 -m scripts.run_tests`; MATLAB-backed tests must be explicitly opted into.
 
 ## Documentation Rules
 

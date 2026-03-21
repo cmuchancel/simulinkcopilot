@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
+from canonicalize.algebraic_substitution import inline_algebraic_definitions
 from eqn2sim_gui.model_metadata import GuiModelMetadata, save_gui_metadata
 from eqn2sim_gui.preview import render_state_trajectory_comparison_preview
 from ir.equation_dict import equation_to_string
@@ -83,6 +84,7 @@ def _build_gui_metadata(
 ) -> GuiModelMetadata:
     extraction = results["extraction"]
     runtime = results["runtime"]
+    resolved_equations = inline_algebraic_definitions(results["equations"]).equations  # type: ignore[arg-type]
     parameter_values = dict(runtime["parameter_values"])  # type: ignore[index]
     initial_conditions = dict(runtime["initial_conditions"])  # type: ignore[index]
 
@@ -115,11 +117,20 @@ def _build_gui_metadata(
             "value": input_values.get(name),
             "input_kind": "constant" if name in input_values else "inport",
         }
+    if getattr(extraction, "independent_variable", None):
+        independent_name = str(extraction.independent_variable)
+        symbols[independent_name] = {
+            "role": "independent_variable",
+            "description": "",
+            "units": "",
+            "value": None,
+            "input_kind": "constant",
+        }
 
     return GuiModelMetadata(
         latex=raw_latex,
         normalized_latex=normalize_latex(raw_latex),
-        equations=[equation_to_string(equation) for equation in results["equations"]],  # type: ignore[index]
+        equations=[equation_to_string(equation) for equation in resolved_equations],
         symbols=dict(sorted(symbols.items())),
         initial_conditions={str(name): float(value) for name, value in initial_conditions.items()},
         extracted_states=list(extraction.states),  # type: ignore[attr-defined]

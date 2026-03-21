@@ -11,25 +11,16 @@ from typing import Callable, Mapping
 
 import numpy as np
 
-from backend.builder import build_simulink_model
-from backend.extract_signals import extract_simulink_signals
-from backend.graph_to_simulink import graph_to_simulink_model
-from backend.simulate_simulink import prepare_workspace_variables, simulation_model_params
-from backend.validate_simulink import compare_simulink_results
-from canonicalize.first_order import build_first_order_system
-from canonicalize.linearity_check import analyze_first_order_linearity
-from canonicalize.solve_for_derivatives import solve_for_highest_derivatives
-from canonicalize.state_space import build_state_space_system
-from ir.equation_dict import equation_to_dict, equation_to_string
-from ir.graph_lowering import lower_first_order_system_graph
-from ir.graph_validate import validate_graph_dict
+from backend.simulate_simulink import SimulinkExecutionStageError, execute_simulink_graph
+from ir.equation_dict import equation_to_string
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
+from pipeline.compilation import SymbolicCompilationStageError, compile_symbolic_system
 from repo_paths import GENERATED_MODELS_ROOT, REPORTS_ROOT
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
+from simulate.input_sources import resolve_input_sources
 from simulate.ode_sim import InputFunction, constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
-from states.extract_states import extract_states
 from simulink.engine import start_engine
 
 
@@ -82,41 +73,13 @@ def _default_stages() -> dict[str, dict[str, object]]:
         "ode_simulation": _stage("skipped"),
         "comparison": _stage("skipped"),
         "simulink_build": _stage("skipped"),
+        "simulink_simulation": _stage("skipped"),
         "simulink_compare": _stage("skipped"),
     }
 
 
 def _time_grid(case: BenchmarkCase) -> np.ndarray:
     return np.linspace(case.t_span[0], case.t_span[1], case.sample_count)
-
-
-def _input_signal_samples(case: BenchmarkCase, input_names: list[str], t_eval: np.ndarray) -> dict[str, dict[str, list[float]]]:
-    return {
-        name: {
-            "time": [float(time_value) for time_value in t_eval.tolist()],
-            "values": [float(case.input_function(float(time_value)).get(name, 0.0)) for time_value in t_eval],
-        }
-        for name in input_names
-    }
-
-
-def _constant_input_values(case: BenchmarkCase, input_names: list[str]) -> dict[str, float] | None:
-    if not input_names:
-        return {}
-    start, stop = case.t_span
-    sample_times = [float(start), float((start + stop) / 2.0), float(stop)]
-    baseline = {
-        name: float(case.input_function(sample_times[0]).get(name, 0.0))
-        for name in input_names
-    }
-    for time_value in sample_times[1:]:
-        sample = {
-            name: float(case.input_function(time_value).get(name, 0.0))
-            for name in input_names
-        }
-        if any(abs(sample[name] - baseline[name]) > 1e-12 for name in input_names):
-            return None
-    return baseline
 
 
 BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
@@ -310,7 +273,6 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         expected_linear=None,
         simulink_expected=False,
         expected_failure_stages=("parse",),
-        expected_failure_substring="Unsupported",
     ),
 )
 
@@ -353,7 +315,11 @@ def _finalize_case(
         )
     else:
         comparison_stage_ok = stages["comparison"]["status"] in {"passed", "skipped"}
-        simulink_stage_ok = stages["simulink_compare"]["status"] in {"passed", "skipped"}
+        simulink_stage_ok = (
+            stages["simulink_build"]["status"] in {"passed", "skipped"}
+            and stages["simulink_simulation"]["status"] in {"passed", "skipped"}
+            and stages["simulink_compare"]["status"] in {"passed", "skipped"}
+        )
         overall_pass = all(
             stages[name]["status"] == "passed"
             for name in [
@@ -444,129 +410,41 @@ def run_full_system_benchmark(
                 continue
 
             try:
-                extraction = extract_states(
+                compilation = compile_symbolic_system(
                     equations,
-                    mode=case.classification_mode,
+                    graph_name=case.name,
+                    classification_mode=case.classification_mode,
                     symbol_config=case.symbol_config,
+                    validate_graph=True,
                 )
-                stages["state_extraction"] = _stage("passed")
+                extraction = compilation.extraction
+                first_order = compilation.first_order
+                linearity = compilation.linearity
+                state_space = compilation.state_space
+                graph = compilation.validated_graph or compilation.graph
                 metrics["state_count"] = len(extraction.states)
-            except Exception as exc:
-                failure_stage = "state_extraction"
-                failure_reason = str(exc)
-                stages["state_extraction"] = _stage(
-                    "expected_failure"
-                    if _check_expected_failure(case, "state_extraction", str(exc))
-                    else "failed",
-                    str(exc),
-                )
-                results.append(
-                    _finalize_case(
-                        case,
-                        stages=stages,
-                        metrics=metrics,
-                        failure_stage=failure_stage,
-                        failure_reason=failure_reason,
-                        equations=equations,
-                    )
-                )
-                continue
-
-            try:
-                solved = solve_for_highest_derivatives(equations)
+                metrics["graph_nodes"] = len(compilation.graph["nodes"])
+                stages["state_extraction"] = _stage("passed")
                 stages["solve"] = _stage("passed")
-            except Exception as exc:
-                failure_stage = "solve"
-                failure_reason = str(exc)
-                stages["solve"] = _stage(
-                    "expected_failure" if _check_expected_failure(case, "solve", str(exc)) else "failed",
-                    str(exc),
-                )
-                results.append(
-                    _finalize_case(
-                        case,
-                        stages=stages,
-                        metrics=metrics,
-                        failure_stage=failure_stage,
-                        failure_reason=failure_reason,
-                        equations=equations,
-                    )
-                )
-                continue
-
-            try:
-                first_order = build_first_order_system(equations, extraction=extraction, solved_derivatives=solved)
                 stages["first_order"] = _stage("passed")
-            except Exception as exc:
-                failure_stage = "first_order"
-                failure_reason = str(exc)
-                stages["first_order"] = _stage("failed", str(exc))
-                results.append(
-                    _finalize_case(
-                        case,
-                        stages=stages,
-                        metrics=metrics,
-                        failure_stage=failure_stage,
-                        failure_reason=failure_reason,
-                        equations=equations,
-                    )
-                )
-                continue
-
-            try:
-                linearity = analyze_first_order_linearity(first_order)
                 if linearity["is_linear"]:
-                    state_space = build_state_space_system(first_order)
                     stages["state_space"] = _stage("passed")
                 else:
-                    state_space = None
                     stages["state_space"] = _stage("skipped", "nonlinear explicit system")
-            except Exception as exc:
-                state_space = None
-                failure_stage = "state_space"
-                failure_reason = str(exc)
-                stages["state_space"] = _stage("failed", str(exc))
-                results.append(
-                    _finalize_case(
-                        case,
-                        stages=stages,
-                        metrics=metrics,
-                        failure_stage=failure_stage,
-                        failure_reason=failure_reason,
-                        equations=equations,
-                        linearity=linearity,
-                    )
-                )
-                continue
-
-            try:
-                graph = lower_first_order_system_graph(first_order, name=case.name)
-                metrics["graph_nodes"] = len(graph["nodes"])
                 stages["graph_lowering"] = _stage("passed")
-            except Exception as exc:
-                failure_stage = "graph_lowering"
-                failure_reason = str(exc)
-                stages["graph_lowering"] = _stage("failed", str(exc))
-                results.append(
-                    _finalize_case(
-                        case,
-                        stages=stages,
-                        metrics=metrics,
-                        failure_stage=failure_stage,
-                        failure_reason=failure_reason,
-                        equations=equations,
-                        linearity=linearity,
-                    )
-                )
-                continue
-
-            try:
-                graph = validate_graph_dict(graph)
                 stages["graph_validation"] = _stage("passed")
-            except Exception as exc:
-                failure_stage = "graph_validation"
+            except SymbolicCompilationStageError as exc:
+                failure_stage = exc.stage
                 failure_reason = str(exc)
-                stages["graph_validation"] = _stage("failed", str(exc))
+                for stage_name in exc.completed_stages:
+                    stages[stage_name] = _stage("passed")
+                if "state_space" in exc.completed_stages and exc.linearity is not None:
+                    if exc.linearity["is_linear"]:
+                        stages["state_space"] = _stage("passed")
+                    else:
+                        stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+                status = "expected_failure" if _check_expected_failure(case, failure_stage, failure_reason) else "failed"
+                stages[failure_stage] = _stage(status, failure_reason)
                 results.append(
                     _finalize_case(
                         case,
@@ -575,7 +453,7 @@ def run_full_system_benchmark(
                         failure_stage=failure_stage,
                         failure_reason=failure_reason,
                         equations=equations,
-                        linearity=linearity,
+                        linearity=exc.linearity or linearity,
                     )
                 )
                 continue
@@ -657,53 +535,46 @@ def run_full_system_benchmark(
             if case.simulink_expected:
                 if not run_simulink:
                     stages["simulink_build"] = _stage("skipped", "Simulink benchmark disabled")
+                    stages["simulink_simulation"] = _stage("skipped", "Simulink benchmark disabled")
                     stages["simulink_compare"] = _stage("skipped", "Simulink benchmark disabled")
                 elif engine_error is not None or eng is None:
                     failure_stage = "simulink_build"
                     failure_reason = engine_error or "MATLAB engine unavailable"
                     stages["simulink_build"] = _stage("failed", failure_reason)
+                    stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
                     stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
                 else:
                     try:
                         input_names = list(first_order["inputs"])  # type: ignore[index]
-                        input_values = _constant_input_values(case, input_names)
-                        input_signals = None if input_values is not None else _input_signal_samples(case, input_names, t_eval)
-                        model_params = simulation_model_params(t_span=case.t_span, t_eval=t_eval)
-                        model = graph_to_simulink_model(
+                        resolved_inputs = resolve_input_sources(
+                            case.input_function,
+                            input_names,
+                            t_span=case.t_span,
+                            t_eval=t_eval,
+                        )
+                        execution = execute_simulink_graph(
+                            eng,
                             graph,
                             name=f"{case.name}_simulink",
                             state_names=list(first_order["states"]),  # type: ignore[index]
                             parameter_values=case.parameter_values,
-                            input_values=input_values,
-                            input_signals=input_signals,
                             initial_conditions=case.initial_conditions,
-                            model_params=model_params,
-                        )
-                        metrics["simulink_blocks"] = len(model["blocks"])
-                        build_start = time.perf_counter()
-                        build_info = build_simulink_model(
-                            eng,
-                            model,
+                            t_span=case.t_span,
+                            t_eval=t_eval,
+                            input_values=resolved_inputs.constant_values,
+                            input_signals=resolved_inputs.signal_samples,
+                            ode_result=ode_result,
+                            state_space_result=state_space_result,
+                            tolerance=tolerance,
                             output_dir=GENERATED_MODELS_ROOT / "benchmark_models",
                         )
-                        prepare_workspace_variables(eng, model)
-                        metrics["simulink_build_time_sec"] = time.perf_counter() - build_start
-                        stages["simulink_build"] = _stage("passed", build_info["model_file"])
-
-                        sim_start = time.perf_counter()
-                        sim_output = eng.sim(build_info["model_name"], "ReturnWorkspaceOutputs", "on", nargout=1)
-                        sim_result = extract_simulink_signals(
-                            eng,
-                            sim_output,
-                            output_names=[entry["name"] for entry in model["outputs"]],
-                        )
-                        metrics["simulink_simulation_time_sec"] = time.perf_counter() - sim_start
-                        simulink_validation = compare_simulink_results(
-                            sim_result,
-                            ode_result,
-                            state_space_result,
-                            tolerance=tolerance,
-                        )
+                        metrics["simulink_blocks"] = execution.block_count
+                        metrics["simulink_build_time_sec"] = execution.build_time_sec
+                        metrics["simulink_simulation_time_sec"] = execution.simulation_time_sec
+                        stages["simulink_build"] = _stage("passed", execution.model_file)
+                        stages["simulink_simulation"] = _stage("passed")
+                        simulink_validation = execution.validation
+                        assert simulink_validation is not None
                         if simulink_validation["passes"]:
                             stages["simulink_compare"] = _stage(
                                 "passed",
@@ -716,14 +587,23 @@ def run_full_system_benchmark(
                                 f"rmse={simulink_validation['vs_ode']['rmse']:.3e}, "
                                 f"max={simulink_validation['vs_ode']['max_abs_error']:.3e}",
                             )
-                    except Exception as exc:
-                        failure_stage = "simulink_build" if stages["simulink_build"]["status"] != "passed" else "simulink_compare"
+                    except SimulinkExecutionStageError as exc:
+                        failure_stage = exc.stage
                         failure_reason = str(exc)
-                        if stages["simulink_build"]["status"] != "passed":
+                        if exc.stage == "simulink_build":
                             stages["simulink_build"] = _stage("failed", str(exc))
+                            stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
                             stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
+                        elif exc.stage == "simulink_simulation":
+                            stages["simulink_build"] = stages["simulink_build"] if stages["simulink_build"]["status"] == "passed" else _stage("passed")
+                            stages["simulink_simulation"] = _stage("failed", str(exc))
+                            stages["simulink_compare"] = _stage("skipped", "Simulink simulation failed")
                         else:
                             stages["simulink_compare"] = _stage("failed", str(exc))
+                    except Exception as exc:
+                        failure_stage = "simulink_compare"
+                        failure_reason = str(exc)
+                        stages["simulink_compare"] = _stage("failed", str(exc))
 
             results.append(
                 _finalize_case(

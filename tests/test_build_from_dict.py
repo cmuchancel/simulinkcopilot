@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ir.simulink_dict import example_model
 from repo_paths import GENERATED_MODELS_ROOT
 from simulink.builder import build_model
 from simulink.engine import start_engine
 from simulink.utils import sanitize_block_name
+
+pytestmark = [pytest.mark.matlab, pytest.mark.slow]
 
 
 def _connection_exists(eng, model_name: str, src_block: str, src_port: str, dst_block: str, dst_port: str) -> bool:
@@ -26,7 +30,7 @@ def _connection_exists(eng, model_name: str, src_block: str, src_port: str, dst_
     )
 
 
-def main() -> int:
+def test_build_from_dict_round_trip() -> None:
     eng = start_engine(retries=3, retry_delay_seconds=3.0)
     model_dict = example_model("dict_round_trip_model")
     output_dir = GENERATED_MODELS_ROOT
@@ -54,12 +58,5 @@ def main() -> int:
             assert _connection_exists(eng, model_name, src_block, src_port, dst_block, dst_port), (
                 f"Missing connection {src_block}/{src_port} -> {dst_block}/{dst_port}"
             )
-
-        print(f"Built and verified {model_file}")
-        return 0
     finally:
         eng.quit()
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

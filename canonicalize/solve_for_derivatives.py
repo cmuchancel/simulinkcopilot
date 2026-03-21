@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import sympy
 
+from canonicalize.algebraic_substitution import inline_algebraic_definitions
 from ir.equation_dict import equation_to_residual, sympy_to_expression
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError, derivative_symbol_name
@@ -32,7 +33,8 @@ class SolvedDerivative:
 
 def solve_for_highest_derivatives(equations: list[EquationNode]) -> list[SolvedDerivative]:
     """Solve the system for the highest-order derivative of each base state."""
-    derivative_orders = collect_derivative_orders(equations)
+    resolved_equations = inline_algebraic_definitions(equations).equations
+    derivative_orders = collect_derivative_orders(resolved_equations)
     targets = [
         (base, order, sympy.Symbol(derivative_symbol_name(base, order)))
         for base, order in sorted(derivative_orders.items())
@@ -41,7 +43,7 @@ def solve_for_highest_derivatives(equations: list[EquationNode]) -> list[SolvedD
     if not targets:
         raise DeterministicCompileError("No derivatives found to solve for.")
 
-    residuals = [equation_to_residual(equation) for equation in equations]
+    residuals = [equation_to_residual(equation) for equation in resolved_equations]
     target_symbols = [target_symbol for _, _, target_symbol in targets]
 
     if len(residuals) < len(target_symbols):

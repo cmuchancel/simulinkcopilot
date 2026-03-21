@@ -15,6 +15,22 @@ class ExtractStatesTests(unittest.TestCase):
         self.assertEqual(list(result.parameters), ["c", "k", "m"])
         self.assertEqual(result.symbol_metadata["x_dot"].role, "derivative_derived_state")
 
+    def test_algebraic_helper_definitions_are_inlined_before_symbol_classification(self) -> None:
+        result = extract_states(
+            translate_latex(
+                "\n".join(
+                    [
+                        "u=kx",
+                        r"m\ddot{x}+c\dot{x}=u",
+                    ]
+                )
+            )
+        )
+        self.assertEqual(list(result.states), ["x", "x_dot"])
+        self.assertEqual(list(result.inputs), [])
+        self.assertEqual(list(result.parameters), ["c", "k", "m"])
+        self.assertNotIn("u", result.symbol_metadata)
+
     def test_ambiguous_input_parameter_split_raises(self) -> None:
         with self.assertRaises(DeterministicCompileError):
             extract_states(translate_latex(r"\dot{x}=ab"))

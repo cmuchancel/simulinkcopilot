@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from repo_paths import GENERATED_MODELS_ROOT
 from simulink.constants import CONSTANT_BLOCK, GAIN_BLOCK, SCOPE_BLOCK
 from simulink.engine import start_engine
 from simulink.utils import ensure_output_dir, format_position
 
+pytestmark = [pytest.mark.matlab, pytest.mark.slow]
 
-def main() -> int:
+
+def test_basic_model_smoke() -> None:
     eng = start_engine(retries=3, retry_delay_seconds=3.0)
     output_dir = ensure_output_dir(GENERATED_MODELS_ROOT)
     model_name = "basic_python_simulink_model"
@@ -43,12 +47,6 @@ def main() -> int:
         eng.set_param(model_name, "SimulationCommand", "update", nargout=0)
         eng.save_system(model_name, str(model_file), nargout=0)
         eng.sim(model_name, nargout=0)
-
-        print(f"Created and simulated {model_file}")
-        return 0
+        assert model_file.exists(), f"Expected {model_file} to exist after build."
     finally:
         eng.quit()
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

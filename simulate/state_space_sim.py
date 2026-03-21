@@ -24,20 +24,35 @@ def simulate_state_space_system(
     states = list(state_space_system["states"])  # type: ignore[index]
     inputs = list(state_space_system["inputs"])  # type: ignore[index]
     parameters = list(state_space_system["parameters"])  # type: ignore[index]
+    independent_variable = state_space_system.get("independent_variable")
     input_function = input_function or constant_inputs({})
 
-    substitutions = {sympy.Symbol(name): float(parameter_values[name]) for name in parameters}
-    A = np.asarray(matrix_from_dict(state_space_system["A"]).subs(substitutions), dtype=float)  # type: ignore[arg-type]
-    B = np.asarray(matrix_from_dict(state_space_system["B"]).subs(substitutions), dtype=float)  # type: ignore[arg-type]
-    C = np.asarray(matrix_from_dict(state_space_system["C"]).subs(substitutions), dtype=float)  # type: ignore[arg-type]
-    D = np.asarray(matrix_from_dict(state_space_system["D"]).subs(substitutions), dtype=float)  # type: ignore[arg-type]
-    offset = np.asarray(matrix_from_dict(state_space_system["offset"]).subs(substitutions), dtype=float).reshape(-1)  # type: ignore[arg-type]
+    parameter_symbols = [sympy.Symbol(name) for name in parameters]
+    independent_symbols = [sympy.Symbol(str(independent_variable))] if independent_variable else []
+    A_expr = matrix_from_dict(state_space_system["A"])  # type: ignore[arg-type]
+    B_expr = matrix_from_dict(state_space_system["B"])  # type: ignore[arg-type]
+    C_expr = matrix_from_dict(state_space_system["C"])  # type: ignore[arg-type]
+    D_expr = matrix_from_dict(state_space_system["D"])  # type: ignore[arg-type]
+    offset_expr = matrix_from_dict(state_space_system["offset"])  # type: ignore[arg-type]
+    compiled_A = sympy.lambdify(independent_symbols + parameter_symbols, A_expr, "numpy")
+    compiled_B = sympy.lambdify(independent_symbols + parameter_symbols, B_expr, "numpy")
+    compiled_C = sympy.lambdify(independent_symbols + parameter_symbols, C_expr, "numpy")
+    compiled_D = sympy.lambdify(independent_symbols + parameter_symbols, D_expr, "numpy")
+    compiled_offset = sympy.lambdify(independent_symbols + parameter_symbols, offset_expr, "numpy")
+    parameter_vector = [float(parameter_values[name]) for name in parameters]
 
     x0 = np.asarray([float(initial_conditions.get(state, 0.0)) for state in states], dtype=float)
+
+    def _evaluate_matrix(compiled, t: float) -> np.ndarray:
+        values = ([float(t)] if independent_symbols else []) + parameter_vector
+        return np.asarray(compiled(*values), dtype=float)
 
     def rhs(t: float, x: np.ndarray) -> np.ndarray:
         input_values = input_function(t)
         u = np.asarray([float(input_values.get(name, 0.0)) for name in inputs], dtype=float)
+        A = _evaluate_matrix(compiled_A, t)
+        B = _evaluate_matrix(compiled_B, t)
+        offset = _evaluate_matrix(compiled_offset, t).reshape(-1)
         return A @ x + (B @ u if inputs else 0.0) + offset
 
     solution = solve_ivp(
@@ -56,9 +71,15 @@ def simulate_state_space_system(
         [[float(input_function(time).get(name, 0.0)) for name in inputs] for time in solution.t],
         dtype=float,
     ) if inputs else np.zeros((solution.t.size, 0))
-    outputs = (C @ solution.y).T
-    if inputs:
-        outputs = outputs + (input_samples @ D.T)
+    output_columns: list[np.ndarray] = []
+    for index, time in enumerate(solution.t):
+        C = _evaluate_matrix(compiled_C, float(time))
+        D = _evaluate_matrix(compiled_D, float(time))
+        y = C @ solution.y[:, index]
+        if inputs:
+            y = y + (D @ input_samples[index])
+        output_columns.append(np.asarray(y, dtype=float).reshape(-1))
+    outputs = np.vstack(output_columns) if output_columns else np.zeros((solution.t.size, 0))
 
     return {
         "t": solution.t,

@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from canonicalize.first_order import build_first_order_system
 from canonicalize.state_space import build_state_space_system
@@ -16,6 +17,8 @@ from repo_paths import GENERATED_MODELS_ROOT
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
 from simulink.engine import start_engine
+
+pytestmark = [pytest.mark.matlab, pytest.mark.slow]
 
 
 class BackendIntegrationTests(unittest.TestCase):

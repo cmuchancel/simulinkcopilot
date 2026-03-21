@@ -16,6 +16,7 @@ class ExtractionResult:
     states: tuple[str, ...]
     inputs: tuple[str, ...]
     parameters: tuple[str, ...]
+    independent_variable: str | None
     derivative_orders: dict[str, int]
     symbol_metadata: dict[str, SymbolMetadata]
 
@@ -24,6 +25,7 @@ class ExtractionResult:
             "states": list(self.states),
             "inputs": list(self.inputs),
             "parameters": list(self.parameters),
+            "independent_variable": self.independent_variable,
             "derivative_orders": dict(self.derivative_orders),
             "symbol_metadata": {
                 name: metadata.to_dict()

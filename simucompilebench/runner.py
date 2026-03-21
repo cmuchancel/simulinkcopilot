@@ -12,24 +12,15 @@ from typing import Any, Callable
 
 import numpy as np
 
-from backend.builder import build_simulink_model
-from backend.extract_signals import extract_simulink_signals
-from backend.graph_to_simulink import graph_to_simulink_model
-from backend.simulate_simulink import prepare_workspace_variables, simulation_model_params
-from backend.validate_simulink import compare_simulink_results
-from canonicalize.first_order import build_first_order_system
-from canonicalize.linearity_check import analyze_first_order_linearity
-from canonicalize.solve_for_derivatives import solve_for_highest_derivatives
-from canonicalize.state_space import build_state_space_system
+from backend.simulate_simulink import SimulinkExecutionStageError, execute_simulink_graph
 from ir.equation_dict import equation_to_string
-from ir.graph_lowering import lower_first_order_system_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.translator import translate_latex
+from pipeline.compilation import SymbolicCompilationStageError, compile_symbolic_system
 from repo_paths import GENERATED_MODELS_ROOT
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
-from states.extract_states import extract_states
 from simulink.engine import start_engine
 
 from .catalog import build_simucompilebench_specs
@@ -310,36 +301,43 @@ def run_extended_benchmark(
                 normalized_equations = [equation_to_string(item) for item in equations]
                 stages["parse"] = _stage("passed")
 
-                extraction = extract_states(
-                    equations,
-                    mode=spec.classification_mode,
-                    symbol_config=dict(spec.symbol_config or {}),
-                )
-                extracted_state_count = len(extraction.states)
-                stages["state_extraction"] = _stage("passed")
-
-                solved = solve_for_highest_derivatives(equations)
-                stages["solve"] = _stage("passed")
-
-                first_order = build_first_order_system(equations, extraction=extraction, solved_derivatives=solved)
-                stages["first_order"] = _stage("passed")
-
                 try:
-                    linearity = analyze_first_order_linearity(first_order)
-                    if linearity["is_linear"]:
-                        state_space = build_state_space_system(first_order)
-                        state_space_available = True
-                        stages["state_space"] = _stage("passed")
-                    else:
-                        stages["state_space"] = _stage("skipped", "nonlinear explicit system")
-                except Exception as exc:
-                    stages["state_space"] = _stage("failed", str(exc))
-                    failure_stage = failure_stage or "state_space"
+                    compilation = compile_symbolic_system(
+                        equations,
+                        graph_name=spec.system_id,
+                        classification_mode=spec.classification_mode,
+                        symbol_config=dict(spec.symbol_config or {}),
+                        validate_graph=False,
+                    )
+                except SymbolicCompilationStageError as exc:
+                    failure_stage = failure_stage or exc.stage
                     failure_reason = failure_reason or str(exc)
+                    for stage_name in exc.completed_stages:
+                        stages[stage_name] = _stage("passed")
+                    if "state_space" in exc.completed_stages and exc.linearity is not None:
+                        if exc.linearity["is_linear"]:
+                            stages["state_space"] = _stage("passed")
+                            state_space_available = True
+                        else:
+                            stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+                    stages[exc.stage] = _stage("failed", str(exc))
+                    raise
 
-                graph = lower_first_order_system_graph(first_order, name=spec.system_id)
-                stages["graph_lowering"] = _stage("passed")
+                extraction = compilation.extraction
+                first_order = compilation.first_order
+                state_space = compilation.state_space
+                extracted_state_count = len(extraction.states)
+                graph = compilation.graph
                 graph_node_count = len(graph["nodes"])
+                stages["state_extraction"] = _stage("passed")
+                stages["solve"] = _stage("passed")
+                stages["first_order"] = _stage("passed")
+                if compilation.linearity["is_linear"]:
+                    state_space_available = True
+                    stages["state_space"] = _stage("passed")
+                else:
+                    stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+                stages["graph_lowering"] = _stage("passed")
 
                 graph = _inject_graph_fault(graph, spec.graph_fault)
                 graph = validate_graph_dict(graph)
@@ -401,46 +399,31 @@ def run_extended_benchmark(
                         failure_stage = failure_stage or "simulink_build"
                         failure_reason = failure_reason or engine_error or "MATLAB engine unavailable"
                     else:
-                        model_name = None
                         try:
-                            model = graph_to_simulink_model(
+                            execution = execute_simulink_graph(
+                                eng,
                                 graph,
                                 name=f"{spec.system_id}_simulink",
                                 state_names=list(first_order["states"]),  # type: ignore[index]
                                 parameter_values=spec.parameter_values,
-                                input_values=spec.input_values,
                                 initial_conditions=spec.initial_conditions,
-                                model_params=simulation_model_params(t_span=spec.t_span, t_eval=t_eval),
-                            )
-                            simulink_block_count = len(model["blocks"])
-                            build_start = time.perf_counter()
-                            build_info = build_simulink_model(
-                                eng,
-                                model,
-                                output_dir=GENERATED_MODELS_ROOT / "simucompilebench_models",
-                            )
-                            simulink_build_time_sec = time.perf_counter() - build_start
-                            model_name = str(build_info["model_name"])
-                            stages["simulink_build"] = _stage("passed", str(build_info["model_file"]))
-
-                            prepare_workspace_variables(eng, model)
-                            sim_start = time.perf_counter()
-                            sim_output = eng.sim(model_name, "ReturnWorkspaceOutputs", "on", nargout=1)
-                            sim_result = extract_simulink_signals(
-                                eng,
-                                sim_output,
-                                output_names=[entry["name"] for entry in model["outputs"]],
-                            )
-                            simulink_simulation_time_sec = time.perf_counter() - sim_start
-                            _validate_numeric_result("Simulink simulation", sim_result)
-                            stages["simulink_simulation"] = _stage("passed")
-
-                            simulink_validation = compare_simulink_results(
-                                sim_result,
-                                ode_result,
-                                state_space_result,
+                                t_span=spec.t_span,
+                                t_eval=t_eval,
+                                input_values=spec.input_values,
+                                ode_result=ode_result,
+                                state_space_result=state_space_result,
                                 tolerance=tolerance,
+                                output_dir=GENERATED_MODELS_ROOT / "simucompilebench_models",
+                                close_after_run=True,
+                                numeric_result_validator=_validate_numeric_result,
                             )
+                            simulink_block_count = execution.block_count
+                            simulink_build_time_sec = execution.build_time_sec
+                            simulink_simulation_time_sec = execution.simulation_time_sec
+                            stages["simulink_build"] = _stage("passed", execution.model_file)
+                            stages["simulink_simulation"] = _stage("passed")
+                            simulink_validation = execution.validation
+                            assert simulink_validation is not None
                             simulink_rmse = float(simulink_validation["vs_ode"]["rmse"])
                             simulink_max_abs_error = float(simulink_validation["vs_ode"]["max_abs_error"])
                             if simulink_validation["passes"]:
@@ -455,12 +438,23 @@ def run_extended_benchmark(
                                 )
                                 failure_stage = failure_stage or "simulink_compare"
                                 failure_reason = failure_reason or stages["simulink_compare"]["detail"]  # type: ignore[assignment]
-                        finally:
-                            if eng is not None and model_name is not None:
-                                try:
-                                    eng.close_system(model_name, 0, nargout=0)
-                                except Exception:  # pragma: no cover - cleanup best effort
-                                    pass
+                        except SimulinkExecutionStageError as exc:
+                            if exc.stage == "simulink_build":
+                                stages["simulink_build"] = _stage("failed", str(exc))
+                                stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
+                                stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
+                                failure_stage = failure_stage or "simulink_build"
+                                failure_reason = failure_reason or str(exc)
+                            elif exc.stage == "simulink_simulation":
+                                stages["simulink_build"] = stages["simulink_build"] if stages["simulink_build"]["status"] == "passed" else _stage("passed")
+                                stages["simulink_simulation"] = _stage("failed", str(exc))
+                                stages["simulink_compare"] = _stage("skipped", "Simulink simulation failed")
+                                failure_stage = failure_stage or "simulink_simulation"
+                                failure_reason = failure_reason or str(exc)
+                            else:
+                                stages["simulink_compare"] = _stage("failed", str(exc))
+                                failure_stage = failure_stage or "simulink_compare"
+                                failure_reason = failure_reason or str(exc)
                 else:
                     skip_reason = "Simulink disabled" if not run_simulink else "Simulink not required for this case"
                     stages["simulink_build"] = _stage("skipped", skip_reason)
@@ -492,15 +486,37 @@ def run_extended_benchmark(
                 elif stages["ode_simulation"]["status"] != "passed":
                     failure_stage = failure_stage or "ode_simulation"
                     stages["ode_simulation"] = _stage("failed", str(exc))
+                elif stages["state_space"]["status"] == "passed" and stages["state_space_simulation"]["status"] == "skipped":
+                    failure_stage = failure_stage or "state_space_simulation"
+                    stages["state_space_simulation"] = _stage("failed", str(exc))
                 elif stages["state_space_simulation"]["status"] not in {"passed", "skipped"}:
                     failure_stage = failure_stage or "state_space_simulation"
                     stages["state_space_simulation"] = _stage("failed", str(exc))
+                elif stages["state_space_simulation"]["status"] == "passed" and stages["state_space_compare"]["status"] == "skipped":
+                    failure_stage = failure_stage or "state_space_compare"
+                    stages["state_space_compare"] = _stage("failed", str(exc))
+                elif (
+                    run_simulink
+                    and spec.simulink_expected
+                    and not spec.expects_failure
+                    and stages["simulink_build"]["status"] == "skipped"
+                ):
+                    failure_stage = failure_stage or "simulink_build"
+                    stages["simulink_build"] = _stage("failed", str(exc))
+                    stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
+                    stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
                 elif stages["simulink_build"]["status"] not in {"passed", "skipped"}:
                     failure_stage = failure_stage or "simulink_build"
                     stages["simulink_build"] = _stage("failed", str(exc))
+                elif stages["simulink_build"]["status"] == "passed" and stages["simulink_simulation"]["status"] == "skipped":
+                    failure_stage = failure_stage or "simulink_simulation"
+                    stages["simulink_simulation"] = _stage("failed", str(exc))
                 elif stages["simulink_simulation"]["status"] not in {"passed", "skipped"}:
                     failure_stage = failure_stage or "simulink_simulation"
                     stages["simulink_simulation"] = _stage("failed", str(exc))
+                elif stages["simulink_simulation"]["status"] == "passed" and stages["simulink_compare"]["status"] == "skipped":
+                    failure_stage = failure_stage or "simulink_compare"
+                    stages["simulink_compare"] = _stage("failed", str(exc))
                 else:
                     failure_stage = failure_stage or "other"
 

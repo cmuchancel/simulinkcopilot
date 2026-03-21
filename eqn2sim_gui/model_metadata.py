@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from canonicalize.algebraic_substitution import inline_algebraic_definitions
 from ir.expression_nodes import DerivativeNode, EquationNode, SymbolNode, walk_expression
 from latex_frontend.symbols import DeterministicCompileError
 from states.rules import collect_derivative_orders, derive_state_list
@@ -67,10 +68,11 @@ class GuiModelMetadata:
 
 def extract_symbol_inventory(equations: list[EquationNode]) -> tuple[list[SymbolInventoryEntry], tuple[str, ...], dict[str, int]]:
     """Return the user-facing symbol inventory and derived state chain."""
-    derivative_orders = collect_derivative_orders(equations)
+    resolved_equations = inline_algebraic_definitions(equations).equations
+    derivative_orders = collect_derivative_orders(resolved_equations)
     state_chain = derive_state_list(derivative_orders)
     seen_plain: set[str] = set()
-    for equation in equations:
+    for equation in resolved_equations:
         for node in walk_expression(equation.lhs):
             if isinstance(node, SymbolNode):
                 seen_plain.add(node.name)
@@ -103,12 +105,15 @@ def validate_gui_symbol_payload(
 ) -> dict[str, dict[str, Any]]:
     """Validate metadata submitted from the local GUI."""
     normalized: dict[str, dict[str, Any]] = {}
+    independent_variable_names: list[str] = []
     for name, entry in symbol_payload.items():
         role = entry.get("role")
         if role not in GUI_SYMBOL_ROLES:
             raise DeterministicCompileError(
                 f"Symbol {name!r} has unsupported GUI role {role!r}. Expected one of {GUI_SYMBOL_ROLES}."
             )
+        if role == "independent_variable":
+            independent_variable_names.append(name)
         if derivative_orders.get(name, 0) > 0 and role != "state":
             raise DeterministicCompileError(
                 f"Symbol {name!r} appears with derivatives and must be marked as a state."
@@ -124,6 +129,8 @@ def validate_gui_symbol_payload(
             "value": _float_or_none(entry.get("value")),
             "input_kind": str(entry.get("input_kind", "inport")).strip() or "inport",
         }
+    if len(independent_variable_names) > 1:
+        raise DeterministicCompileError("Exactly one independent variable may be marked in the GUI metadata.")
     return normalized
 
 

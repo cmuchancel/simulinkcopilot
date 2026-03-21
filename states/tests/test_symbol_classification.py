@@ -83,6 +83,17 @@ class SymbolClassificationTests(unittest.TestCase):
         self.assertEqual(result.inputs, ("u",))
         self.assertEqual(result.parameters, ("a", "b"))
 
+    def test_configured_mode_supports_declared_independent_variable(self) -> None:
+        result = extract_states(
+            translate_latex(r"\dot{x}=-t x+u"),
+            mode="configured",
+            symbol_config={"t": "independent_variable", "u": "input"},
+        )
+        self.assertEqual(result.inputs, ("u",))
+        self.assertEqual(result.parameters, ())
+        self.assertEqual(result.independent_variable, "t")
+        self.assertEqual(result.symbol_metadata["t"].role, "independent_variable")
+
     def test_multi_equation_shared_parameters_are_identified(self) -> None:
         result = extract_states(
             translate_latex("\\dot{x}=v\nm\\dot{v}+c v + kx = u"),

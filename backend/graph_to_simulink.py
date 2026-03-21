@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-import numpy as np
-
 from backend.block_library import BLOCK_LIBRARY
+from backend.graph_numeric import GraphNumericEvaluator, safe_reciprocal as _safe_reciprocal
+from backend.graph_partition import build_graph_subsystem_plan
 from backend.layout import annotate_integrator_orders, apply_deterministic_layout
 from backend.simulink_dict import ROOT_SYSTEM, SUBSYSTEM_BLOCK, BackendSimulinkModelDict, validate_simulink_model_dict
 from backend.traceability import build_node_expressions, state_base_name, state_order
@@ -31,12 +31,6 @@ def _sanitize_for_id(name: str) -> str:
     return sanitize_block_name(name)
 
 
-def _safe_reciprocal(value: float) -> float:
-    if math.isclose(value, 0.0, rel_tol=0.0, abs_tol=1e-15):
-        raise DeterministicCompileError("Reciprocal function encountered a zero denominator during constant folding.")
-    return 1.0 / value
-
-
 def _group_key_for_state(state: str) -> str:
     return state_base_name(state)
 
@@ -54,10 +48,10 @@ class GraphToSimulinkLowerer:
     local_source_cache: dict[str, tuple[str, str]] = field(default_factory=dict)
     import_cache: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
     export_cache: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
-    numeric_cache: dict[str, float | None] = field(default_factory=dict)
     workspace_variables: dict[str, object] = field(default_factory=dict)
     inport_counters: dict[str, int] = field(default_factory=dict)
     outport_counters: dict[str, int] = field(default_factory=dict)
+    numeric_evaluator: GraphNumericEvaluator = field(init=False)
 
     def __post_init__(self) -> None:
         self.graph = validate_graph_dict(self.graph)
@@ -67,14 +61,21 @@ class GraphToSimulinkLowerer:
             for entry in self.graph.get("state_chains", [])  # type: ignore[index]
         }
         self.node_expressions = build_node_expressions(self.graph)
-        self.state_groups = self._build_state_groups()
-        self.node_groups = self._build_node_groups()
-        self.node_owners = self._build_node_owners()
-        self.node_layers = {
-            node_id: self._graph_layer(node_id, set())
-            for node_id, node in self.node_map.items()
-            if node["op"] not in {"state_signal", "integrator"}
-        }
+        plan = build_graph_subsystem_plan(
+            self.node_map,
+            self.state_chain_map,
+            root_system=ROOT_SYSTEM,
+            group_key_for_state=_group_key_for_state,
+            subsystem_id_for_group=self._subsystem_block_id,
+        )
+        self.state_groups = list(plan.state_groups)
+        self.node_groups = plan.node_groups
+        self.node_owners = plan.node_owners
+        self.node_layers = plan.node_layers
+        self.numeric_evaluator = GraphNumericEvaluator(
+            node_map=self.node_map,
+            symbol_values=self.symbol_values,
+        )
         for group in self.state_groups:
             subsystem_id = self._subsystem_block_id(group)
             self.add_block(
@@ -91,137 +92,12 @@ class GraphToSimulinkLowerer:
                 },
             )
 
-    def _build_state_groups(self) -> list[str]:
-        groups = {_group_key_for_state(state) for state in self.state_chain_map}
-        return sorted(groups)
-
     def _subsystem_block_id(self, group: str) -> str:
         return f"subsystem_{_sanitize_for_id(group)}"
 
-    def _state_owner(self, state: str) -> str:
-        return self._subsystem_block_id(_group_key_for_state(state))
-
-    def _mark_group_dependency(self, node_id: str, group: str, seen: set[tuple[str, str]]) -> None:
-        marker = (node_id, group)
-        if marker in seen:
-            return
-        seen.add(marker)
-        self.node_groups.setdefault(node_id, set()).add(group)
-        if self.node_map[node_id]["op"] in {"state_signal", "constant", "symbol_input"}:
-            return
-        for child_id in self.node_map[node_id].get("inputs", []):
-            self._mark_group_dependency(child_id, group, seen)
-
-    def _build_node_groups(self) -> dict[str, set[str]]:
-        groups: dict[str, set[str]] = {}
-        for state, chain in self.state_chain_map.items():
-            self.node_groups = groups
-            self._mark_group_dependency(chain["rhs"], _group_key_for_state(state), set())
-        return groups
-
-    def _build_node_owners(self) -> dict[str, str]:
-        owners: dict[str, str] = {}
-        for node_id, node in self.node_map.items():
-            op = node["op"]
-            if op in {"constant", "symbol_input"}:
-                owners[node_id] = ROOT_SYSTEM
-            elif op in {"integrator", "state_signal"}:
-                owners[node_id] = self._state_owner(str(node["state"]))
-            else:
-                groups = sorted(self.node_groups.get(node_id, set()))
-                owners[node_id] = self._subsystem_block_id(groups[0]) if len(groups) == 1 else ROOT_SYSTEM
-        return owners
-
-    def _graph_layer(self, node_id: str, active: set[str]) -> int:
-        if node_id in active:
-            return 0
-        node = self.node_map[node_id]
-        op = node["op"]
-        if op in {"constant", "symbol_input", "state_signal", "integrator"}:
-            return 0
-        active.add(node_id)
-        child_layers = [self._graph_layer(child_id, active) for child_id in node.get("inputs", [])]
-        active.remove(node_id)
-        return (max(child_layers) + 1) if child_layers else 0
-
     def numeric_value(self, node_id: str) -> float | None:
         """Return a numeric value if the node subtree is compile-time evaluable."""
-        if node_id in self.numeric_cache:
-            return self.numeric_cache[node_id]
-
-        node = self.node_map[node_id]
-        op = node["op"]
-        value: float | None
-        if op == "constant":
-            value = float(node["value"])
-        elif op == "symbol_input":
-            symbol_name = str(node["name"])
-            value = float(self.symbol_values[symbol_name]) if symbol_name in self.symbol_values else None
-        elif op in {"state_signal", "integrator"}:
-            value = None
-        else:
-            child_values = [self.numeric_value(child_id) for child_id in node.get("inputs", [])]
-            if any(child is None for child in child_values):
-                value = None
-            elif op in {"add", "sum"}:
-                value = float(sum(child_values))
-            elif op in {"mul", "gain"}:
-                value = float(np.prod(child_values, dtype=float))
-            elif op == "div":
-                value = float(child_values[0] / child_values[1])
-            elif op == "negate":
-                value = float(-child_values[0])
-            elif op == "pow":
-                value = float(child_values[0] ** child_values[1])
-            elif op == "sin":
-                value = float(math.sin(child_values[0]))
-            elif op == "cos":
-                value = float(math.cos(child_values[0]))
-            elif op == "tan":
-                value = float(math.tan(child_values[0]))
-            elif op == "sec":
-                value = float(_safe_reciprocal(math.cos(child_values[0])))
-            elif op == "csc":
-                value = float(_safe_reciprocal(math.sin(child_values[0])))
-            elif op == "cot":
-                value = float(_safe_reciprocal(math.tan(child_values[0])))
-            elif op == "asin":
-                value = float(math.asin(child_values[0]))
-            elif op == "acos":
-                value = float(math.acos(child_values[0]))
-            elif op == "atan":
-                value = float(math.atan(child_values[0]))
-            elif op == "sinh":
-                value = float(math.sinh(child_values[0]))
-            elif op == "cosh":
-                value = float(math.cosh(child_values[0]))
-            elif op == "tanh":
-                value = float(math.tanh(child_values[0]))
-            elif op == "sech":
-                value = float(_safe_reciprocal(math.cosh(child_values[0])))
-            elif op == "csch":
-                value = float(_safe_reciprocal(math.sinh(child_values[0])))
-            elif op == "coth":
-                value = float(_safe_reciprocal(math.tanh(child_values[0])))
-            elif op == "asinh":
-                value = float(math.asinh(child_values[0]))
-            elif op == "acosh":
-                value = float(math.acosh(child_values[0]))
-            elif op == "atanh":
-                value = float(math.atanh(child_values[0]))
-            elif op == "exp":
-                value = float(math.exp(child_values[0]))
-            elif op == "log":
-                value = float(math.log(child_values[0]))
-            elif op == "sqrt":
-                value = float(math.sqrt(child_values[0]))
-            elif op == "abs":
-                value = float(abs(child_values[0]))
-            else:
-                value = None
-
-        self.numeric_cache[node_id] = value
-        return value
+        return self.numeric_evaluator.value(node_id)
 
     def add_block(
         self,
@@ -349,6 +225,549 @@ class GraphToSimulinkLowerer:
         root_ref = self._export_to_root(node_id, owner)
         return root_ref if consumer_system == ROOT_SYSTEM else self._import_from_root(node_id, consumer_system, root_ref)
 
+    def _remember_source(self, node_id: str, source: tuple[str, str]) -> tuple[str, str]:
+        self.local_source_cache[node_id] = source
+        return source
+
+    def _materialize_constant_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        block_id = self.add_block(
+            f"const_{node_id}",
+            "Constant",
+            system=owner,
+            name=f"const_{_sanitize_for_id(node_id)}",
+            params={"Value": _numeric_string(node["value"])},
+            metadata={
+                "layout_role": "source" if owner == ROOT_SYSTEM else "compute",
+                "trace_expression": self.node_expressions[node_id],
+                "layer_hint": 0,
+            },
+        )
+        return self._remember_source(node_id, (block_id, "1"))
+
+    def _materialize_symbol_input_node(self, node_id: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        symbol_name = str(node["name"])
+        symbol_role = str(node.get("symbol_role", ""))
+        metadata = {
+            "layout_role": "source",
+            "trace_expression": self.node_expressions[node_id],
+            "layer_hint": 0,
+        }
+        if symbol_role == "independent_variable":
+            block_id = self.add_block(
+                f"time_{_sanitize_for_id(symbol_name)}",
+                "Clock",
+                system=ROOT_SYSTEM,
+                name=f"time_{symbol_name}",
+                metadata=metadata,
+            )
+        elif symbol_name in self.symbol_values:
+            block_id = self.add_block(
+                f"symbol_{_sanitize_for_id(symbol_name)}",
+                "Constant",
+                system=ROOT_SYSTEM,
+                name=f"symbol_{symbol_name}",
+                params={"Value": _numeric_string(self.symbol_values[symbol_name])},
+                metadata=metadata,
+            )
+        elif self.input_mode == "inport":
+            port = self.inport_counters.get(ROOT_SYSTEM, 0) + 1
+            self.inport_counters[ROOT_SYSTEM] = port
+            block_id = self.add_block(
+                f"input_{_sanitize_for_id(symbol_name)}",
+                "Inport",
+                system=ROOT_SYSTEM,
+                name=f"input_{symbol_name}",
+                params={"Port": port},
+                metadata=metadata,
+            )
+        elif symbol_name in self.input_signals:
+            workspace_name = f"{self.model_name}_{_sanitize_for_id(symbol_name)}_input"
+            series = self.input_signals[symbol_name]
+            times = list(series["time"])
+            values = list(series["values"])
+            if len(times) != len(values):
+                raise DeterministicCompileError(
+                    f"Input signal {symbol_name!r} has mismatched time/value lengths."
+                )
+            self.workspace_variables[workspace_name] = [
+                [float(time), float(value)]
+                for time, value in zip(times, values)
+            ]
+            block_id = self.add_block(
+                f"input_{_sanitize_for_id(symbol_name)}",
+                "FromWorkspace",
+                system=ROOT_SYSTEM,
+                name=f"input_{symbol_name}",
+                params={"VariableName": workspace_name},
+                metadata=metadata,
+            )
+        else:
+            raise DeterministicCompileError(
+                f"No numeric value or input signal provided for symbol input {symbol_name!r}."
+            )
+        return self._remember_source(node_id, (block_id, "1"))
+
+    def _materialize_folded_constant_node(
+        self,
+        node_id: str,
+        *,
+        owner: str,
+        numeric_value: float,
+    ) -> tuple[str, str]:
+        block_id = self.add_block(
+            f"const_{node_id}",
+            "Constant",
+            system=owner,
+            name=f"const_{_sanitize_for_id(node_id)}",
+            params={"Value": _numeric_string(numeric_value)},
+            metadata={
+                "layout_role": "shared" if owner == ROOT_SYSTEM else "compute",
+                "trace_expression": self.node_expressions[node_id],
+                "layer_hint": self.node_layers.get(node_id, 0),
+            },
+        )
+        return self._remember_source(node_id, (block_id, "1"))
+
+    def _materialize_integrator_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        state_name = str(node.get("state", ""))
+        params: dict[str, object] = {}
+        if state_name in self.initial_conditions:
+            params["InitialCondition"] = _numeric_string(self.initial_conditions[state_name])
+        block_id = self.add_block(
+            f"int_{_sanitize_for_id(state_name)}",
+            "Integrator",
+            system=owner,
+            name=f"int_{state_name}",
+            params=params,
+            metadata={
+                "layout_role": "integrator",
+                "state": state_name,
+                "state_order": state_order(state_name),
+                "trace_expression": state_name,
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        rhs_node_id = node["inputs"][0]
+        rhs_source = self.resolve_for_system(rhs_node_id, owner)
+        self.add_connection(owner, rhs_source, block_id, 1, label=self.node_expressions[rhs_node_id])
+        return source
+
+    def _operator_metadata(self, node_id: str, *, owner: str) -> tuple[int, str]:
+        layer_hint = self.node_layers.get(node_id, 0)
+        layout_role = "shared" if owner == ROOT_SYSTEM else "compute"
+        return layer_hint, layout_role
+
+    def _materialize_sum_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"sum_{node_id}",
+            "Sum",
+            system=owner,
+            name=f"sum_{_sanitize_for_id(node_id)}",
+            params={"Inputs": "+" * len(node["inputs"])},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        for index, child_id in enumerate(node["inputs"], start=1):
+            self.add_connection(
+                owner,
+                self.resolve_for_system(child_id, owner),
+                block_id,
+                index,
+                label=self.node_expressions[child_id],
+            )
+        return source
+
+    def _materialize_product_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        child_values = [self.numeric_value(child_id) for child_id in node["inputs"]]
+        dynamic_children = [child_id for child_id, value in zip(node["inputs"], child_values) if value is None]
+        if len(node["inputs"]) == 2 and len(dynamic_children) == 1:
+            gain_value = next(value for value in child_values if value is not None)
+            block_id = self.add_block(
+                f"gain_{node_id}",
+                "Gain",
+                system=owner,
+                name=f"gain_{_sanitize_for_id(node_id)}",
+                params={"Gain": _numeric_string(gain_value)},
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": self.node_expressions[node_id],
+                },
+            )
+            source = self._remember_source(node_id, (block_id, "1"))
+            child_id = dynamic_children[0]
+            self.add_connection(
+                owner,
+                self.resolve_for_system(child_id, owner),
+                block_id,
+                1,
+                label=self.node_expressions[child_id],
+            )
+            return source
+
+        block_id = self.add_block(
+            f"prod_{node_id}",
+            "Product",
+            system=owner,
+            name=f"prod_{_sanitize_for_id(node_id)}",
+            params={"Inputs": "*" * len(node["inputs"])},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        for index, child_id in enumerate(node["inputs"], start=1):
+            self.add_connection(
+                owner,
+                self.resolve_for_system(child_id, owner),
+                block_id,
+                index,
+                label=self.node_expressions[child_id],
+            )
+        return source
+
+    def _materialize_division_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        numerator_id, denominator_id = node["inputs"]
+        denominator_value = self.numeric_value(denominator_id)
+        if denominator_value is not None and self.numeric_value(numerator_id) is None:
+            block_id = self.add_block(
+                f"gain_{node_id}",
+                "Gain",
+                system=owner,
+                name=f"gain_{_sanitize_for_id(node_id)}",
+                params={"Gain": _numeric_string(1.0 / denominator_value)},
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": self.node_expressions[node_id],
+                },
+            )
+            source = self._remember_source(node_id, (block_id, "1"))
+            self.add_connection(
+                owner,
+                self.resolve_for_system(numerator_id, owner),
+                block_id,
+                1,
+                label=self.node_expressions[numerator_id],
+            )
+            return source
+
+        block_id = self.add_block(
+            f"div_{node_id}",
+            "Divide",
+            system=owner,
+            name=f"div_{_sanitize_for_id(node_id)}",
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        self.add_connection(owner, self.resolve_for_system(numerator_id, owner), block_id, 1, label=self.node_expressions[numerator_id])
+        self.add_connection(owner, self.resolve_for_system(denominator_id, owner), block_id, 2, label=self.node_expressions[denominator_id])
+        return source
+
+    def _materialize_negate_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"neg_{node_id}",
+            "Gain",
+            system=owner,
+            name=f"neg_{_sanitize_for_id(node_id)}",
+            params={"Gain": "-1"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        child_id = node["inputs"][0]
+        self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
+        return source
+
+    def _materialize_trig_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        op = str(node["op"])
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"{op}_{node_id}",
+            "TrigonometricFunction",
+            system=owner,
+            name=f"{op}_{_sanitize_for_id(node_id)}",
+            params={"Operator": op},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        child_id = node["inputs"][0]
+        self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
+        return source
+
+    def _materialize_reciprocal_trig_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        op = str(node["op"])
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        base_op = RECIPROCAL_FUNCTION_BASES[op]
+        trig_id = self.add_block(
+            f"{base_op}_{node_id}",
+            "TrigonometricFunction",
+            system=owner,
+            name=f"{base_op}_{_sanitize_for_id(node_id)}",
+            params={"Operator": base_op},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": f"{base_op}(...)",
+            },
+        )
+        child_id = node["inputs"][0]
+        self.add_connection(owner, self.resolve_for_system(child_id, owner), trig_id, 1, label=self.node_expressions[child_id])
+        one_id = self.add_block(
+            f"const_one_{node_id}",
+            "Constant",
+            system=owner,
+            name=f"const_one_{_sanitize_for_id(node_id)}",
+            params={"Value": "1"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": max(0, layer_hint - 1),
+                "trace_expression": "1",
+            },
+        )
+        div_id = self.add_block(
+            f"{op}_{node_id}",
+            "Divide",
+            system=owner,
+            name=f"{op}_{_sanitize_for_id(node_id)}",
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (div_id, "1"))
+        self.add_connection(owner, (one_id, "1"), div_id, 1, label="1")
+        self.add_connection(owner, (trig_id, "1"), div_id, 2, label=f"{base_op}({self.node_expressions[child_id]})")
+        return source
+
+    def _materialize_abs_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"abs_{node_id}",
+            "Abs",
+            system=owner,
+            name=f"abs_{_sanitize_for_id(node_id)}",
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        child_id = node["inputs"][0]
+        self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
+        return source
+
+    def _materialize_math_function_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        op = str(node["op"])
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"{op}_{node_id}",
+            "MathFunction",
+            system=owner,
+            name=f"{op}_{_sanitize_for_id(node_id)}",
+            params={"Operator": op},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        child_id = node["inputs"][0]
+        self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
+        return source
+
+    def _materialize_power_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        base_id, exponent_id = node["inputs"]
+        exponent_value = self.numeric_value(exponent_id)
+        if exponent_value is None:
+            raise DeterministicCompileError(f"Power node {node_id!r} requires a numeric exponent.")
+        rounded = int(round(exponent_value))
+        if math.isclose(exponent_value, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            block_id = self.add_block(
+                f"const_{node_id}",
+                "Constant",
+                system=owner,
+                name=f"const_{_sanitize_for_id(node_id)}",
+                params={"Value": "1"},
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": "1",
+                },
+            )
+            return self._remember_source(node_id, (block_id, "1"))
+        if math.isclose(exponent_value, 1.0, rel_tol=0.0, abs_tol=1e-12):
+            source = self.resolve_for_system(base_id, owner)
+            return self._remember_source(node_id, source)
+        if math.isclose(exponent_value, rounded, rel_tol=0.0, abs_tol=1e-12):
+            return self._materialize_integer_power_node(
+                node_id,
+                owner=owner,
+                layer_hint=layer_hint,
+                layout_role=layout_role,
+                base_id=base_id,
+                exponent_value=rounded,
+            )
+        return self._materialize_fractional_power_node(
+            node_id,
+            owner=owner,
+            layer_hint=layer_hint,
+            layout_role=layout_role,
+            base_id=base_id,
+            exponent_value=exponent_value,
+        )
+
+    def _materialize_integer_power_node(
+        self,
+        node_id: str,
+        *,
+        owner: str,
+        layer_hint: int,
+        layout_role: str,
+        base_id: str,
+        exponent_value: int,
+    ) -> tuple[str, str]:
+        magnitude = abs(exponent_value)
+        if magnitude == 1:
+            power_source = self.resolve_for_system(base_id, owner)
+        else:
+            block_id = self.add_block(
+                f"prod_{node_id}",
+                "Product",
+                system=owner,
+                name=f"prod_{_sanitize_for_id(node_id)}",
+                params={"Inputs": "*" * magnitude},
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": self.node_expressions[node_id],
+                },
+            )
+            power_source = self._remember_source(node_id, (block_id, "1"))
+            base_source = self.resolve_for_system(base_id, owner)
+            for index in range(1, magnitude + 1):
+                self.add_connection(owner, base_source, block_id, index, label=self.node_expressions[base_id])
+        if exponent_value > 0:
+            return self._remember_source(node_id, power_source)
+
+        one_id = self.add_block(
+            f"const_one_{node_id}",
+            "Constant",
+            system=owner,
+            name=f"const_one_{_sanitize_for_id(node_id)}",
+            params={"Value": "1"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": max(0, layer_hint - 1),
+                "trace_expression": "1",
+            },
+        )
+        div_id = self.add_block(
+            f"pow_recip_{node_id}",
+            "Divide",
+            system=owner,
+            name=f"pow_recip_{_sanitize_for_id(node_id)}",
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (div_id, "1"))
+        self.add_connection(owner, (one_id, "1"), div_id, 1, label="1")
+        self.add_connection(owner, power_source, div_id, 2, label=self.node_expressions[node_id])
+        return source
+
+    def _materialize_fractional_power_node(
+        self,
+        node_id: str,
+        *,
+        owner: str,
+        layer_hint: int,
+        layout_role: str,
+        base_id: str,
+        exponent_value: float,
+    ) -> tuple[str, str]:
+        log_id = self.add_block(
+            f"log_{node_id}",
+            "MathFunction",
+            system=owner,
+            name=f"log_{_sanitize_for_id(node_id)}",
+            params={"Operator": "log"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": max(0, layer_hint - 2),
+                "trace_expression": f"log({self.node_expressions[base_id]})",
+            },
+        )
+        gain_id = self.add_block(
+            f"pow_gain_{node_id}",
+            "Gain",
+            system=owner,
+            name=f"pow_gain_{_sanitize_for_id(node_id)}",
+            params={"Gain": _numeric_string(exponent_value)},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": max(0, layer_hint - 1),
+                "trace_expression": f"{_numeric_string(exponent_value)} * log({self.node_expressions[base_id]})",
+            },
+        )
+        exp_id = self.add_block(
+            f"exp_{node_id}",
+            "MathFunction",
+            system=owner,
+            name=f"exp_{_sanitize_for_id(node_id)}",
+            params={"Operator": "exp"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (exp_id, "1"))
+        base_source = self.resolve_for_system(base_id, owner)
+        self.add_connection(owner, base_source, log_id, 1, label=self.node_expressions[base_id])
+        self.add_connection(owner, (log_id, "1"), gain_id, 1, label=f"log({self.node_expressions[base_id]})")
+        self.add_connection(owner, (gain_id, "1"), exp_id, 1, label=f"{_numeric_string(exponent_value)} * log({self.node_expressions[base_id]})")
+        return source
+
     def materialize_owned(self, node_id: str) -> tuple[str, str]:
         if node_id in self.local_source_cache:
             return self.local_source_cache[node_id]
@@ -364,464 +783,43 @@ class GraphToSimulinkLowerer:
             return source
 
         if op == "constant":
-            block_id = self.add_block(
-                f"const_{node_id}",
-                "Constant",
-                system=owner,
-                name=f"const_{_sanitize_for_id(node_id)}",
-                params={"Value": _numeric_string(node["value"])},
-                metadata={
-                    "layout_role": "source" if owner == ROOT_SYSTEM else "compute",
-                    "trace_expression": self.node_expressions[node_id],
-                    "layer_hint": 0,
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            return source
+            return self._materialize_constant_node(node_id, owner=owner)
 
         if op == "symbol_input":
-            symbol_name = str(node["name"])
-            metadata = {
-                "layout_role": "source",
-                "trace_expression": self.node_expressions[node_id],
-                "layer_hint": 0,
-            }
-            if symbol_name in self.symbol_values:
-                block_id = self.add_block(
-                    f"symbol_{_sanitize_for_id(symbol_name)}",
-                    "Constant",
-                    system=ROOT_SYSTEM,
-                    name=f"symbol_{symbol_name}",
-                    params={"Value": _numeric_string(self.symbol_values[symbol_name])},
-                    metadata=metadata,
-                )
-            elif self.input_mode == "inport":
-                port = self.inport_counters.get(ROOT_SYSTEM, 0) + 1
-                self.inport_counters[ROOT_SYSTEM] = port
-                block_id = self.add_block(
-                    f"input_{_sanitize_for_id(symbol_name)}",
-                    "Inport",
-                    system=ROOT_SYSTEM,
-                    name=f"input_{symbol_name}",
-                    params={"Port": port},
-                    metadata=metadata,
-                )
-            elif symbol_name in self.input_signals:
-                workspace_name = f"{self.model_name}_{_sanitize_for_id(symbol_name)}_input"
-                series = self.input_signals[symbol_name]
-                times = list(series["time"])
-                values = list(series["values"])
-                if len(times) != len(values):
-                    raise DeterministicCompileError(
-                        f"Input signal {symbol_name!r} has mismatched time/value lengths."
-                    )
-                self.workspace_variables[workspace_name] = [
-                    [float(time), float(value)]
-                    for time, value in zip(times, values)
-                ]
-                block_id = self.add_block(
-                    f"input_{_sanitize_for_id(symbol_name)}",
-                    "FromWorkspace",
-                    system=ROOT_SYSTEM,
-                    name=f"input_{symbol_name}",
-                    params={"VariableName": workspace_name},
-                    metadata=metadata,
-                )
-            else:
-                raise DeterministicCompileError(
-                    f"No numeric value or input signal provided for symbol input {symbol_name!r}."
-                )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            return source
+            return self._materialize_symbol_input_node(node_id)
 
         if op != "integrator" and numeric_value is not None:
-            block_id = self.add_block(
-                f"const_{node_id}",
-                "Constant",
-                system=owner,
-                name=f"const_{_sanitize_for_id(node_id)}",
-                params={"Value": _numeric_string(numeric_value)},
-                metadata={
-                    "layout_role": "shared" if owner == ROOT_SYSTEM else "compute",
-                    "trace_expression": self.node_expressions[node_id],
-                    "layer_hint": self.node_layers.get(node_id, 0),
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            return source
+            return self._materialize_folded_constant_node(node_id, owner=owner, numeric_value=numeric_value)
 
         if op == "integrator":
-            state_name = str(node.get("state", ""))
-            params: dict[str, object] = {}
-            if state_name in self.initial_conditions:
-                params["InitialCondition"] = _numeric_string(self.initial_conditions[state_name])
-            block_id = self.add_block(
-                f"int_{_sanitize_for_id(state_name)}",
-                "Integrator",
-                system=owner,
-                name=f"int_{state_name}",
-                params=params,
-                metadata={
-                    "layout_role": "integrator",
-                    "state": state_name,
-                    "state_order": state_order(state_name),
-                    "trace_expression": state_name,
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            rhs_node_id = node["inputs"][0]
-            rhs_source = self.resolve_for_system(rhs_node_id, owner)
-            self.add_connection(owner, rhs_source, block_id, 1, label=self.node_expressions[rhs_node_id])
-            return source
-
-        layer_hint = self.node_layers.get(node_id, 0)
-        layout_role = "shared" if owner == ROOT_SYSTEM else "compute"
+            return self._materialize_integrator_node(node_id, owner=owner)
 
         if op in {"add", "sum"}:
-            block_id = self.add_block(
-                f"sum_{node_id}",
-                "Sum",
-                system=owner,
-                name=f"sum_{_sanitize_for_id(node_id)}",
-                params={"Inputs": "+" * len(node["inputs"])},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            for index, child_id in enumerate(node["inputs"], start=1):
-                self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, index, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_sum_node(node_id, owner=owner)
 
         if op in {"mul", "gain"}:
-            child_values = [self.numeric_value(child_id) for child_id in node["inputs"]]
-            dynamic_children = [child_id for child_id, value in zip(node["inputs"], child_values) if value is None]
-            if len(node["inputs"]) == 2 and len(dynamic_children) == 1:
-                gain_value = next(value for value in child_values if value is not None)
-                block_id = self.add_block(
-                    f"gain_{node_id}",
-                    "Gain",
-                    system=owner,
-                    name=f"gain_{_sanitize_for_id(node_id)}",
-                    params={"Gain": _numeric_string(gain_value)},
-                    metadata={
-                        "layout_role": layout_role,
-                        "layer_hint": layer_hint,
-                        "trace_expression": self.node_expressions[node_id],
-                    },
-                )
-                source = (block_id, "1")
-                self.local_source_cache[node_id] = source
-                child_id = dynamic_children[0]
-                self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
-                return source
-
-            block_id = self.add_block(
-                f"prod_{node_id}",
-                "Product",
-                system=owner,
-                name=f"prod_{_sanitize_for_id(node_id)}",
-                params={"Inputs": "*" * len(node["inputs"])},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            for index, child_id in enumerate(node["inputs"], start=1):
-                self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, index, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_product_node(node_id, owner=owner)
 
         if op == "div":
-            numerator_id, denominator_id = node["inputs"]
-            denominator_value = self.numeric_value(denominator_id)
-            if denominator_value is not None and self.numeric_value(numerator_id) is None:
-                block_id = self.add_block(
-                    f"gain_{node_id}",
-                    "Gain",
-                    system=owner,
-                    name=f"gain_{_sanitize_for_id(node_id)}",
-                    params={"Gain": _numeric_string(1.0 / denominator_value)},
-                    metadata={
-                        "layout_role": layout_role,
-                        "layer_hint": layer_hint,
-                        "trace_expression": self.node_expressions[node_id],
-                    },
-                )
-                source = (block_id, "1")
-                self.local_source_cache[node_id] = source
-                self.add_connection(owner, self.resolve_for_system(numerator_id, owner), block_id, 1, label=self.node_expressions[numerator_id])
-                return source
-
-            block_id = self.add_block(
-                f"div_{node_id}",
-                "Divide",
-                system=owner,
-                name=f"div_{_sanitize_for_id(node_id)}",
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            self.add_connection(owner, self.resolve_for_system(numerator_id, owner), block_id, 1, label=self.node_expressions[numerator_id])
-            self.add_connection(owner, self.resolve_for_system(denominator_id, owner), block_id, 2, label=self.node_expressions[denominator_id])
-            return source
+            return self._materialize_division_node(node_id, owner=owner)
 
         if op == "negate":
-            block_id = self.add_block(
-                f"neg_{node_id}",
-                "Gain",
-                system=owner,
-                name=f"neg_{_sanitize_for_id(node_id)}",
-                params={"Gain": "-1"},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            child_id = node["inputs"][0]
-            self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_negate_node(node_id, owner=owner)
 
         if op in DIRECT_SIMULINK_TRIG_FUNCTIONS:
-            block_id = self.add_block(
-                f"{op}_{node_id}",
-                "TrigonometricFunction",
-                system=owner,
-                name=f"{op}_{_sanitize_for_id(node_id)}",
-                params={"Operator": op},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            child_id = node["inputs"][0]
-            self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_trig_node(node_id, owner=owner)
 
         if op in RECIPROCAL_FUNCTION_BASES:
-            base_op = RECIPROCAL_FUNCTION_BASES[op]
-            trig_id = self.add_block(
-                f"{base_op}_{node_id}",
-                "TrigonometricFunction",
-                system=owner,
-                name=f"{base_op}_{_sanitize_for_id(node_id)}",
-                params={"Operator": base_op},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": f"{base_op}(...)",
-                },
-            )
-            child_id = node["inputs"][0]
-            self.add_connection(owner, self.resolve_for_system(child_id, owner), trig_id, 1, label=self.node_expressions[child_id])
-            one_id = self.add_block(
-                f"const_one_{node_id}",
-                "Constant",
-                system=owner,
-                name=f"const_one_{_sanitize_for_id(node_id)}",
-                params={"Value": "1"},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": max(0, layer_hint - 1),
-                    "trace_expression": "1",
-                },
-            )
-            div_id = self.add_block(
-                f"{op}_{node_id}",
-                "Divide",
-                system=owner,
-                name=f"{op}_{_sanitize_for_id(node_id)}",
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (div_id, "1")
-            self.local_source_cache[node_id] = source
-            self.add_connection(owner, (one_id, "1"), div_id, 1, label="1")
-            self.add_connection(owner, (trig_id, "1"), div_id, 2, label=f"{base_op}({self.node_expressions[child_id]})")
-            return source
+            return self._materialize_reciprocal_trig_node(node_id, owner=owner)
 
         if op == "abs":
-            block_id = self.add_block(
-                f"abs_{node_id}",
-                "Abs",
-                system=owner,
-                name=f"abs_{_sanitize_for_id(node_id)}",
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            child_id = node["inputs"][0]
-            self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_abs_node(node_id, owner=owner)
 
         if op in DIRECT_SIMULINK_MATH_FUNCTIONS:
-            block_id = self.add_block(
-                f"{op}_{node_id}",
-                "MathFunction",
-                system=owner,
-                name=f"{op}_{_sanitize_for_id(node_id)}",
-                params={"Operator": op},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (block_id, "1")
-            self.local_source_cache[node_id] = source
-            child_id = node["inputs"][0]
-            self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
-            return source
+            return self._materialize_math_function_node(node_id, owner=owner)
 
         if op == "pow":
-            base_id, exponent_id = node["inputs"]
-            exponent_value = self.numeric_value(exponent_id)
-            if exponent_value is None:
-                raise DeterministicCompileError(f"Power node {node_id!r} requires a numeric exponent.")
-            rounded = int(round(exponent_value))
-            if math.isclose(exponent_value, 0.0, rel_tol=0.0, abs_tol=1e-12):
-                block_id = self.add_block(
-                    f"const_{node_id}",
-                    "Constant",
-                    system=owner,
-                    name=f"const_{_sanitize_for_id(node_id)}",
-                    params={"Value": "1"},
-                    metadata={
-                        "layout_role": layout_role,
-                        "layer_hint": layer_hint,
-                        "trace_expression": "1",
-                    },
-                )
-                source = (block_id, "1")
-                self.local_source_cache[node_id] = source
-                return source
-            if math.isclose(exponent_value, 1.0, rel_tol=0.0, abs_tol=1e-12):
-                source = self.resolve_for_system(base_id, owner)
-                self.local_source_cache[node_id] = source
-                return source
-            if math.isclose(exponent_value, rounded, rel_tol=0.0, abs_tol=1e-12):
-                magnitude = abs(rounded)
-                if magnitude == 1:
-                    power_source = self.resolve_for_system(base_id, owner)
-                else:
-                    block_id = self.add_block(
-                        f"prod_{node_id}",
-                        "Product",
-                        system=owner,
-                        name=f"prod_{_sanitize_for_id(node_id)}",
-                        params={"Inputs": "*" * magnitude},
-                        metadata={
-                            "layout_role": layout_role,
-                            "layer_hint": layer_hint,
-                            "trace_expression": self.node_expressions[node_id],
-                        },
-                    )
-                    power_source = (block_id, "1")
-                    self.local_source_cache[node_id] = power_source
-                    base_source = self.resolve_for_system(base_id, owner)
-                    for index in range(1, magnitude + 1):
-                        self.add_connection(owner, base_source, block_id, index, label=self.node_expressions[base_id])
-                if rounded > 0:
-                    self.local_source_cache[node_id] = power_source
-                    return power_source
-                one_id = self.add_block(
-                    f"const_one_{node_id}",
-                    "Constant",
-                    system=owner,
-                    name=f"const_one_{_sanitize_for_id(node_id)}",
-                    params={"Value": "1"},
-                    metadata={
-                        "layout_role": layout_role,
-                        "layer_hint": max(0, layer_hint - 1),
-                        "trace_expression": "1",
-                    },
-                )
-                div_id = self.add_block(
-                    f"pow_recip_{node_id}",
-                    "Divide",
-                    system=owner,
-                    name=f"pow_recip_{_sanitize_for_id(node_id)}",
-                    metadata={
-                        "layout_role": layout_role,
-                        "layer_hint": layer_hint,
-                        "trace_expression": self.node_expressions[node_id],
-                    },
-                )
-                source = (div_id, "1")
-                self.local_source_cache[node_id] = source
-                self.add_connection(owner, (one_id, "1"), div_id, 1, label="1")
-                self.add_connection(owner, power_source, div_id, 2, label=self.node_expressions[node_id])
-                return source
-
-            log_id = self.add_block(
-                f"log_{node_id}",
-                "MathFunction",
-                system=owner,
-                name=f"log_{_sanitize_for_id(node_id)}",
-                params={"Operator": "log"},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": max(0, layer_hint - 2),
-                    "trace_expression": f"log({self.node_expressions[base_id]})",
-                },
-            )
-            gain_id = self.add_block(
-                f"pow_gain_{node_id}",
-                "Gain",
-                system=owner,
-                name=f"pow_gain_{_sanitize_for_id(node_id)}",
-                params={"Gain": _numeric_string(exponent_value)},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": max(0, layer_hint - 1),
-                    "trace_expression": f"{_numeric_string(exponent_value)} * log({self.node_expressions[base_id]})",
-                },
-            )
-            exp_id = self.add_block(
-                f"exp_{node_id}",
-                "MathFunction",
-                system=owner,
-                name=f"exp_{_sanitize_for_id(node_id)}",
-                params={"Operator": "exp"},
-                metadata={
-                    "layout_role": layout_role,
-                    "layer_hint": layer_hint,
-                    "trace_expression": self.node_expressions[node_id],
-                },
-            )
-            source = (exp_id, "1")
-            self.local_source_cache[node_id] = source
-            base_source = self.resolve_for_system(base_id, owner)
-            self.add_connection(owner, base_source, log_id, 1, label=self.node_expressions[base_id])
-            self.add_connection(owner, (log_id, "1"), gain_id, 1, label=f"log({self.node_expressions[base_id]})")
-            self.add_connection(owner, (gain_id, "1"), exp_id, 1, label=f"{_numeric_string(exponent_value)} * log({self.node_expressions[base_id]})")
-            return source
+            return self._materialize_power_node(node_id, owner=owner)
 
         raise DeterministicCompileError(f"Unsupported graph op {op!r} in Simulink lowering.")
 

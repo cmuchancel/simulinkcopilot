@@ -8,7 +8,7 @@ from canonicalize.solve_for_derivatives import SolvedDerivative, solve_for_highe
 from ir.equation_dict import expression_from_dict, expression_to_dict, expression_to_sympy, sympy_to_expression
 from ir.expression_nodes import EquationNode, SymbolNode
 from latex_frontend.symbols import derivative_symbol_name, state_name
-from states.extract_states import extract_states
+from states.extract_states import analyze_state_extraction, extract_states
 from states.rules import ExtractionResult
 
 
@@ -18,6 +18,11 @@ def build_first_order_system(
     solved_derivatives: list[SolvedDerivative] | None = None,
 ) -> dict[str, object]:
     """Build a canonical first-order state-equation system."""
+    if extraction is None and solved_derivatives is None:
+        analysis = analyze_state_extraction(equations)
+        extraction = analysis.extraction
+        solved_derivatives = analysis.solved_derivatives
+
     extraction = extraction or extract_states(equations)
     solved_derivatives = solved_derivatives or solve_for_highest_derivatives(equations)
 
@@ -64,6 +69,7 @@ def build_first_order_system(
         "states": list(extraction.states),
         "inputs": list(extraction.inputs),
         "parameters": list(extraction.parameters),
+        "independent_variable": extraction.independent_variable,
         "state_equations": state_equations,
     }
 

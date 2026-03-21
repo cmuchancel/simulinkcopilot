@@ -14,6 +14,7 @@ import uuid
 
 from flask import Flask, abort, render_template, request, send_file, url_for
 
+from canonicalize.algebraic_substitution import inline_algebraic_definitions
 from eqn2sim_gui.model_metadata import (
     GUI_SYMBOL_ROLES,
     GuiModelMetadata,
@@ -687,8 +688,19 @@ def _analyze_submission(
             equation_count=len(equations),
         )
 
+    substitution_start = time.perf_counter()
+    substitution_result = inline_algebraic_definitions(equations)
+    resolved_equations = substitution_result.equations
+    if debug_trace is not None:
+        debug_trace.record(
+            "inline_algebraic_definitions_completed",
+            elapsed_seconds=round(time.perf_counter() - substitution_start, 3),
+            helper_definition_count=len(substitution_result.resolved_definitions),
+            expanded_equation_count=len(resolved_equations),
+        )
+
     inventory_start = time.perf_counter()
-    inventory_entries, state_chain, derivative_orders = extract_symbol_inventory(equations)
+    inventory_entries, state_chain, derivative_orders = extract_symbol_inventory(resolved_equations)
     if debug_trace is not None:
         debug_trace.record(
             "extract_symbol_inventory_completed",
@@ -727,8 +739,8 @@ def _analyze_submission(
         "latex_text": latex_text,
         "show_latex_stage": True,
         "normalized_latex": normalized_latex,
-        "equation_strings": [equation_to_string(equation) for equation in equations],
-        "equation_dicts": [equation_to_dict(equation) for equation in equations],
+        "equation_strings": [equation_to_string(equation) for equation in resolved_equations],
+        "equation_dicts": [equation_to_dict(equation) for equation in resolved_equations],
         "preview_svg": preview.svg,
         "preview_error": preview.error,
         "inventory": [entry.to_dict() for entry in inventory_entries],
@@ -836,7 +848,7 @@ def _compile_first_order_system(metadata: GuiModelMetadata) -> dict[str, object]
     from canonicalize.solve_for_derivatives import solve_for_highest_derivatives
     from states.extract_states import extract_states
 
-    equations = translate_latex(metadata.latex)
+    equations = inline_algebraic_definitions(translate_latex(metadata.latex)).equations
     extraction = extract_states(
         equations,
         mode="configured",

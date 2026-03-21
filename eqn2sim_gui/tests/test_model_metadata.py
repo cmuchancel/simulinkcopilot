@@ -25,6 +25,21 @@ class GuiModelMetadataTests(unittest.TestCase):
         self.assertEqual(state_chain, ("x_cart", "x_cart_dot"))
         self.assertEqual(derivative_orders, {"x_cart": 2})
 
+    def test_inventory_omits_algebraically_defined_helper_symbols(self) -> None:
+        inventory, state_chain, derivative_orders = extract_symbol_inventory(
+            translate_latex(
+                "\n".join(
+                    [
+                        "u_1=kx",
+                        r"m\ddot{x}=u_1",
+                    ]
+                )
+            )
+        )
+        self.assertEqual([entry.name for entry in inventory], ["k", "m", "x"])
+        self.assertEqual(state_chain, ("x", "x_dot"))
+        self.assertEqual(derivative_orders, {"x": 2})
+
     def test_validate_gui_symbol_payload_requires_derivative_symbols_to_be_states(self) -> None:
         with self.assertRaises(DeterministicCompileError):
             validate_gui_symbol_payload(

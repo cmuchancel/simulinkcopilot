@@ -10,6 +10,7 @@ from latex_frontend.translator import translate_latex
 from simulate.compare import compare_simulations
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
+from states.extract_states import extract_states
 
 
 class SimulationTests(unittest.TestCase):
@@ -60,6 +61,40 @@ class SimulationTests(unittest.TestCase):
             t_eval=self.t_eval,
         )
         comparison = compare_simulations(direct, state_space, tolerance=1e-6)
+        self.assertTrue(comparison["passes"])
+
+    def test_multi_input_linear_system_matches_state_space(self) -> None:
+        equations = translate_latex(r"\dot{x}=a x+b u_1+c u_2")
+        extraction = extract_states(
+            equations,
+            mode="configured",
+            symbol_config={"a": "parameter", "b": "parameter", "c": "parameter", "u_1": "input", "u_2": "input"},
+        )
+        first_order = build_first_order_system(equations, extraction=extraction)
+        state_space = build_state_space_system(first_order)
+        parameters = {"a": -0.4, "b": 2.0, "c": -1.0}
+        initial_conditions = {"x": 0.25}
+        input_function = lambda t: {"u_1": float(np.sin(t)), "u_2": float(np.cos(t))}
+        t_eval = np.linspace(0.0, 4.0, 240)
+
+        direct = simulate_ode_system(
+            first_order,
+            parameter_values=parameters,
+            initial_conditions=initial_conditions,
+            input_function=input_function,
+            t_eval=t_eval,
+        )
+        state_space_result = simulate_state_space_system(
+            state_space,
+            parameter_values=parameters,
+            initial_conditions=initial_conditions,
+            input_function=input_function,
+            t_eval=t_eval,
+        )
+
+        self.assertEqual(direct["input_names"], ["u_1", "u_2"])
+        self.assertEqual(state_space_result["input_names"], ["u_1", "u_2"])
+        comparison = compare_simulations(direct, state_space_result, tolerance=1e-6)
         self.assertTrue(comparison["passes"])
 
 

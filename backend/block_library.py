@@ -32,6 +32,10 @@ BLOCK_LIBRARY = {
         "path": "simulink/Sources/From Workspace",
         "ports": ["out"],
     },
+    "Clock": {
+        "path": "simulink/Sources/Clock",
+        "ports": ["out"],
+    },
     "Inport": {
         "path": "simulink/Sources/In1",
         "ports": ["out"],

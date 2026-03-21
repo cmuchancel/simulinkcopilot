@@ -40,20 +40,23 @@ def simulate_ode_system(
     states = list(first_order_system["states"])  # type: ignore[index]
     inputs = list(first_order_system["inputs"])  # type: ignore[index]
     parameters = list(first_order_system["parameters"])  # type: ignore[index]
+    independent_variable = first_order_system.get("independent_variable")
     input_function = input_function or constant_inputs({})
 
+    independent_symbols = [sympy.Symbol(str(independent_variable))] if independent_variable else []
     state_symbols = [sympy.Symbol(name) for name in states]
     input_symbols = [sympy.Symbol(name) for name in inputs]
     parameter_symbols = [sympy.Symbol(name) for name in parameters]
     rhs_exprs = first_order_rhs_sympy(first_order_system)
-    compiled_rhs = sympy.lambdify(state_symbols + input_symbols + parameter_symbols, rhs_exprs, "numpy")
+    compiled_rhs = sympy.lambdify(independent_symbols + state_symbols + input_symbols + parameter_symbols, rhs_exprs, "numpy")
 
     parameter_vector = [float(parameter_values[name]) for name in parameters]
 
     def rhs(t: float, y: np.ndarray) -> np.ndarray:
         input_values = input_function(t)
         input_vector = [float(input_values.get(name, 0.0)) for name in inputs]
-        raw = compiled_rhs(*list(y), *input_vector, *parameter_vector)
+        independent_vector = [float(t)] if independent_symbols else []
+        raw = compiled_rhs(*independent_vector, *list(y), *input_vector, *parameter_vector)
         return np.asarray(raw, dtype=float).reshape(-1)
 
     y0 = _initial_state_vector(states, initial_conditions)

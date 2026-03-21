@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from simulate.regression_suite import render_markdown_report, run_regression_suite, write_regression_reports
 
 
@@ -14,12 +16,16 @@ class RegressionSuiteTests(unittest.TestCase):
         self.assertTrue(by_name["mass_spring_damper"]["overall_pass"])
         self.assertEqual(by_name["nonlinear_pendulum"]["stages"]["state_space"]["status"], "skipped")
 
+    @pytest.mark.matlab
+    @pytest.mark.slow
     def test_regression_suite_reports_simulink_stage_for_required_linear_example(self) -> None:
         report = run_regression_suite(selected_examples=["mass_spring_damper"], run_simulink=True)
         entry = report["examples"][0]
         self.assertEqual(entry["stages"]["simulink_build"]["status"], "passed")
         self.assertEqual(entry["stages"]["simulink_compare"]["status"], "passed")
 
+    @pytest.mark.matlab
+    @pytest.mark.slow
     def test_regression_suite_reports_simulink_stage_for_nonlinear_example(self) -> None:
         report = run_regression_suite(selected_examples=["nonlinear_pendulum"], run_simulink=True)
         entry = report["examples"][0]

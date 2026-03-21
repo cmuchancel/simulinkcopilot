@@ -190,6 +190,31 @@ class Eqn2SimGuiAppTests(unittest.TestCase):
             self.assertIn("Generate Simulink Model", html)
             self.assertIn("disabled", html)
 
+    def test_refresh_route_omits_algebraically_defined_helper_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = create_app()
+            app.config.update(TESTING=True, GUI_DEBUG_ROOT=temp_dir)
+            client = app.test_client()
+
+            response = client.post(
+                "/",
+                data={
+                    "action": "refresh_equations",
+                    "latex": "\n".join(
+                        [
+                            "u_1=kx",
+                            r"m\ddot{x}=u_1",
+                        ]
+                    ),
+                },
+            )
+            html = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('name="symbol_role__m"', html)
+            self.assertIn('name="symbol_role__k"', html)
+            self.assertIn('name="symbol_role__x"', html)
+            self.assertNotIn('name="symbol_role__u_1"', html)
+
     @patch("eqn2sim_gui.app._generate_state_trajectory_artifacts")
     @patch("eqn2sim_gui.app._generate_simulink_artifact")
     def test_generate_route_builds_artifacts_and_exposes_download(self, build_mock, trajectory_mock) -> None:

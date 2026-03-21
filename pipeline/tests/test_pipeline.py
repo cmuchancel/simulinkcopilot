@@ -8,6 +8,8 @@ import tempfile
 from contextlib import redirect_stdout
 from unittest import mock
 
+import pytest
+
 from eqn2sim_gui.model_metadata import GuiModelMetadata
 from pipeline.gui_export import export_results_to_gui_run
 from pipeline.run_pipeline import DEFAULT_SIMULINK_OUTPUT_DIR, _resolved_simulink_output_dir, main, run_pipeline
@@ -28,6 +30,8 @@ class PipelineTests(unittest.TestCase):
         self.assertIsNone(result["state_space"])
         self.assertIsNone(result["comparison"])
 
+    @pytest.mark.matlab
+    @pytest.mark.slow
     def test_nonlinear_pipeline_allows_simulink_validation(self) -> None:
         result = run_pipeline(
             EXAMPLES_ROOT / "nonlinear_pendulum.tex",
@@ -86,6 +90,88 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["extraction"].inputs, ("F_drive",))
         self.assertEqual(result["extraction"].parameters, ("c_damper", "k_spring", "m_cart"))
         self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
+
+    def test_pipeline_inlines_algebraic_helpers_before_runtime_symbol_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "helper_driven.tex"
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "u=-kx",
+                        r"m\ddot{x}+c\dot{x}=u",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = run_pipeline(
+                input_path,
+                runtime_override={
+                    "parameter_values": {"m": 2.0, "c": 0.4, "k": 8.0},
+                    "initial_conditions": {"x": 1.0, "x_dot": 0.0},
+                    "t_span": [0.0, 2.0],
+                    "sample_count": 60,
+                },
+            )
+        self.assertEqual(result["extraction"].states, ("x", "x_dot"))
+        self.assertEqual(result["extraction"].inputs, ())
+        self.assertEqual(result["extraction"].parameters, ("c", "k", "m"))
+        self.assertLess(float(result["ode_result"]["states"][-1, 0]), 1.0)
+
+    def test_pipeline_supports_declared_independent_variable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "time_varying.tex"
+            input_path.write_text(
+                r"\dot{x}=-t x+u",
+                encoding="utf-8",
+            )
+            result = run_pipeline(
+                input_path,
+                classification_mode="configured",
+                symbol_config={
+                    "t": "independent_variable",
+                    "u": "input",
+                },
+                runtime_override={
+                    "initial_conditions": {"x": 1.0},
+                    "input_values": {"u": 0.0},
+                    "t_span": [0.0, 1.0],
+                    "sample_count": 30,
+                },
+            )
+        self.assertEqual(result["extraction"].independent_variable, "t")
+        self.assertEqual(result["extraction"].inputs, ("u",))
+        self.assertEqual(result["extraction"].parameters, ())
+        self.assertIsNotNone(result["state_space"])
+        self.assertTrue(result["comparison"]["passes"])
+
+    def test_pipeline_handles_multi_input_linear_systems(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "mimo.tex"
+            input_path.write_text(
+                r"\dot{x}=a x+b u_1+c u_2",
+                encoding="utf-8",
+            )
+            result = run_pipeline(
+                input_path,
+                classification_mode="configured",
+                symbol_config={
+                    "a": "parameter",
+                    "b": "parameter",
+                    "c": "parameter",
+                    "u_1": "input",
+                    "u_2": "input",
+                },
+                runtime_override={
+                    "parameter_values": {"a": -0.4, "b": 2.0, "c": -1.0},
+                    "initial_conditions": {"x": 0.25},
+                    "input_values": {"u_1": 1.5, "u_2": -0.5},
+                    "t_span": [0.0, 4.0],
+                    "t_eval": [0.0, 0.5, 1.0, 2.0, 4.0],
+                },
+            )
+            self.assertEqual(result["extraction"].inputs, ("u_1", "u_2"))
+            self.assertIsNotNone(result["state_space"])
+            self.assertTrue(result["comparison"]["passes"])
 
     def test_default_simulink_output_dir_is_workspace_bedillion_demo(self) -> None:
         self.assertEqual(_resolved_simulink_output_dir(None), DEFAULT_SIMULINK_OUTPUT_DIR.resolve())

@@ -1,0 +1,29 @@
+[run]
+branch = True
+source =
+    backend
+    canonicalize
+    eqn2sim_gui
+    ir
+    latex_frontend
+    pipeline
+    simucompilebench
+    simulate
+    simulink
+    states
+omit =
+    */tests/*
+    scripts/*
+    workspace/*
+    simulink/test_*.py
+    simulate/synthetic_benchmark.py
+
+[report]
+fail_under = 80
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    raise SystemExit

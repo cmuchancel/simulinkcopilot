@@ -247,10 +247,22 @@ python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.t
 
 ## Tests
 
-Run the full unit suite:
+Install test dependencies:
 
 ```bash
-python3 -m unittest discover -v
+python3 -m pip install -r requirements-dev.txt
+```
+
+Run the fast deterministic suite:
+
+```bash
+python3 -m scripts.run_tests
+```
+
+Run the full suite, including slow and MATLAB-backed tests:
+
+```bash
+python3 -m scripts.run_tests --run-slow --run-matlab
 ```
 
 ## Bundled Examples

@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
 .env
 workspace/generated_models/
 workspace/bedillion_demo/

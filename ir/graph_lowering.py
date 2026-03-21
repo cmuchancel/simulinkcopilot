@@ -22,6 +22,7 @@ class GraphBuilder:
     state_names: set[str] = field(default_factory=set)
     input_names: set[str] = field(default_factory=set)
     parameter_names: set[str] = field(default_factory=set)
+    independent_variable_names: set[str] = field(default_factory=set)
     nodes: dict[str, dict[str, object]] = field(default_factory=dict)
     expression_cache: dict[str, str] = field(default_factory=dict)
     counter: int = 0
@@ -71,6 +72,14 @@ class GraphBuilder:
                 "state_signal",
                 [source_id],
                 state=name,
+            )
+        if name in self.independent_variable_names:
+            return self._emit_node(
+                f"symbol_{_sanitize(name)}",
+                "symbol_input",
+                [],
+                name=name,
+                symbol_role="independent_variable",
             )
         role = "parameter" if name in self.parameter_names else "input"
         return self._emit_node(
@@ -156,6 +165,7 @@ def lower_expression_graph(
     state_names: set[str] | None = None,
     input_names: set[str] | None = None,
     parameter_names: set[str] | None = None,
+    independent_variable_names: set[str] | None = None,
     name: str = "expression_graph",
 ) -> dict[str, object]:
     """Lower a single expression dictionary to a deterministic graph."""
@@ -165,6 +175,7 @@ def lower_expression_graph(
         state_names=set(state_names or set()),
         input_names=set(input_names or set()),
         parameter_names=set(parameter_names or set()),
+        independent_variable_names=set(independent_variable_names or set()),
     )
     output_id = builder.lower_expression(expression_dict)
     return builder.to_graph(outputs={"result": output_id})
@@ -181,6 +192,11 @@ def lower_first_order_system_graph(first_order_system: dict[str, object], *, nam
         state_names=set(states),
         input_names=inputs,
         parameter_names=parameters,
+        independent_variable_names=(
+            {str(first_order_system["independent_variable"])}
+            if first_order_system.get("independent_variable")
+            else set()
+        ),
     )
 
     for state in states:

@@ -10,27 +10,20 @@ from pathlib import Path
 import numpy as np
 import sympy
 
-from canonicalize.linearity_check import analyze_first_order_linearity
-from canonicalize.nonlinear_forms import build_explicit_system_form
-from canonicalize.first_order import build_first_order_system
-from canonicalize.solve_for_derivatives import solve_for_highest_derivatives
-from canonicalize.state_space import build_state_space_system
 from latex_frontend.symbols import DeterministicCompileError
 from ir.equation_dict import (
-    equation_to_dict,
     equation_to_string,
     expression_from_dict,
     expression_to_sympy,
     matrix_from_dict,
 )
-from ir.graph_lowering import lower_first_order_system_graph
-from ir.graph_validate import validate_graph_dict
 from latex_frontend.translator import translate_file
+from pipeline.compilation import compile_symbolic_system
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
+from simulate.input_sources import resolve_input_sources
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
 from states.classify_symbols import CONFIGURABLE_ROLES
-from states.extract_states import extract_states
 from pipeline.runtime_catalog import runtime_context_for_example
 from pipeline.gui_export import DEFAULT_GUI_REPORT_ROOT, export_results_to_gui_run
 from repo_paths import BEDILLION_DEMO_ROOT, REPORTS_ROOT
@@ -170,40 +163,6 @@ def _resolved_simulink_output_dir(path: str | Path | None) -> Path:
     return Path(path).resolve() if path is not None else DEFAULT_SIMULINK_OUTPUT_DIR.resolve()
 
 
-def _constant_input_values(runtime: dict[str, object], input_names: list[str]) -> dict[str, float]:
-    """Resolve a deterministic constant input vector from the runtime input function."""
-    input_function = runtime["input_function"]
-    start, stop = runtime["t_span"]  # type: ignore[index]
-    sample_times = [float(start), float((start + stop) / 2.0), float(stop)]
-    baseline = {
-        name: float(input_function(sample_times[0]).get(name, 0.0))  # type: ignore[operator]
-        for name in input_names
-    }
-    for time in sample_times[1:]:
-        sample = {
-            name: float(input_function(time).get(name, 0.0))  # type: ignore[operator]
-            for name in input_names
-        }
-        if any(abs(sample[name] - baseline[name]) > 1e-12 for name in input_names):
-            raise DeterministicCompileError(
-                "The Simulink backend currently supports constant input functions only."
-            )
-    return baseline
-
-
-def _input_signal_samples(runtime: dict[str, object], input_names: list[str]) -> dict[str, dict[str, list[float]]]:
-    """Sample deterministic input signals on the runtime evaluation grid."""
-    input_function = runtime["input_function"]
-    t_eval = np.asarray(runtime["t_eval"], dtype=float)
-    return {
-        name: {
-            "time": [float(time) for time in t_eval.tolist()],
-            "values": [float(input_function(float(time)).get(name, 0.0)) for time in t_eval],
-        }
-        for name in input_names
-    }
-
-
 def run_pipeline(
     path: str | Path,
     tolerance: float = DEFAULT_TOLERANCE,
@@ -220,16 +179,21 @@ def run_pipeline(
     """Run the full deterministic pipeline and return structured results."""
     source_path = Path(path)
     equations = translate_file(source_path)
-    equation_dicts = [equation_to_dict(equation) for equation in equations]
     resolved_mode = classification_mode or ("configured" if symbol_config is not None else "strict")
-    extraction = extract_states(equations, mode=resolved_mode, symbol_config=symbol_config)
-    solved_derivatives = solve_for_highest_derivatives(equations)
-    first_order = build_first_order_system(equations, extraction=extraction, solved_derivatives=solved_derivatives)
-    explicit_form = build_explicit_system_form(first_order)
-    linearity = analyze_first_order_linearity(first_order)
-    state_space = build_state_space_system(first_order) if linearity["is_linear"] else None
-    graph = lower_first_order_system_graph(first_order, name=source_path.stem)
-    validated_graph = validate_graph_dict(graph) if validate_graph else graph
+    compilation = compile_symbolic_system(
+        equations,
+        graph_name=source_path.stem,
+        classification_mode=resolved_mode,
+        symbol_config=symbol_config,
+        validate_graph=validate_graph,
+    )
+    extraction = compilation.extraction
+    solved_derivatives = compilation.solved_derivatives
+    first_order = compilation.first_order
+    explicit_form = compilation.explicit_form
+    linearity = compilation.linearity
+    state_space = compilation.state_space
+    validated_graph = compilation.validated_graph or compilation.graph
     runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
 
     ode_result = None
@@ -259,56 +223,48 @@ def run_pipeline(
             comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
 
     if run_simulink:
-        from backend.graph_to_simulink import graph_to_simulink_model
-        from backend.simulate_simulink import simulation_model_params, simulate_simulink_model
-        from backend.validate_simulink import compare_simulink_results
+        from backend.simulate_simulink import execute_simulink_graph
         from simulink.engine import start_engine
 
         input_names = list(first_order["inputs"])  # type: ignore[index]
-        input_values = None
-        input_signals = None
-        try:
-            input_values = _constant_input_values(runtime, input_names)
-        except DeterministicCompileError:
-            input_signals = _input_signal_samples(runtime, input_names)
-        model_params = simulation_model_params(
+        resolved_inputs = resolve_input_sources(
+            runtime["input_function"],  # type: ignore[arg-type]
+            input_names,
             t_span=runtime["t_span"],  # type: ignore[arg-type]
             t_eval=runtime["t_eval"],  # type: ignore[arg-type]
-        )
-        simulink_model = graph_to_simulink_model(
-            validated_graph,
-            name=f"{source_path.stem}_simulink",
-            state_names=list(first_order["states"]),  # type: ignore[index]
-            parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
-            input_values=input_values,
-            input_signals=input_signals,
-            initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
-            model_params=model_params,
         )
         owns_engine = matlab_engine is None
         eng = matlab_engine or start_engine(retries=1, retry_delay_seconds=1.0)
         try:
-            simulink_result = simulate_simulink_model(
+            execution = execute_simulink_graph(
                 eng,
-                simulink_model,
+                graph=validated_graph,
+                name=f"{source_path.stem}_simulink",
+                state_names=list(first_order["states"]),  # type: ignore[index]
+                parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
+                initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
+                t_span=runtime["t_span"],  # type: ignore[arg-type]
+                t_eval=runtime["t_eval"],  # type: ignore[arg-type]
+                input_values=resolved_inputs.constant_values,
+                input_signals=resolved_inputs.signal_samples,
+                ode_result=ode_result,
+                state_space_result=state_space_result,
+                tolerance=tolerance,
                 output_dir=_resolved_simulink_output_dir(simulink_output_dir),
             )
+            simulink_model = execution.model
+            simulink_result = execution.simulation
+            simulink_validation = execution.validation
         finally:
             if owns_engine:
                 eng.quit()
-        if ode_result is None:
+        if simulink_validation is None:
             raise DeterministicCompileError("Simulink validation requires the direct ODE simulation result.")
-        simulink_validation = compare_simulink_results(
-            simulink_result,
-            ode_result,
-            state_space_result,
-            tolerance=tolerance,
-        )
 
     return {
         "source_path": str(source_path),
-        "equations": equations,
-        "equation_dicts": equation_dicts,
+        "equations": compilation.equations,
+        "equation_dicts": compilation.equation_dicts,
         "extraction": extraction,
         "solved_derivatives": solved_derivatives,
         "first_order": first_order,
