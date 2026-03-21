@@ -239,9 +239,9 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         sample_count=320,
     ),
     BenchmarkCase(
-        name="fail_dae",
+        name="fail_high_order_dae",
         category="Category 12 - Systems That SHOULD FAIL",
-        latex="x+y=1\n\\dot{x}=y",
+        latex="\\ddot{x}+y=0\ny+\\sin(y)-x=0",
         expected_linear=None,
         simulink_expected=False,
         expected_failure_stages=("solve",),

@@ -1,6 +1,6 @@
-# Deterministic LaTeX ODE Compiler
+# Deterministic LaTeX ODE/DAE Compiler
 
-This repo is a deterministic symbolic compiler backend for restricted LaTeX ODEs. It is designed to be reproducible, inspectable, and strict enough to support a later deterministic Simulink graph builder.
+This repo is a deterministic symbolic compiler backend for restricted LaTeX ODEs and a narrow, explicit class of semi-explicit DAEs. It is designed to be reproducible, inspectable, and strict enough to support deterministic Simulink model generation without hand-waving over unsupported systems.
 
 ## Repo Layout
 
@@ -20,18 +20,18 @@ The current pipeline:
 1. normalizes supported LaTeX variants into a narrow grammar
 2. tokenizes and parses equations into explicit expression nodes
 3. serializes equations into canonical Python dictionaries
-4. extracts state candidates, derivative-derived states, inputs, and parameters deterministically
-5. solves for highest-order derivatives
-6. reduces systems to explicit first-order form
-7. derives linear state-space form when the first-order system is linear
-8. lowers the first-order system into a deterministic graph dictionary
-9. converts the graph dictionary into a Simulink-ready model dictionary
-10. builds a real `.slx` model through the MATLAB engine
-11. validates the graph dictionary and Simulink model structure
-12. simulates the explicit first-order system
-13. simulates the state-space system when available
-14. simulates the generated Simulink model for supported linear examples
-15. compares trajectories with RMSE and max absolute error
+4. extracts differential states, derivative-derived states, inputs, parameters, and algebraic variables deterministically
+5. classifies the system as explicit ODE, reducible semi-explicit DAE, descriptor-capable semi-explicit DAE artifact, nonlinear preserved semi-explicit DAE, or unsupported DAE
+6. reduces explicit and reducible systems through the explicit ODE path
+7. preserves supported first-order semi-explicit DAE constraints in typed DAE artifacts when reduction is not the intended route
+8. derives linear descriptor/state-space artifacts where applicable
+9. lowers explicit systems into deterministic graph dictionaries and supported preserved DAEs into preserved graph/descriptor artifacts
+10. converts graph or descriptor artifacts into Simulink-ready model dictionaries
+11. builds a real `.slx` model through the MATLAB engine when requested
+12. validates graph, descriptor, and Simulink model structure
+13. simulates explicit ODE systems directly in Python
+14. validates supported preserved DAEs in Python with consistent initialization, residual checks, and differential-state trajectories
+15. compares Python and Simulink trajectories for the supported route that was selected
 
 ## Deterministic Guarantees
 
@@ -65,7 +65,9 @@ Unsupported by design:
 - arbitrary LaTeX environments
 - unknown LaTeX commands
 - derivatives with respect to variables other than `t`
-- DAE-like algebraic constraints
+- higher-index DAEs without index reduction
+- fully implicit DAEs outside the supported semi-explicit normal form
+- structurally singular or non-square preserved algebraic subsystems
 - implicit nonlinear derivative coupling with non-unique solves
 - nonlinear systems in state-space conversion
 
@@ -103,6 +105,7 @@ The compiler lowers first-order systems into a deterministic graph dictionary wi
 - `edges`
 - `outputs`
 - `state_chains` for first-order system graphs
+- `algebraic_chains` for preserved semi-explicit DAE graphs
 
 Supported graph ops:
 
@@ -155,15 +158,19 @@ The backend modules live in [backend/](/Users/chancelavoie/Desktop/simulinkcopil
 
 Current backend behavior:
 
-- validated first-order graphs lower deterministically into Simulink block dictionaries
+- validated explicit first-order graphs lower deterministically into Simulink block dictionaries
+- supported preserved semi-explicit DAE graphs lower into Simulink block dictionaries with algebraic-constraint structure
+- descriptor-form artifacts can lower to Simulink without forcing the algebraic constraint structure through the explicit ODE graph path
 - models are built through `matlab.engine`
-- linear examples are simulated in Simulink and compared against both Python ODE and Python state-space runs
+- explicit ODE examples are simulated in Simulink and compared against Python ODE and, when available, state-space runs
+- supported preserved DAEs can be validated against Python-side DAE execution on their supported subset
 - outputs are extracted from `Simulink.SimulationOutput.yout`
 
 Current backend constraints:
 
-- the validated backend path is currently for linear examples
-- runtime inputs must currently be constant for backend validation
+- derivatives with respect to variables other than `t` are still unsupported
+- high-index DAEs remain unsupported
+- Python-side DAE validation is limited to the supported semi-explicit subset
 - nonlinear state-space conversion remains unsupported
 
 ## Supported System Classes
@@ -173,6 +180,26 @@ Current backend constraints:
 - coupled multi-state linear systems
 - mixed first/second-order systems
 - explicit nonlinear polynomial systems
+- reducible semi-explicit DAEs with deterministic algebraic elimination
+- first-order nonlinear preserved semi-explicit DAEs with Python-side validation and Simulink lowering
+- first-order linear semi-explicit DAEs with descriptor artifacts and preserved-constraint lowering support
+
+## DAE Support
+
+The repo supports a narrow, explicit set of DAE routes:
+
+- `explicit_ode`
+  No algebraic structure remains after parsing/classification.
+- `reducible_semi_explicit_dae`
+  Algebraic variables can be solved deterministically and substituted away before the explicit ODE path.
+- `nonlinear_preserved_semi_explicit_dae`
+  First-order semi-explicit DAEs of the form `x' = f(x, z, u, p, t)`, `0 = g(x, z, u, p, t)` are preserved through a DAE-native path for a supported nonlinear subset.
+- `linear_descriptor_dae`
+  Linear descriptor artifacts exist for first-order linear semi-explicit DAEs, and preserved-constraint descriptor lowering is supported where that route is selected.
+- `unsupported_dae`
+  Higher-index, non-square, structurally singular, or otherwise unsupported algebraic structures are rejected explicitly.
+
+See [docs/dae_support.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/dae_support.md) for the route decision tree and the exact support boundary.
 
 ## CLI
 
@@ -304,16 +331,17 @@ This writes:
 
 Current limitations:
 
-- no trigonometric/function frontend support yet
 - no plain multi-letter symbol mode
 - state-space generation is linear-only
-- no DAE support
+- only a narrow semi-explicit DAE subset is supported
+- high-index DAEs are not reduced
+- fully implicit DAEs outside the supported normal form are rejected
 - no implicit nonlinear derivative solving
-- Simulink backend validation currently assumes constant inputs
+- descriptor-preserving support is stronger as an artifact/lowering path than as a default route for reducible linear semi-explicit DAEs
 
 Natural next steps:
 
 - extend the frontend with additional deterministic math functions
 - add richer symbol metadata/value configuration
-- extend the Simulink backend beyond the current linear/constant-input validation path
+- broaden preserved-constraint DAE coverage without weakening unsupported-boundary diagnostics
 - add more failure-focused regression cases

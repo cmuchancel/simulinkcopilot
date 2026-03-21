@@ -28,10 +28,15 @@ SUPPORTED_SYSTEM_CLASSES = [
     "mixed first/second-order systems",
     "explicit nonlinear polynomial first-order systems",
     "nonlinear first-order systems lowered to Simulink block graphs",
+    "reducible semi-explicit DAEs with deterministic algebraic elimination",
+    "first-order nonlinear preserved semi-explicit DAEs with Python-side residual validation",
+    "first-order linear semi-explicit DAEs with descriptor-form artifacts and preserved-constraint lowering support",
 ]
 
 KNOWN_UNSUPPORTED_CLASSES = [
-    "DAE-like algebraic constraints mixed with differential equations",
+    "higher-index DAEs without index reduction",
+    "fully implicit DAEs outside the supported semi-explicit normal form",
+    "structurally singular or non-square preserved algebraic subsystems",
     "implicit nonlinear derivative coupling with non-unique solves",
     "unsupported LaTeX commands outside the restricted grammar",
     "nonlinear systems in state-space conversion",
