@@ -37,6 +37,17 @@ def _real_results(tmp_path: Path) -> dict[str, object]:
     )
 
 
+def _fake_problem(*, source_type: str = "latex", name: str = "system", equations=None):
+    equation_nodes = list(equations or [])
+    return SimpleNamespace(
+        source_type=source_type,
+        source_name=lambda: name,
+        source_label=lambda: f"/tmp/{name}.tex",
+        equation_nodes=lambda: equation_nodes,
+        declared_symbol_config=lambda: {},
+    )
+
+
 def _fake_results(*, with_comparison: bool = False, with_simulink: bool = False) -> dict[str, object]:
     extraction = SimpleNamespace(
         states=("x",),
@@ -96,6 +107,28 @@ def _fake_results(*, with_comparison: bool = False, with_simulink: bool = False)
             "expected_linear": False,
         },
     }
+
+
+def _descriptor_like_results() -> dict[str, object]:
+    result = _fake_results(with_simulink=True)
+    result["dae_classification"] = {
+        "kind": "linear_descriptor_dae",
+        "route": "descriptor_dae",
+        "supported": True,
+        "python_validation_supported": True,
+        "simulink_lowering_supported": True,
+        "diagnostic": None,
+    }
+    result["dae_validation"] = None
+    result["first_order"] = None
+    result["graph"] = None
+    result["descriptor_system"] = None
+    result["comparison"] = None
+    result["simulink_validation"] = {
+        "passes": True,
+        "vs_dae_python": {"rmse": 0.0, "max_abs_error": 0.0},
+    }
+    return result
 
 
 def test_apply_runtime_override_validates_keys_and_sampling() -> None:
@@ -201,6 +234,38 @@ def test_summarize_pipeline_results_and_print_cover_reporting(tmp_path: Path) ->
     assert "Simulink backend:" in output
 
 
+def test_simulink_subset_result_extracts_named_columns() -> None:
+    subset = pipeline_module._simulink_subset_result(
+        {
+            "t": [0.0, 1.0],
+            "signals": {
+                "x": [1.0, 0.5],
+                "y": [2.0, 1.5],
+            },
+        },
+        ["y", "x"],
+    )
+    assert subset["state_names"] == ["y", "x"]
+    assert subset["states"].tolist() == [[2.0, 1.0], [1.5, 0.5]]
+
+
+def test_print_results_covers_descriptor_and_simulink_validation_paths() -> None:
+    results = _descriptor_like_results()
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        pipeline_module._print_results(
+            results,
+            show_ir=False,
+            show_first_order=False,
+            show_state_space=False,
+            show_graph_validation=False,
+        )
+    output = buffer.getvalue()
+    assert "unavailable: descriptor-only Simulink path" in output
+    assert "vs_dae_python_rmse: 0.0" in output
+    assert "model_name: demo_model" in output
+
+
 def test_main_rejects_invalid_cli_combinations(monkeypatch) -> None:
     invalid_argv_sets = [
         ["run_pipeline.py", "--equations", r"\dot{x}=0", "--sample-count", "1"],
@@ -255,6 +320,80 @@ def test_main_writes_report_and_verbose_bundle(monkeypatch, tmp_path: Path) -> N
     assert json.loads(graph_path.read_text(encoding="utf-8")) == {"nodes": [{"id": "n1", "op": "constant"}], "edges": []}
 
 
+def test_main_runtime_json_expected_linear_and_failed_return_paths(monkeypatch, tmp_path: Path) -> None:
+    runtime_path = tmp_path / "runtime.json"
+    report_path = tmp_path / "report.json"
+    runtime_path.write_text(json.dumps({"parameter_values": {"a": 2.0}}), encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run_pipeline(*args, **kwargs):
+        captured["runtime_override"] = kwargs["runtime_override"]
+        return _fake_results(with_comparison=True)
+
+    monkeypatch.setattr(pipeline_module, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(
+        pipeline_module,
+        "_print_results",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "summarize_pipeline_results",
+        lambda results: {"ok": True},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--equations",
+            r"\dot{x}=0",
+            "--no-simulink",
+            "--runtime-json",
+            str(runtime_path),
+            "--expected-linear",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+
+    exit_code = pipeline_module.main()
+    assert exit_code == 0
+    assert captured["runtime_override"]["parameter_values"]["a"] == 2.0
+    assert captured["runtime_override"]["expected_linear"] is True
+
+    monkeypatch.setattr(pipeline_module, "run_pipeline", lambda *args, **kwargs: _fake_results(with_comparison=False, with_simulink=True) | {"simulink_validation": {"passes": False}})
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--equations",
+            r"\dot{x}=0",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 1
+
+    failing_compare = _fake_results(with_comparison=True)
+    failing_compare["comparison"]["passes"] = False
+    monkeypatch.setattr(pipeline_module, "run_pipeline", lambda *args, **kwargs: failing_compare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--equations",
+            r"\dot{x}=0",
+            "--no-simulink",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 1
+
+
 def test_main_exports_gui_run_and_returns_simulink_status(monkeypatch, tmp_path: Path) -> None:
     export_calls: list[dict[str, object]] = []
     monkeypatch.setattr(pipeline_module, "run_pipeline", lambda *args, **kwargs: _fake_results(with_simulink=True))
@@ -292,6 +431,91 @@ def test_main_exports_gui_run_and_returns_simulink_status(monkeypatch, tmp_path:
     assert exit_code == 0
     assert export_calls[0]["raw_latex"] == r"\dot{x}=0"
     assert export_calls[0]["gui_report_root"] == str(tmp_path / "gui_runs")
+
+
+def test_main_handles_nonlatex_input_and_verbose_simulink_engine(monkeypatch, tmp_path: Path) -> None:
+    equations_path = tmp_path / "system.txt"
+    equations_path.write_text("diff(x,t) == -x", encoding="utf-8")
+    report_path = tmp_path / "report.json"
+    start_calls: list[dict[str, object]] = []
+    engine = SimpleNamespace(quit=lambda: start_calls.append({"quit": True}))
+
+    fake_engine_module = types.SimpleNamespace(
+        start_engine=lambda **kwargs: start_calls.append(kwargs) or engine
+    )
+    fake_verbose_module = types.SimpleNamespace(
+        write_verbose_artifacts=lambda results, output_dir, matlab_engine=None: {
+            "output_dir": str(output_dir),
+            "files": {},
+        }
+    )
+    monkeypatch.setitem(sys.modules, "simulink.engine", fake_engine_module)
+    monkeypatch.setitem(sys.modules, "pipeline.verbose_artifacts", fake_verbose_module)
+    monkeypatch.setattr(
+        pipeline_module,
+        "run_pipeline_problem",
+        lambda problem, **kwargs: _fake_results(with_comparison=False) | {"source_type": problem.source_type},
+    )
+    monkeypatch.setattr(pipeline_module, "_print_results", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline_module, "summarize_pipeline_results", lambda results: {"ok": True})
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input",
+            str(equations_path),
+            "--source-type",
+            "matlab_symbolic",
+            "--no-simulink",
+            "--skip-sim",
+            "--verbose",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 0
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input",
+            str(equations_path),
+            "--source-type",
+            "matlab_symbolic",
+            "--skip-sim",
+            "--verbose",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
+
+    latex_path = tmp_path / "system.tex"
+    latex_path.write_text(r"\dot{x}=0", encoding="utf-8")
+    monkeypatch.setattr(
+        pipeline_module,
+        "run_pipeline",
+        lambda *args, **kwargs: _fake_results(with_simulink=True),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input",
+            str(latex_path),
+            "--verbose",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 0
+    assert any(call.get("retries") == 1 for call in start_calls if isinstance(call, dict))
+    assert {"quit": True} in start_calls
 
 
 def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monkeypatch, tmp_path: Path) -> None:
@@ -395,6 +619,161 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
     assert result["simulink_result"]["model_name"] == "dae_model"
     assert result["simulink_validation"] is None
     assert result["consistent_initialization"].algebraic_initial_conditions == {"y": 0.0}
+
+
+def test_run_pipeline_preserved_dae_builds_python_comparison_when_backend_validation_missing(monkeypatch) -> None:
+    extraction = SimpleNamespace(states=("x",), inputs=(), parameters=(), independent_variable=None)
+    dae_system = SimpleNamespace(
+        differential_states=("x",),
+        algebraic_variables=("z",),
+        reduced_to_explicit=False,
+        classification=SimpleNamespace(
+            to_dict=lambda: {
+                "kind": "nonlinear_preserved_semi_explicit_dae",
+                "route": "preserved_dae",
+                "supported": True,
+                "python_validation_supported": True,
+                "simulink_lowering_supported": True,
+                "diagnostic": None,
+            }
+        ),
+    )
+    analysis = SimpleNamespace(dae_system=dae_system)
+    preserved_compilation = SimpleNamespace(
+        extraction=extraction,
+        dae_system=dae_system,
+        equation_dicts=[],
+        graph={"nodes": [{"id": "n1", "op": "constant", "inputs": []}], "edges": []},
+        validated_graph={"nodes": [{"id": "n1", "op": "constant", "inputs": []}], "edges": []},
+    )
+    problem = _fake_problem()
+
+    monkeypatch.setattr(pipeline_module, "_analyze_problem", lambda *args, **kwargs: analysis)
+    monkeypatch.setattr(
+        pipeline_module,
+        "compile_preserved_dae_system_from_analysis",
+        lambda *args, **kwargs: preserved_compilation,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "initialize_preserved_dae",
+        lambda *args, **kwargs: SimpleNamespace(
+            differential_initial_conditions={"x": 1.0},
+            algebraic_initial_conditions={"z": 0.2},
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "validate_preserved_semi_explicit_dae",
+        lambda *args, **kwargs: SimpleNamespace(
+            to_dict=lambda: {
+                "t": [0.0, 1.0],
+                "differential_states": [[1.0], [0.5]],
+                "simulation_success": True,
+                "residual_norm_max": 0.0,
+                "residual_norm_final": 0.0,
+            }
+        ),
+    )
+    fake_backend_module = types.SimpleNamespace(
+        execute_simulink_descriptor=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("descriptor path should not run")),
+        execute_simulink_graph=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("graph path should not run")),
+        execute_simulink_preserved_dae_graph=lambda *args, **kwargs: SimpleNamespace(
+            model={"blocks": {}},
+            simulation={"model_name": "dae_model", "model_file": "/tmp/dae_model.slx", "t": [0.0, 1.0], "signals": {"x": [1.0, 0.5], "z": [0.2, 0.1]}},
+            validation=None,
+        ),
+    )
+    fake_engine_module = types.SimpleNamespace(start_engine=lambda **kwargs: SimpleNamespace(quit=lambda: None))
+    monkeypatch.setitem(sys.modules, "backend.simulate_simulink", fake_backend_module)
+    monkeypatch.setitem(sys.modules, "simulink.engine", fake_engine_module)
+
+    result = pipeline_module._run_normalized_problem(problem, run_sim=True, run_simulink=True)
+
+    assert result["simulink_validation"]["passes"] is True
+    assert result["simulink_validation"]["vs_dae_python"]["rmse"] == 0.0
+
+
+def test_run_pipeline_explicit_graph_requires_backend_validation(monkeypatch) -> None:
+    extraction = SimpleNamespace(states=("x",), inputs=(), parameters=(), independent_variable=None)
+    dae_system = SimpleNamespace(
+        differential_states=("x",),
+        algebraic_variables=(),
+        reduced_to_explicit=True,
+        classification=SimpleNamespace(
+            to_dict=lambda: {
+                "kind": "explicit_ode",
+                "route": "explicit_ode",
+                "supported": True,
+                "python_validation_supported": True,
+                "simulink_lowering_supported": True,
+                "diagnostic": None,
+            }
+        ),
+    )
+    analysis = SimpleNamespace(dae_system=dae_system)
+    compilation = SimpleNamespace(
+        extraction=extraction,
+        solved_derivatives=[],
+        dae_system=dae_system,
+        descriptor_system=None,
+        first_order={"states": ["x"], "inputs": [], "parameters": [], "state_equations": []},
+        explicit_form={},
+        linearity={"is_linear": False, "offending_entries": []},
+        state_space=None,
+        graph={"nodes": [{"id": "n1", "op": "constant", "inputs": []}], "edges": []},
+        validated_graph={"nodes": [{"id": "n1", "op": "constant", "inputs": []}], "edges": []},
+        equation_dicts=[],
+    )
+    problem = _fake_problem()
+
+    monkeypatch.setattr(pipeline_module, "_analyze_problem", lambda *args, **kwargs: analysis)
+    monkeypatch.setattr(
+        pipeline_module,
+        "compile_symbolic_system_from_analysis",
+        lambda *args, **kwargs: compilation,
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "consistent_initialize_dae",
+        lambda *args, **kwargs: SimpleNamespace(
+            differential_initial_conditions={"x": 0.0},
+            algebraic_initial_conditions={},
+            to_dict=lambda: {"differential_initial_conditions": {"x": 0.0}, "algebraic_initial_conditions": {}, "reduced_to_explicit": True},
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "simulate_ode_system",
+        lambda *args, **kwargs: {"t": [0.0, 1.0], "states": np.array([[0.0], [0.0]])},
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "default_runtime_context",
+        lambda stem, first_order_system: {
+            "parameter_values": {},
+            "initial_conditions": {"x": 0.0},
+            "input_function": lambda _time: {},
+            "t_span": (0.0, 1.0),
+            "t_eval": np.array([0.0, 1.0]),
+            "expected_linear": False,
+        },
+    )
+    fake_backend_module = types.SimpleNamespace(
+        execute_simulink_descriptor=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("descriptor path should not run")),
+        execute_simulink_graph=lambda *args, **kwargs: SimpleNamespace(
+            model={"blocks": {}},
+            simulation={"model_name": "ode_model", "model_file": "/tmp/ode_model.slx"},
+            validation=None,
+        ),
+        execute_simulink_preserved_dae_graph=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("preserved path should not run")),
+    )
+    fake_engine_module = types.SimpleNamespace(start_engine=lambda **kwargs: SimpleNamespace(quit=lambda: None))
+    monkeypatch.setitem(sys.modules, "backend.simulate_simulink", fake_backend_module)
+    monkeypatch.setitem(sys.modules, "simulink.engine", fake_engine_module)
+
+    with pytest.raises(DeterministicCompileError, match="Simulink validation requires the direct ODE simulation result"):
+        pipeline_module._run_normalized_problem(problem, run_sim=True, run_simulink=True)
 
 
 def test_main_accepts_matlab_symbolic_payload_json(tmp_path: Path, monkeypatch) -> None:
