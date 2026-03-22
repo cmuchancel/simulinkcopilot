@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.simulate_simulink import SimulinkExecutionStageError
 from canonicalize.dae_system import DaeSupportClassification
 from simulate.dae_benchmark_suite import (
     DAE_BENCHMARK_CASES,
@@ -111,6 +112,13 @@ def _fake_result(**overrides):
     return base
 
 
+def _fake_analysis(*, dae_system=None, descriptor_system=None):
+    return SimpleNamespace(
+        dae_system=dae_system or _fake_dae_system(),
+        descriptor_system=descriptor_system,
+    )
+
+
 def test_time_grid_and_runtime_override_helpers() -> None:
     case = DAE_BENCHMARK_CASES[0]
     grid = _time_grid(case)
@@ -181,6 +189,21 @@ def test_run_dae_benchmark_records_parse_failures(monkeypatch: pytest.MonkeyPatc
     assert case["stages"]["parse"]["status"] == "failed"
 
 
+def test_run_dae_benchmark_records_state_extraction_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("analysis boom")),
+    )
+
+    report = run_dae_benchmark(selected_cases=["reducible_nonlinear_helper"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "state_extraction"
+    assert case["stages"]["state_extraction"]["status"] == "failed"
+
+
 def test_run_dae_benchmark_records_classification_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
     monkeypatch.setattr(
@@ -197,6 +220,47 @@ def test_run_dae_benchmark_records_classification_mismatch(monkeypatch: pytest.M
     case = report["cases"][0]
     assert case["failure_stage"] == "classification"
     assert case["stages"]["classification"]["status"] == "failed"
+
+
+def test_run_dae_benchmark_records_missing_descriptor_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(
+            dae_system=_fake_dae_system(
+                kind="reducible_semi_explicit_dae",
+                route="explicit_ode",
+                reduced_to_explicit=True,
+                preserved_form=None,
+            ),
+            descriptor_system=None,
+        ),
+    )
+
+    report = run_dae_benchmark(selected_cases=["linear_descriptor_capable_balance"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "descriptor_artifact"
+    assert case["stages"]["descriptor_artifact"]["status"] == "failed"
+
+
+def test_run_dae_benchmark_records_missing_preserved_form(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(
+            dae_system=_fake_dae_system(preserved_form=None),
+            descriptor_system=None,
+        ),
+    )
+
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "preserved_form"
+    assert case["stages"]["preserved_form"]["status"] == "failed"
 
 
 def test_run_dae_benchmark_marks_expected_pipeline_failures(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -220,6 +284,25 @@ def test_run_dae_benchmark_marks_expected_pipeline_failures(monkeypatch: pytest.
     assert case["stages"]["pipeline"]["status"] == "expected_failure"
 
 
+def test_run_dae_benchmark_records_unexpected_pipeline_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(),
+    )
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.run_pipeline",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("pipeline boom")),
+    )
+
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "pipeline"
+    assert case["stages"]["pipeline"]["status"] == "failed"
+
+
 def test_run_dae_benchmark_records_missing_python_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
     monkeypatch.setattr(
@@ -236,6 +319,52 @@ def test_run_dae_benchmark_records_missing_python_validation(monkeypatch: pytest
     assert report["failed_cases"] == 1
     case = report["cases"][0]
     assert case["failure_stage"] == "python_validation"
+
+
+def test_run_dae_benchmark_records_failed_python_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(),
+    )
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.run_pipeline",
+        lambda *args, **kwargs: _fake_result(
+            dae_validation={
+                "simulation_success": False,
+                "message": "residual blew up",
+                "residual_norm_max": 1.0,
+                "residual_norm_final": 1.0,
+            }
+        ),
+    )
+
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "python_validation"
+    assert case["failure_reason"] == "residual blew up"
+
+
+def test_run_dae_benchmark_records_lowering_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(),
+    )
+    monkeypatch.setattr("simulate.dae_benchmark_suite.run_pipeline", lambda *args, **kwargs: _fake_result())
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite._lower_supported_case",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("lower boom")),
+    )
+
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=False)
+
+    assert report["failed_cases"] == 1
+    case = report["cases"][0]
+    assert case["failure_stage"] == "simulink_lowering"
+    assert case["stages"]["simulink_lowering"]["status"] == "failed"
 
 
 def test_run_dae_benchmark_records_engine_unavailable_and_compare_failures(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -265,3 +394,98 @@ def test_run_dae_benchmark_records_engine_unavailable_and_compare_failures(monke
     case = report["cases"][0]
     assert case["stages"]["simulink_compare"]["status"] == "failed"
     assert case["overall_pass"] is False
+
+
+def test_run_dae_benchmark_marks_simulink_compare_success_and_missing_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.start_engine", lambda *args, **kwargs: SimpleNamespace(quit=lambda: None))
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(),
+    )
+    monkeypatch.setattr("simulate.dae_benchmark_suite.run_pipeline", lambda *args, **kwargs: _fake_result())
+    monkeypatch.setattr("simulate.dae_benchmark_suite._lower_supported_case", lambda *args, **kwargs: {"name": "model", "blocks": {}})
+
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite._execute_supported_case",
+        lambda *args, **kwargs: SimpleNamespace(model_file="/tmp/model.slx", validation=None),
+    )
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=True)
+    case = report["cases"][0]
+    assert case["stages"]["simulink_compare"]["status"] == "skipped"
+    assert case["overall_pass"] is True
+
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite._execute_supported_case",
+        lambda *args, **kwargs: SimpleNamespace(model_file="/tmp/model.slx", validation={"passes": True}),
+    )
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=True)
+    case = report["cases"][0]
+    assert case["stages"]["simulink_compare"]["status"] == "passed"
+    assert case["overall_pass"] is True
+
+
+def test_run_dae_benchmark_records_simulink_execution_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("simulate.dae_benchmark_suite.start_engine", lambda *args, **kwargs: SimpleNamespace(quit=lambda: None))
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(),
+    )
+    monkeypatch.setattr("simulate.dae_benchmark_suite.run_pipeline", lambda *args, **kwargs: _fake_result())
+    monkeypatch.setattr("simulate.dae_benchmark_suite._lower_supported_case", lambda *args, **kwargs: {"name": "model", "blocks": {}})
+
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite._execute_supported_case",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SimulinkExecutionStageError("simulink_compare", "compare boom")),
+    )
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=True)
+    case = report["cases"][0]
+    assert case["failure_stage"] == "simulink_compare"
+    assert case["stages"]["simulink_build"]["status"] == "failed"
+
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite._execute_supported_case",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("generic boom")),
+    )
+    report = run_dae_benchmark(selected_cases=["nonlinear_preserved_cubic_constraint"], run_simulink=True)
+    case = report["cases"][0]
+    assert case["failure_stage"] == "simulink_build"
+    assert case["stages"]["simulink_build"]["status"] == "failed"
+
+
+def test_render_dae_benchmark_markdown_handles_missing_classification() -> None:
+    markdown = render_dae_benchmark_markdown(
+        {
+            "generated_cases": 1,
+            "passed_cases": 0,
+            "failed_cases": 1,
+            "tolerance": 1e-6,
+            "cases": [
+                {
+                    "name": "broken",
+                    "category": "Category X",
+                    "latex": "x=1",
+                    "classification": None,
+                    "metrics": {
+                        "differential_state_count": None,
+                        "algebraic_variable_count": None,
+                        "reduced_to_explicit": None,
+                        "descriptor_artifact_available": None,
+                        "preserved_form_available": None,
+                        "graph_nodes": None,
+                        "lowered_simulink_blocks": None,
+                        "residual_norm_max": None,
+                        "residual_norm_final": None,
+                    },
+                    "stages": {"parse": {"status": "failed", "detail": "boom"}},
+                    "failure_stage": "parse",
+                    "failure_reason": "boom",
+                    "overall_pass": False,
+                }
+            ],
+        }
+    )
+
+    assert "failure_stage: parse" in markdown
+    assert "classification:" not in markdown

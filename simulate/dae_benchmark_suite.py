@@ -71,6 +71,54 @@ def _default_stages() -> dict[str, dict[str, object]]:
     }
 
 
+def _case_report(
+    case: DaeBenchmarkCase,
+    *,
+    stages: dict[str, dict[str, object]],
+    metrics: dict[str, object],
+    classification: dict[str, object] | None = None,
+    failure_stage: str | None = None,
+    failure_reason: str | None = None,
+    simulink_validation: dict[str, object] | None = None,
+    overall_pass: bool,
+) -> dict[str, object]:
+    return {
+        "name": case.name,
+        "category": case.category,
+        "latex": case.latex,
+        "classification": classification,
+        "metrics": metrics,
+        "stages": stages,
+        "failure_stage": failure_stage,
+        "failure_reason": failure_reason,
+        "simulink_validation": simulink_validation,
+        "overall_pass": overall_pass,
+    }
+
+
+def _record_failure(
+    results: list[dict[str, object]],
+    case: DaeBenchmarkCase,
+    *,
+    stages: dict[str, dict[str, object]],
+    metrics: dict[str, object],
+    classification: dict[str, object] | None = None,
+    failure_stage: str,
+    failure_reason: str,
+) -> None:
+    results.append(
+        _case_report(
+            case,
+            stages=stages,
+            metrics=metrics,
+            classification=classification,
+            failure_stage=failure_stage,
+            failure_reason=failure_reason,
+            overall_pass=False,
+        )
+    )
+
+
 def _time_grid(case: DaeBenchmarkCase) -> np.ndarray:
     return np.linspace(case.t_span[0], case.t_span[1], case.sample_count)
 
@@ -311,18 +359,14 @@ def run_dae_benchmark(
                 failure_stage = "parse"
                 failure_reason = str(exc)
                 stages["parse"] = _stage("failed", str(exc))
-                results.append(
-                    {
-                        "name": case.name,
-                        "category": case.category,
-                        "latex": case.latex,
-                        "classification": classification,
-                        "stages": stages,
-                        "metrics": metrics,
-                        "failure_stage": failure_stage,
-                        "failure_reason": failure_reason,
-                        "overall_pass": False,
-                    }
+                _record_failure(
+                    results,
+                    case,
+                    stages=stages,
+                    metrics=metrics,
+                    classification=classification,
+                    failure_stage=failure_stage,
+                    failure_reason=failure_reason,
                 )
                 continue
 
@@ -337,17 +381,13 @@ def run_dae_benchmark(
                 failure_stage = "state_extraction"
                 failure_reason = str(exc)
                 stages["state_extraction"] = _stage("failed", str(exc))
-                results.append(
-                    {
-                        "name": case.name,
-                        "category": case.category,
-                        "latex": case.latex,
-                        "stages": stages,
-                        "metrics": metrics,
-                        "failure_stage": failure_stage,
-                        "failure_reason": failure_reason,
-                        "overall_pass": False,
-                    }
+                _record_failure(
+                    results,
+                    case,
+                    stages=stages,
+                    metrics=metrics,
+                    failure_stage=failure_stage,
+                    failure_reason=failure_reason,
                 )
                 continue
 
@@ -372,17 +412,13 @@ def run_dae_benchmark(
                     f"supported={case.expected_supported!r}; got {classification!r}."
                 )
                 stages["classification"] = _stage("failed", failure_reason)
-                results.append(
-                    {
-                        "name": case.name,
-                        "category": case.category,
-                        "latex": case.latex,
-                        "stages": stages,
-                        "metrics": metrics,
-                        "failure_stage": failure_stage,
-                        "failure_reason": failure_reason,
-                        "overall_pass": False,
-                    }
+                _record_failure(
+                    results,
+                    case,
+                    stages=stages,
+                    metrics=metrics,
+                    failure_stage=failure_stage,
+                    failure_reason=failure_reason,
                 )
                 continue
             stages["classification"] = _stage("passed", classification["kind"])
@@ -392,18 +428,14 @@ def run_dae_benchmark(
                     failure_stage = "descriptor_artifact"
                     failure_reason = "Expected descriptor artifact was unavailable."
                     stages["descriptor_artifact"] = _stage("failed", failure_reason)
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
                 stages["descriptor_artifact"] = _stage("passed")
@@ -415,18 +447,14 @@ def run_dae_benchmark(
                     failure_stage = "preserved_form"
                     failure_reason = "Expected preserved semi-explicit DAE form was unavailable."
                     stages["preserved_form"] = _stage("failed", failure_reason)
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
                 stages["preserved_form"] = _stage("passed")
@@ -457,32 +485,26 @@ def run_dae_benchmark(
                     ):
                         stages["pipeline"] = _stage("expected_failure", str(exc))
                         results.append(
-                            {
-                                "name": case.name,
-                                "category": case.category,
-                                "latex": case.latex,
-                                "classification": classification,
-                                "stages": stages,
-                                "metrics": metrics,
-                                "failure_stage": failure_stage,
-                                "failure_reason": failure_reason,
-                                "overall_pass": True,
-                            }
+                            _case_report(
+                                case,
+                                stages=stages,
+                                metrics=metrics,
+                                classification=classification,
+                                failure_stage=failure_stage,
+                                failure_reason=failure_reason,
+                                overall_pass=True,
+                            )
                         )
                         continue
                     stages["pipeline"] = _stage("failed", str(exc))
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
 
@@ -491,18 +513,14 @@ def run_dae_benchmark(
                     failure_stage = "python_validation"
                     failure_reason = "Supported DAE benchmark did not produce DAE-native validation output."
                     stages["python_validation"] = _stage("failed", failure_reason)
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
                 metrics["residual_norm_max"] = dae_validation.get("residual_norm_max")
@@ -511,18 +529,14 @@ def run_dae_benchmark(
                     failure_stage = "python_validation"
                     failure_reason = str(dae_validation.get("message") or "DAE validation failed.")
                     stages["python_validation"] = _stage("failed", failure_reason)
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
                 stages["python_validation"] = _stage(
@@ -540,18 +554,14 @@ def run_dae_benchmark(
                     failure_stage = "simulink_lowering"
                     failure_reason = str(exc)
                     stages["simulink_lowering"] = _stage("failed", str(exc))
-                    results.append(
-                        {
-                            "name": case.name,
-                            "category": case.category,
-                            "latex": case.latex,
-                            "classification": classification,
-                            "stages": stages,
-                            "metrics": metrics,
-                            "failure_stage": failure_stage,
-                            "failure_reason": failure_reason,
-                            "overall_pass": False,
-                        }
+                    _record_failure(
+                        results,
+                        case,
+                        stages=stages,
+                        metrics=metrics,
+                        classification=classification,
+                        failure_stage=failure_stage,
+                        failure_reason=failure_reason,
                     )
                     continue
 
@@ -601,18 +611,16 @@ def run_dae_benchmark(
             if stages["simulink_compare"]["status"] == "failed":
                 overall_pass = False
             results.append(
-                {
-                    "name": case.name,
-                    "category": case.category,
-                    "latex": case.latex,
-                    "classification": classification,
-                    "metrics": metrics,
-                    "stages": stages,
-                    "failure_stage": failure_stage,
-                    "failure_reason": failure_reason,
-                    "simulink_validation": simulink_validation,
-                    "overall_pass": overall_pass,
-                }
+                _case_report(
+                    case,
+                    stages=stages,
+                    metrics=metrics,
+                    classification=classification,
+                    failure_stage=failure_stage,
+                    failure_reason=failure_reason,
+                    simulink_validation=simulink_validation,
+                    overall_pass=overall_pass,
+                )
             )
     finally:
         if eng is not None:

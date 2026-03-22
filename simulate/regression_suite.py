@@ -56,6 +56,26 @@ def _stage(status: str, detail: str | None = None) -> dict[str, object]:
     return {"status": status, "detail": detail}
 
 
+def _error_example_result(
+    *,
+    stem: str,
+    path: Path,
+    expected_linear: bool,
+    error: str,
+    stage_name: str,
+) -> dict[str, object]:
+    return {
+        "name": stem,
+        "path": str(path),
+        "expected_linear": expected_linear,
+        "error": error,
+        "stages": {
+            stage_name: _stage("failed", error),
+        },
+        "overall_pass": False,
+    }
+
+
 def run_regression_suite(
     *,
     selected_examples: list[str] | None = None,
@@ -87,16 +107,13 @@ def run_regression_suite(
 
             if use_simulink and engine_error is not None:
                 example_results.append(
-                    {
-                        "name": stem,
-                        "path": str(path),
-                        "expected_linear": spec.expected_linear,
-                        "error": engine_error,
-                        "stages": {
-                            "simulink_build": _stage("failed", engine_error),
-                        },
-                        "overall_pass": False,
-                    }
+                    _error_example_result(
+                        stem=stem,
+                        path=path,
+                        expected_linear=spec.expected_linear,
+                        error=engine_error,
+                        stage_name="simulink_build",
+                    )
                 )
                 continue
 
@@ -189,16 +206,13 @@ def run_regression_suite(
                 )
             except Exception as exc:  # pragma: no cover - exercised in generated report if failures appear
                 example_results.append(
-                    {
-                        "name": stem,
-                        "path": str(path),
-                        "expected_linear": spec.expected_linear,
-                        "error": str(exc),
-                        "stages": {
-                            "parse": _stage("failed", str(exc)),
-                        },
-                        "overall_pass": False,
-                    }
+                    _error_example_result(
+                        stem=stem,
+                        path=path,
+                        expected_linear=spec.expected_linear,
+                        error=str(exc),
+                        stage_name="parse",
+                    )
                 )
     finally:
         if eng is not None:

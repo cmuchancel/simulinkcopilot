@@ -433,3 +433,86 @@ def test_main_accepts_matlab_symbolic_payload_json(tmp_path: Path, monkeypatch) 
     assert report["source_type"] == "matlab_symbolic"
     assert report["normalized_problem"]["source_type"] == "matlab_symbolic"
     assert report["dae_classification"]["kind"] == "explicit_ode"
+
+
+def test_main_request_mode_rejects_conflicting_flags(monkeypatch) -> None:
+    invalid_argv_sets = [
+        ["run_pipeline.py", "--request", "req.json", "--input", "system.tex", "--response", "resp.json"],
+        ["run_pipeline.py", "--request", "req.json", "--equations", r"\dot{x}=0", "--response", "resp.json"],
+        ["run_pipeline.py", "--request", "req.json", "--input-payload-json", "payload.json", "--response", "resp.json"],
+        ["run_pipeline.py", "--request", "req.json", "--response", "resp.json", "--export-gui-run"],
+    ]
+
+    for argv in invalid_argv_sets:
+        monkeypatch.setattr(sys, "argv", argv)
+        with pytest.raises(SystemExit):
+            pipeline_module.main()
+
+
+def test_main_rejects_payload_source_type_conflicts_and_missing_source_type(tmp_path: Path, monkeypatch) -> None:
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text(json.dumps({"equations": ["xdot = -x"]}), encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_pipeline.py", "--input-payload-json", str(payload_path), "--no-simulink", "--skip-sim"],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
+
+    payload_path.write_text(
+        json.dumps({"source_type": "matlab_symbolic", "equations": ["diff(x,t) == -x"], "states": ["x"], "time_variable": "t"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(payload_path),
+            "--source-type",
+            "latex",
+            "--no-simulink",
+            "--skip-sim",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
+
+
+def test_main_rejects_matlab_ode_function_without_payload(monkeypatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_pipeline.py", "--equations", "xdot = -x", "--source-type", "matlab_ode_function"],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
+
+
+def test_main_rejects_gui_export_for_non_latex_payload(tmp_path: Path, monkeypatch) -> None:
+    payload_path = tmp_path / "payload.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "source_type": "matlab_equation_text",
+                "equations": ["xdot = -x"],
+                "states": ["x"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(payload_path),
+            "--export-gui-run",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
