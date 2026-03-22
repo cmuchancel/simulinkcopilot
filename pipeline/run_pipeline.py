@@ -785,13 +785,15 @@ def _print_results(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the deterministic equation-to-Simulink pipeline.")
-    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group = parser.add_mutually_exclusive_group(required=False)
     source_group.add_argument("--input", help="Path to an input file. For non-LaTeX front doors this is interpreted as equation text.")
     source_group.add_argument("--equations", help="Raw equation text passed directly on the command line.")
     source_group.add_argument(
         "--input-payload-json",
         help="Path to a structured JSON payload for matlab_symbolic, matlab_equation_text, or matlab_ode_function inputs.",
     )
+    parser.add_argument("--request", help="Path to a MATLAB bridge request JSON file.")
+    parser.add_argument("--response", help="Path to a MATLAB bridge response JSON file.")
     parser.add_argument(
         "--equations-name",
         default="inline_equations",
@@ -911,6 +913,21 @@ def main() -> int:
     engine = None
     temp_equation_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
+        if args.request is not None:
+            if args.response is None:
+                parser.error("--request requires --response.")
+            if args.input is not None or args.equations is not None or args.input_payload_json is not None:
+                parser.error("--request cannot be combined with --input, --equations, or --input-payload-json.")
+            if args.export_gui_run:
+                parser.error("--request mode does not support --export-gui-run.")
+            from pipeline.matlab_bridge import process_matlab_bridge_request_file
+
+            return process_matlab_bridge_request_file(
+                args.request,
+                args.response,
+                verbose=bool(args.verbose),
+            )
+
         runtime_override = None
         if args.runtime_json:
             runtime_override = json.loads(Path(args.runtime_json).read_text(encoding="utf-8"))
@@ -933,6 +950,8 @@ def main() -> int:
             parser.error("--skip-sim cannot be combined with default Simulink generation. Use --no-simulink if needed.")
         if args.export_gui_run and not args.simulink:
             parser.error("--export-gui-run requires Simulink generation to be enabled.")
+        if args.input is None and args.equations is None and args.input_payload_json is None:
+            parser.error("One of --input, --equations, or --input-payload-json is required unless --request is used.")
 
         symbol_config = dict(args.symbol_role)
         classification_mode = args.classification_mode
