@@ -4,7 +4,7 @@ This repo is a deterministic symbolic compiler backend for restricted equation i
 
 ## Repo Layout
 
-- `backend/`, `canonicalize/`, `eqn2sim_gui/`, `ir/`, `latex_frontend/`, `pipeline/`, `simulate/`, `simucompilebench/`, `simulink/`, `states/`
+- `backend/`, `canonicalize/`, `eqn2sim_gui/`, `ir/`, `latex_frontend/`, `matlab/`, `pipeline/`, `simulate/`, `simucompilebench/`, `simulink/`, `states/`
   Core implementation modules.
 - `scripts/`
   Supported CLI entrypoints. Run these with `python3 -m scripts.<name>`.
@@ -37,7 +37,7 @@ The current pipeline:
 14. validates supported preserved DAEs in Python with consistent initialization, residual checks, and differential-state trajectories
 15. compares Python and Simulink trajectories for the supported route that was selected
 
-See [docs/input_frontends.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/input_frontends.md) for the front-door payloads and [docs/ir_schema.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md) for the shared normalized schema.
+See [docs/input_frontends.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/input_frontends.md) for the front-door payloads, [docs/ir_schema.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md) for the shared normalized schema, and [docs/matlab_bridge.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/matlab_bridge.md) for the first MATLAB-facing bridge layer.
 
 ## Deterministic Guarantees
 
@@ -258,6 +258,33 @@ Useful flags:
 - `--run-sim`
 - `--simulink` (default)
 - `--no-simulink`
+
+## MATLAB Bridge
+
+The repo now includes a first MATLAB-facing bridge layer in [matlab/](/Users/chancelavoie/Desktop/simulinkcopilot/matlab).
+
+Public entrypoints:
+
+- `analyzeEquationSupport(...)`
+- `generateSimulinkFromLatex(...)`
+- `generateSimulinkFromEquationText(...)`
+- `generateSimulinkFromSymbolicMatlab(...)`
+- `generateSimulinkFromODEFunction(...)`
+
+The MATLAB side is intentionally thin:
+
+1. MATLAB builds a request struct
+2. MATLAB writes request JSON
+3. MATLAB calls `python -m pipeline.run_pipeline --request ... --response ...`
+4. Python runs the shared backend pipeline
+5. Python optionally builds the `.slx` file through the existing `matlab.engine` path
+6. MATLAB parses the response JSON into a MATLAB struct
+
+Important scope note:
+
+- This is a MATLAB bridge on top of the existing backend.
+- It is not yet a native MATLAB-only compiler backend.
+- `generateSimulinkFromODEFunction(...)` supports only structured exported RHS specs and intentionally rejects opaque MATLAB function handles.
 - `--runtime-json /tmp/runtime.json`
 - `--equations $'m\\ddot{x}+c\\dot{x}+kx=u'`
 - `--equations-name inline_system`
