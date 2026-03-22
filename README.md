@@ -1,6 +1,6 @@
-# Deterministic LaTeX ODE/DAE Compiler
+# Deterministic Equation-to-Simulink Compiler
 
-This repo is a deterministic symbolic compiler backend for restricted LaTeX ODEs and a narrow, explicit class of semi-explicit DAEs. It is designed to be reproducible, inspectable, and strict enough to support deterministic Simulink model generation without hand-waving over unsupported systems.
+This repo is a deterministic symbolic compiler backend for restricted equation inputs and a narrow, explicit class of semi-explicit DAEs. It currently accepts LaTeX plus three MATLAB-native front doors, normalizes all supported inputs into one shared IR, and keeps the downstream classifier, reducer, validator, and Simulink lowering paths shared. It is designed to be reproducible, inspectable, and strict enough to support deterministic Simulink model generation without hand-waving over unsupported systems.
 
 ## Repo Layout
 
@@ -17,9 +17,13 @@ Repo conventions are documented in [CODING_STANDARDS.md](/Users/chancelavoie/Des
 
 The current pipeline:
 
-1. normalizes supported LaTeX variants into a narrow grammar
-2. tokenizes and parses equations into explicit expression nodes
-3. serializes equations into canonical Python dictionaries
+1. accepts one of four front doors:
+   - `latex`
+   - `matlab_symbolic`
+   - `matlab_equation_text`
+   - `matlab_ode_function`
+2. normalizes supported source inputs into one shared `NormalizedProblem` schema
+3. converts front-end equations into canonical expression nodes
 4. extracts differential states, derivative-derived states, inputs, parameters, and algebraic variables deterministically
 5. classifies the system as explicit ODE, reducible semi-explicit DAE, descriptor-capable semi-explicit DAE artifact, nonlinear preserved semi-explicit DAE, or unsupported DAE
 6. reduces explicit and reducible systems through the explicit ODE path
@@ -33,6 +37,8 @@ The current pipeline:
 14. validates supported preserved DAEs in Python with consistent initialization, residual checks, and differential-state trajectories
 15. compares Python and Simulink trajectories for the supported route that was selected
 
+See [docs/input_frontends.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/input_frontends.md) for the front-door payloads and [docs/ir_schema.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md) for the shared normalized schema.
+
 ## Deterministic Guarantees
 
 - No LLMs, no probabilistic parsing, no random IDs.
@@ -40,6 +46,23 @@ The current pipeline:
 - Symbol classification uses deterministic rules and optional explicit configuration.
 - Graph lowering uses stable IDs and structural common-subexpression reuse.
 - Report generation is machine-readable and reproducible.
+
+## Supported Front Doors
+
+- `latex`
+  Existing restricted LaTeX grammar path.
+- `matlab_symbolic`
+  MATLAB Symbolic Math Toolbox-style equation strings such as `diff(x,t) == -x + z`.
+- `matlab_equation_text`
+  MATLAB-ish equation strings such as `xdot = z` and `0 = z + sin(x)`.
+- `matlab_ode_function`
+  Structured exported RHS specifications only. Opaque MATLAB function handles are intentionally rejected.
+
+Important scope note:
+
+- This change broadens input coverage, not DAE theory coverage.
+- All supported front doors normalize into the same internal IR.
+- The downstream support boundary for ODEs and DAEs is unchanged unless explicitly documented elsewhere.
 
 ## Supported Grammar
 
@@ -203,20 +226,30 @@ See [docs/dae_support.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/dae_s
 
 ## CLI
 
-Run the full pipeline:
+Run the full pipeline from a LaTeX file:
 
 ```bash
 python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.tex
 ```
 
-Or pass the LaTeX directly:
+Or pass LaTeX directly:
 
 ```bash
 python3 -m pipeline.run_pipeline --equations $'m\\ddot{x}+c\\dot{x}+kx=u'
 ```
 
+Run a MATLAB-symbolic payload:
+
+```bash
+python3 -m pipeline.run_pipeline \
+  --input-payload-json /tmp/matlab_symbolic_payload.json \
+  --no-simulink
+```
+
 Useful flags:
 
+- `--source-type latex|matlab_symbolic|matlab_equation_text|matlab_ode_function`
+- `--input-payload-json /tmp/input_payload.json`
 - `--show-ir`
 - `--show-first-order`
 - `--show-state-space`

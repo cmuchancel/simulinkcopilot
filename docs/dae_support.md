@@ -2,6 +2,12 @@
 
 This repo does not claim broad arbitrary DAE support. It supports a narrow, explicit set of semi-explicit DAE routes and rejects unsupported structures with specific diagnostics.
 
+Input note:
+
+- The repo now accepts multiple front doors (`latex`, `matlab_symbolic`, `matlab_equation_text`, `matlab_ode_function`).
+- That broadens input coverage, not DAE-theory coverage.
+- All supported front doors normalize into the same shared IR before the DAE classifier runs.
+
 ## Supported Classes
 
 - `explicit_ode`
@@ -17,7 +23,7 @@ This repo does not claim broad arbitrary DAE support. It supports a narrow, expl
 
 ## Decision Tree
 
-1. Parse and normalize the LaTeX equations.
+1. Parse and normalize the supported front-door input into one shared normalized problem.
 2. Extract:
    - differential states
    - derivative-derived states
@@ -83,6 +89,7 @@ Assumptions:
 
 Used for:
 - descriptor-form linear semi-explicit DAEs where the descriptor artifact is the correct lowering target
+- reducible linear semi-explicit balance cases that still expose a descriptor artifact even when the explicit ODE route is selected for simulation
 
 Artifacts:
 - descriptor matrices

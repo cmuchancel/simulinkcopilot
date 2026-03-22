@@ -1,4 +1,4 @@
-"""Run the deterministic LaTeX-to-simulation pipeline."""
+"""Run the deterministic normalized-input-to-simulation pipeline."""
 
 from __future__ import annotations
 
