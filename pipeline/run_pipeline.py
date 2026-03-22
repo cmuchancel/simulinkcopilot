@@ -18,11 +18,20 @@ from ir.equation_dict import (
     expression_to_sympy,
     matrix_from_dict,
 )
-from latex_frontend.translator import translate_file
 from pipeline.compilation import (
     compile_descriptor_system_from_analysis,
     compile_preserved_dae_system_from_analysis,
     compile_symbolic_system_from_analysis,
+)
+from pipeline.input_frontends import (
+    normalize_from_latex_path,
+    normalize_from_latex_text,
+    normalize_problem,
+)
+from pipeline.normalized_problem import (
+    NormalizedProblem,
+    merge_symbol_config,
+    validate_problem_against_extraction,
 )
 from simulate.compare import DEFAULT_TOLERANCE, compare_simulations
 from simulate.dae_init import ConsistentInitializationResult, consistent_initialize_dae
@@ -215,8 +224,32 @@ def _resolved_simulink_output_dir(path: str | Path | None) -> Path:
     return Path(path).resolve() if path is not None else DEFAULT_SIMULINK_OUTPUT_DIR.resolve()
 
 
-def run_pipeline(
-    path: str | Path,
+def _analyze_problem(
+    problem: NormalizedProblem,
+    *,
+    mode: str,
+    symbol_config: str | Path | dict[str, object] | None,
+):
+    """Analyze a normalized problem while preserving declared front-door metadata."""
+    merged_symbol_config = merge_symbol_config(problem, symbol_config)
+    analysis = analyze_state_extraction(
+        problem.equation_nodes(),
+        mode=mode,
+        symbol_config=merged_symbol_config,
+    )
+    validate_problem_against_extraction(
+        problem,
+        states=analysis.extraction.states,
+        algebraics=analysis.dae_system.algebraic_variables,
+        inputs=analysis.extraction.inputs,
+        parameters=analysis.extraction.parameters,
+        independent_variable=analysis.extraction.independent_variable,
+    )
+    return analysis
+
+
+def _run_normalized_problem(
+    problem: NormalizedProblem,
     tolerance: float = DEFAULT_TOLERANCE,
     *,
     run_sim: bool = True,
@@ -228,12 +261,16 @@ def run_pipeline(
     matlab_engine=None,
     simulink_output_dir: str | Path | None = None,
 ) -> dict[str, object]:
-    """Run the full deterministic pipeline and return structured results."""
-    source_path = Path(path)
-    equations = translate_file(source_path)
-    resolved_mode = classification_mode or ("configured" if symbol_config is not None else "strict")
-    analysis = analyze_state_extraction(
-        equations,
+    """Run the full deterministic pipeline from a shared normalized problem."""
+    source_name = problem.source_name()
+    source_label = problem.source_label()
+    equations = problem.equation_nodes()
+    declared_symbol_config = problem.declared_symbol_config()
+    resolved_mode = classification_mode or (
+        "configured" if symbol_config is not None or declared_symbol_config else "strict"
+    )
+    analysis = _analyze_problem(
+        problem,
         mode=resolved_mode,
         symbol_config=symbol_config,
     )
@@ -244,7 +281,7 @@ def run_pipeline(
         compilation = compile_symbolic_system_from_analysis(
             analysis,
             equations=equations,
-            graph_name=source_path.stem,
+            graph_name=source_name,
             validate_graph=validate_graph,
         )
         extraction = compilation.extraction
@@ -257,7 +294,7 @@ def run_pipeline(
         state_space = compilation.state_space
         validated_graph = compilation.validated_graph or compilation.graph
         equation_dicts = compilation.equation_dicts
-        runtime = apply_runtime_override(default_runtime_context(source_path.stem, first_order), runtime_override)
+        runtime = apply_runtime_override(default_runtime_context(source_name, first_order), runtime_override)
     elif classification["kind"] == "linear_descriptor_dae":
         descriptor_compilation = compile_descriptor_system_from_analysis(
             analysis,
@@ -282,7 +319,7 @@ def run_pipeline(
         preserved_compilation = compile_preserved_dae_system_from_analysis(
             analysis,
             equations=equations,
-            graph_name=source_path.stem,
+            graph_name=source_name,
             validate_graph=validate_graph,
         )
         extraction = preserved_compilation.extraction
@@ -395,7 +432,7 @@ def run_pipeline(
                 execution = execute_simulink_descriptor(
                     eng,
                     descriptor_system=descriptor_system,
-                    name=f"{source_path.stem}_simulink",
+                    name=f"{source_name}_simulink",
                     parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
                     differential_initial_conditions=consistent_initialization.differential_initial_conditions,
                     algebraic_initial_conditions=consistent_initialization.algebraic_initial_conditions,
@@ -410,7 +447,7 @@ def run_pipeline(
                 execution = execute_simulink_preserved_dae_graph(
                     eng,
                     graph=validated_graph,
-                    name=f"{source_path.stem}_simulink",
+                    name=f"{source_name}_simulink",
                     output_names=[*dae_system.differential_states, *dae_system.algebraic_variables],
                     parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
                     differential_initial_conditions=consistent_initialization.differential_initial_conditions,
@@ -425,7 +462,7 @@ def run_pipeline(
                 execution = execute_simulink_graph(
                     eng,
                     graph=validated_graph,
-                    name=f"{source_path.stem}_simulink",
+                    name=f"{source_name}_simulink",
                     state_names=list(first_order["states"]),  # type: ignore[index]
                     parameter_values=runtime["parameter_values"],  # type: ignore[arg-type]
                     initial_conditions=runtime["initial_conditions"],  # type: ignore[arg-type]
@@ -464,7 +501,9 @@ def run_pipeline(
             raise DeterministicCompileError("Simulink validation requires the direct ODE simulation result.")
 
     return {
-        "source_path": str(source_path),
+        "source_path": source_label,
+        "source_type": problem.source_type,
+        "normalized_problem": problem,
         "equations": equations,
         "equation_dicts": equation_dicts if equation_dicts is not None else [equation_to_dict(equation) for equation in equations],
         "extraction": extraction,
@@ -489,6 +528,91 @@ def run_pipeline(
     }
 
 
+def run_pipeline_problem(
+    problem: NormalizedProblem,
+    tolerance: float = DEFAULT_TOLERANCE,
+    *,
+    run_sim: bool = True,
+    validate_graph: bool = True,
+    run_simulink: bool = False,
+    runtime_override: dict[str, object] | None = None,
+    classification_mode: str | None = None,
+    symbol_config: str | Path | dict[str, object] | None = None,
+    matlab_engine=None,
+    simulink_output_dir: str | Path | None = None,
+) -> dict[str, object]:
+    """Run the full deterministic pipeline from a normalized-problem object."""
+    return _run_normalized_problem(
+        problem,
+        tolerance=tolerance,
+        run_sim=run_sim,
+        validate_graph=validate_graph,
+        run_simulink=run_simulink,
+        runtime_override=runtime_override,
+        classification_mode=classification_mode,
+        symbol_config=symbol_config,
+        matlab_engine=matlab_engine,
+        simulink_output_dir=simulink_output_dir,
+    )
+
+
+def run_pipeline_payload(
+    input_payload: dict[str, object] | NormalizedProblem,
+    tolerance: float = DEFAULT_TOLERANCE,
+    *,
+    run_sim: bool = True,
+    validate_graph: bool = True,
+    run_simulink: bool = False,
+    runtime_override: dict[str, object] | None = None,
+    classification_mode: str | None = None,
+    symbol_config: str | Path | dict[str, object] | None = None,
+    matlab_engine=None,
+    simulink_output_dir: str | Path | None = None,
+) -> dict[str, object]:
+    """Run the full deterministic pipeline from any supported normalized payload."""
+    problem = normalize_problem(input_payload)
+    return _run_normalized_problem(
+        problem,
+        tolerance=tolerance,
+        run_sim=run_sim,
+        validate_graph=validate_graph,
+        run_simulink=run_simulink,
+        runtime_override=runtime_override,
+        classification_mode=classification_mode,
+        symbol_config=symbol_config,
+        matlab_engine=matlab_engine,
+        simulink_output_dir=simulink_output_dir,
+    )
+
+
+def run_pipeline(
+    path: str | Path,
+    tolerance: float = DEFAULT_TOLERANCE,
+    *,
+    run_sim: bool = True,
+    validate_graph: bool = True,
+    run_simulink: bool = False,
+    runtime_override: dict[str, object] | None = None,
+    classification_mode: str | None = None,
+    symbol_config: str | Path | dict[str, object] | None = None,
+    matlab_engine=None,
+    simulink_output_dir: str | Path | None = None,
+) -> dict[str, object]:
+    """Run the full deterministic pipeline from a LaTeX source file."""
+    return _run_normalized_problem(
+        normalize_from_latex_path(path),
+        tolerance=tolerance,
+        run_sim=run_sim,
+        validate_graph=validate_graph,
+        run_simulink=run_simulink,
+        runtime_override=runtime_override,
+        classification_mode=classification_mode,
+        symbol_config=symbol_config,
+        matlab_engine=matlab_engine,
+        simulink_output_dir=simulink_output_dir,
+    )
+
+
 def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
     """Return a JSON-serializable summary for reporting and CLI output."""
     state_space = results["state_space"]
@@ -497,8 +621,11 @@ def summarize_pipeline_results(results: dict[str, object]) -> dict[str, object]:
     simulink_result = results["simulink_result"]
     simulink_validation = results["simulink_validation"]
     explicit_form = results["explicit_form"]
+    normalized_problem = results.get("normalized_problem")
     return {
         "source_path": results["source_path"],
+        "source_type": results.get("source_type", "latex"),
+        "normalized_problem": None if normalized_problem is None else normalized_problem.to_dict(),  # type: ignore[union-attr]
         "equations": [equation_to_string(equation) for equation in results["equations"]],  # type: ignore[index]
         "equation_dicts": results["equation_dicts"],
         "extraction": results["extraction"].to_dict(),  # type: ignore[union-attr]
@@ -657,14 +784,23 @@ def _print_results(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the deterministic LaTeX ODE pipeline.")
+    parser = argparse.ArgumentParser(description="Run the deterministic equation-to-Simulink pipeline.")
     source_group = parser.add_mutually_exclusive_group(required=True)
-    source_group.add_argument("--input", help="Path to a LaTeX equation file.")
-    source_group.add_argument("--equations", help="Raw LaTeX equations passed directly on the command line.")
+    source_group.add_argument("--input", help="Path to an input file. For non-LaTeX front doors this is interpreted as equation text.")
+    source_group.add_argument("--equations", help="Raw equation text passed directly on the command line.")
+    source_group.add_argument(
+        "--input-payload-json",
+        help="Path to a structured JSON payload for matlab_symbolic, matlab_equation_text, or matlab_ode_function inputs.",
+    )
     parser.add_argument(
         "--equations-name",
         default="inline_equations",
         help="Synthetic stem to use when --equations is provided. Controls report/model naming.",
+    )
+    parser.add_argument(
+        "--source-type",
+        choices=("latex", "matlab_symbolic", "matlab_equation_text", "matlab_ode_function"),
+        help="Select the input front door. Defaults to latex unless an input payload JSON declares source_type.",
     )
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE, help="Validation tolerance.")
     parser.add_argument(
@@ -772,23 +908,9 @@ def main() -> int:
     parser.set_defaults(simulink=True)
     args = parser.parse_args()
 
-    input_stem = Path(args.input).stem if args.input else args.equations_name
-    verbose_requested = args.verbose or args.verbose_output_dir is not None
-    verbose_output_dir = (
-        Path(args.verbose_output_dir)
-        if args.verbose_output_dir
-        else REPORTS_ROOT / "verbose" / input_stem
-    )
-
     engine = None
     temp_equation_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
-        input_path = args.input
-        if args.equations is not None:
-            temp_equation_dir = tempfile.TemporaryDirectory(prefix="simulinkcopilot_cli_")
-            input_path = str(Path(temp_equation_dir.name) / f"{args.equations_name}.tex")
-            Path(input_path).write_text(args.equations, encoding="utf-8")
-
         runtime_override = None
         if args.runtime_json:
             runtime_override = json.loads(Path(args.runtime_json).read_text(encoding="utf-8"))
@@ -819,23 +941,106 @@ def main() -> int:
         if symbol_config and classification_mode is None:
             classification_mode = "configured"
 
+        explicit_source_type = args.source_type
+        if args.input_payload_json:
+            raw_payload = json.loads(Path(args.input_payload_json).read_text(encoding="utf-8"))
+            if not isinstance(raw_payload, dict):
+                parser.error("--input-payload-json must decode to a JSON object.")
+            payload_source_type = raw_payload.get("source_type")
+            if explicit_source_type is None and payload_source_type is None:
+                parser.error("--input-payload-json requires source_type in the payload or via --source-type.")
+            if (
+                explicit_source_type is not None
+                and payload_source_type is not None
+                and payload_source_type != explicit_source_type
+            ):
+                parser.error(
+                    f"--source-type {explicit_source_type!r} conflicts with payload source_type {payload_source_type!r}."
+                )
+            if payload_source_type is None:
+                raw_payload["source_type"] = explicit_source_type
+            normalized_problem = normalize_problem(raw_payload)
+        else:
+            effective_source_type = explicit_source_type or "latex"
+            if effective_source_type == "matlab_ode_function":
+                parser.error(
+                    "matlab_ode_function input requires --input-payload-json with a structured exported specification."
+                )
+            if args.input is not None:
+                if effective_source_type == "latex":
+                    normalized_problem = normalize_from_latex_path(args.input)
+                else:
+                    normalized_problem = normalize_problem(
+                        {
+                            "source_type": effective_source_type,
+                            "equations": Path(args.input).read_text(encoding="utf-8"),
+                            "name": Path(args.input).stem,
+                        }
+                    )
+            else:
+                if args.equations is None:
+                    parser.error("Either --input, --equations, or --input-payload-json is required.")
+                if effective_source_type == "latex":
+                    normalized_problem = normalize_from_latex_text(
+                        args.equations,
+                        name=args.equations_name,
+                    )
+                else:
+                    normalized_problem = normalize_problem(
+                        {
+                            "source_type": effective_source_type,
+                            "equations": args.equations,
+                            "name": args.equations_name,
+                        }
+                    )
+
+        if args.export_gui_run and normalized_problem.source_type != "latex":
+            parser.error("--export-gui-run currently supports only latex inputs.")
+
+        input_stem = normalized_problem.source_name()
+        verbose_requested = args.verbose or args.verbose_output_dir is not None
+        verbose_output_dir = (
+            Path(args.verbose_output_dir)
+            if args.verbose_output_dir
+            else REPORTS_ROOT / "verbose" / input_stem
+        )
+
         if args.simulink and verbose_requested:
             from simulink.engine import start_engine
 
             engine = start_engine(retries=1, retry_delay_seconds=1.0)
 
-        results = run_pipeline(
-            input_path,
-            tolerance=args.tolerance,
-            run_sim=args.run_sim,
-            validate_graph=True,
-            run_simulink=args.simulink,
-            runtime_override=runtime_override,
-            classification_mode=classification_mode,
-            symbol_config=symbol_config or None,
-            matlab_engine=engine,
-            simulink_output_dir=_resolved_simulink_output_dir(args.simulink_output_dir),
-        )
+        if normalized_problem.source_type == "latex" and args.input_payload_json is None:
+            latex_input_path = args.input
+            if latex_input_path is None and args.equations is not None:
+                temp_equation_dir = tempfile.TemporaryDirectory(prefix="simulinkcopilot_cli_")
+                latex_input_path = str(Path(temp_equation_dir.name) / f"{args.equations_name}.tex")
+                Path(latex_input_path).write_text(args.equations, encoding="utf-8")
+            results = run_pipeline(
+                latex_input_path,
+                tolerance=args.tolerance,
+                run_sim=args.run_sim,
+                validate_graph=True,
+                run_simulink=args.simulink,
+                runtime_override=runtime_override,
+                classification_mode=classification_mode,
+                symbol_config=symbol_config or None,
+                matlab_engine=engine,
+                simulink_output_dir=_resolved_simulink_output_dir(args.simulink_output_dir),
+            )
+        else:
+            results = run_pipeline_problem(
+                normalized_problem,
+                tolerance=args.tolerance,
+                run_sim=args.run_sim,
+                validate_graph=True,
+                run_simulink=args.simulink,
+                runtime_override=runtime_override,
+                classification_mode=classification_mode,
+                symbol_config=symbol_config or None,
+                matlab_engine=engine,
+                simulink_output_dir=_resolved_simulink_output_dir(args.simulink_output_dir),
+            )
         _validate_expected_states(results["extraction"].states, args.state)
         _print_results(
             results,
@@ -866,7 +1071,10 @@ def main() -> int:
                     print(f"  {key}: {value}")
 
         if args.export_gui_run:
-            raw_latex = Path(input_path).read_text(encoding="utf-8")
+            if args.input is not None:
+                raw_latex = Path(args.input).read_text(encoding="utf-8")
+            else:
+                raw_latex = args.equations
             gui_export = export_results_to_gui_run(
                 results,
                 raw_latex=raw_latex,

@@ -12,6 +12,11 @@ from canonicalize.dae_system import SemiExplicitDaeSystem, build_semi_explicit_d
 from canonicalize.dae_reduction import DaeReductionResult, reduce_semi_explicit_dae
 from ir.expression_nodes import EquationNode
 from latex_frontend.symbols import DeterministicCompileError
+from pipeline.normalized_problem import (
+    NormalizedProblem,
+    merge_symbol_config,
+    validate_problem_against_extraction,
+)
 from states.classify_symbols import classify_symbols, load_symbol_config
 from states.rules import ExtractionResult, collect_derivative_orders, derive_state_list
 
@@ -106,6 +111,30 @@ def analyze_state_extraction(
         dae_system=dae_system,
         descriptor_system=descriptor_system,
     )
+
+
+def analyze_normalized_problem(
+    problem: NormalizedProblem,
+    mode: str = "strict",
+    symbol_config: str | Path | Mapping[str, object] | None = None,
+) -> StateExtractionAnalysis:
+    """Analyze a normalized problem while preserving declared front-door metadata."""
+    merged_symbol_config = merge_symbol_config(problem, symbol_config)
+    resolved_mode = "configured" if merged_symbol_config is not None and mode == "strict" else mode
+    analysis = analyze_state_extraction(
+        problem.equation_nodes(),
+        mode=resolved_mode,
+        symbol_config=merged_symbol_config,
+    )
+    validate_problem_against_extraction(
+        problem,
+        states=analysis.extraction.states,
+        algebraics=analysis.dae_system.algebraic_variables,
+        inputs=analysis.extraction.inputs,
+        parameters=analysis.extraction.parameters,
+        independent_variable=analysis.extraction.independent_variable,
+    )
+    return analysis
 
 
 def extract_states(

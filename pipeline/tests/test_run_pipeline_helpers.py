@@ -395,3 +395,41 @@ def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monke
     assert result["simulink_result"]["model_name"] == "dae_model"
     assert result["simulink_validation"] is None
     assert result["consistent_initialization"].algebraic_initial_conditions == {"y": 0.0}
+
+
+def test_main_accepts_matlab_symbolic_payload_json(tmp_path: Path, monkeypatch) -> None:
+    payload_path = tmp_path / "payload.json"
+    report_path = tmp_path / "report.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "source_type": "matlab_symbolic",
+                "equations": ["diff(x,t) == -x + u"],
+                "states": ["x"],
+                "inputs": ["u"],
+                "time_variable": "t",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(payload_path),
+            "--no-simulink",
+            "--skip-sim",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+
+    exit_code = pipeline_module.main()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert report["source_type"] == "matlab_symbolic"
+    assert report["normalized_problem"]["source_type"] == "matlab_symbolic"
+    assert report["dae_classification"]["kind"] == "explicit_ode"
