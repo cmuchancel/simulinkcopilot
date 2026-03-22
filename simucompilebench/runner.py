@@ -92,8 +92,7 @@ def _inject_graph_fault(graph: dict[str, Any], fault_name: str | None) -> dict[s
             return broken
         doomed_id = str(nodes[-1]["id"])
         broken["nodes"] = [node for node in nodes if str(node["id"]) != doomed_id]
-        if edges:
-            edges[0]["source"] = doomed_id
+        edges[0]["source"] = doomed_id
         broken["edges"] = edges
         return broken
     raise RuntimeError(f"Unsupported graph fault injection '{fault_name}'.")
@@ -141,23 +140,90 @@ def _robustness_score(
                 t_eval=t_eval,
             )
             _validate_numeric_result("robustness ODE simulation", ode_result)
-            if state_space is not None:
-                state_space_result = simulate_state_space_system(
-                    state_space,
-                    parameter_values=spec.parameter_values,
-                    initial_conditions=initial_conditions,
-                    input_function=input_function,
-                    t_span=spec.t_span,
-                    t_eval=t_eval,
-                )
-                _validate_numeric_result("robustness state-space simulation", state_space_result)
-                comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
-                if not comparison["passes"]:
-                    continue
+            if state_space is None:
+                pass_count += 1
+                continue
+            state_space_result = simulate_state_space_system(
+                state_space,
+                parameter_values=spec.parameter_values,
+                initial_conditions=initial_conditions,
+                input_function=input_function,
+                t_span=spec.t_span,
+                t_eval=t_eval,
+            )
+            _validate_numeric_result("robustness state-space simulation", state_space_result)
+            comparison = compare_simulations(ode_result, state_space_result, tolerance=tolerance)
+            if not comparison["passes"]:
+                continue
             pass_count += 1
         except Exception:
             continue
     return float(pass_count / len(scales))
+
+
+def _set_state_space_stage(stages: dict[str, dict[str, object]], linearity: dict[str, object] | None) -> bool:
+    if linearity is not None and bool(linearity.get("is_linear")):
+        stages["state_space"] = _stage("passed")
+        return True
+    stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+    return False
+
+
+def _infer_unexpected_failure_stage(
+    stages: dict[str, dict[str, object]],
+    *,
+    run_simulink: bool,
+    spec: BenchmarkSystemSpec,
+) -> str:
+    for stage_name in (
+        "parse",
+        "state_extraction",
+        "solve",
+        "first_order",
+        "graph_lowering",
+        "graph_validation",
+        "ode_simulation",
+    ):
+        if stages[stage_name]["status"] != "passed":
+            return stage_name
+
+    if stages["state_space"]["status"] == "passed":
+        if stages["state_space_simulation"]["status"] != "passed":
+            return "state_space_simulation"
+        if stages["state_space_compare"]["status"] != "passed":
+            return "state_space_compare"
+
+    if run_simulink and spec.simulink_expected and not spec.expects_failure:
+        if stages["simulink_build"]["status"] != "passed":
+            return "simulink_build"
+        if stages["simulink_simulation"]["status"] != "passed":
+            return "simulink_simulation"
+        if stages["simulink_compare"]["status"] != "passed":
+            return "simulink_compare"
+
+    return "other"
+
+
+def _mark_unexpected_failure(
+    stages: dict[str, dict[str, object]],
+    detail: str,
+    *,
+    run_simulink: bool,
+    spec: BenchmarkSystemSpec,
+) -> str:
+    failure_stage = _infer_unexpected_failure_stage(stages, run_simulink=run_simulink, spec=spec)
+    if failure_stage == "simulink_build":
+        stages["simulink_build"] = _stage("failed", detail)
+        stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
+        stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
+        return failure_stage
+    if failure_stage == "simulink_simulation":
+        stages["simulink_simulation"] = _stage("failed", detail)
+        stages["simulink_compare"] = _stage("skipped", "Simulink simulation failed")
+        return failure_stage
+    if failure_stage in stages:
+        stages[failure_stage] = _stage("failed", detail)
+    return failure_stage
 
 
 def _result_row(
@@ -314,12 +380,8 @@ def run_extended_benchmark(
                     failure_reason = failure_reason or str(exc)
                     for stage_name in exc.completed_stages:
                         stages[stage_name] = _stage("passed")
-                    if "state_space" in exc.completed_stages and exc.linearity is not None:
-                        if exc.linearity["is_linear"]:
-                            stages["state_space"] = _stage("passed")
-                            state_space_available = True
-                        else:
-                            stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+                    if "state_space" in exc.completed_stages:
+                        state_space_available = _set_state_space_stage(stages, exc.linearity)
                     stages[exc.stage] = _stage("failed", str(exc))
                     raise
 
@@ -332,11 +394,7 @@ def run_extended_benchmark(
                 stages["state_extraction"] = _stage("passed")
                 stages["solve"] = _stage("passed")
                 stages["first_order"] = _stage("passed")
-                if compilation.linearity["is_linear"]:
-                    state_space_available = True
-                    stages["state_space"] = _stage("passed")
-                else:
-                    stages["state_space"] = _stage("skipped", "nonlinear explicit system")
+                state_space_available = _set_state_space_stage(stages, compilation.linearity)
                 stages["graph_lowering"] = _stage("passed")
 
                 graph = _inject_graph_fault(graph, spec.graph_fault)
@@ -465,60 +523,12 @@ def run_extended_benchmark(
                     robustness_score = _robustness_score(spec, first_order, state_space=state_space, tolerance=tolerance)
             except Exception as exc:
                 failure_reason = failure_reason or str(exc)
-                if stages["parse"]["status"] != "passed":
-                    failure_stage = failure_stage or "parse"
-                    stages["parse"] = _stage("failed", str(exc))
-                elif stages["state_extraction"]["status"] != "passed":
-                    failure_stage = failure_stage or "state_extraction"
-                    stages["state_extraction"] = _stage("failed", str(exc))
-                elif stages["solve"]["status"] != "passed":
-                    failure_stage = failure_stage or "solve"
-                    stages["solve"] = _stage("failed", str(exc))
-                elif stages["first_order"]["status"] != "passed":
-                    failure_stage = failure_stage or "first_order"
-                    stages["first_order"] = _stage("failed", str(exc))
-                elif stages["graph_lowering"]["status"] != "passed":
-                    failure_stage = failure_stage or "graph_lowering"
-                    stages["graph_lowering"] = _stage("failed", str(exc))
-                elif stages["graph_validation"]["status"] != "passed":
-                    failure_stage = failure_stage or "graph_validation"
-                    stages["graph_validation"] = _stage("failed", str(exc))
-                elif stages["ode_simulation"]["status"] != "passed":
-                    failure_stage = failure_stage or "ode_simulation"
-                    stages["ode_simulation"] = _stage("failed", str(exc))
-                elif stages["state_space"]["status"] == "passed" and stages["state_space_simulation"]["status"] == "skipped":
-                    failure_stage = failure_stage or "state_space_simulation"
-                    stages["state_space_simulation"] = _stage("failed", str(exc))
-                elif stages["state_space_simulation"]["status"] not in {"passed", "skipped"}:
-                    failure_stage = failure_stage or "state_space_simulation"
-                    stages["state_space_simulation"] = _stage("failed", str(exc))
-                elif stages["state_space_simulation"]["status"] == "passed" and stages["state_space_compare"]["status"] == "skipped":
-                    failure_stage = failure_stage or "state_space_compare"
-                    stages["state_space_compare"] = _stage("failed", str(exc))
-                elif (
-                    run_simulink
-                    and spec.simulink_expected
-                    and not spec.expects_failure
-                    and stages["simulink_build"]["status"] == "skipped"
-                ):
-                    failure_stage = failure_stage or "simulink_build"
-                    stages["simulink_build"] = _stage("failed", str(exc))
-                    stages["simulink_simulation"] = _stage("skipped", "Simulink build failed")
-                    stages["simulink_compare"] = _stage("skipped", "Simulink build failed")
-                elif stages["simulink_build"]["status"] not in {"passed", "skipped"}:
-                    failure_stage = failure_stage or "simulink_build"
-                    stages["simulink_build"] = _stage("failed", str(exc))
-                elif stages["simulink_build"]["status"] == "passed" and stages["simulink_simulation"]["status"] == "skipped":
-                    failure_stage = failure_stage or "simulink_simulation"
-                    stages["simulink_simulation"] = _stage("failed", str(exc))
-                elif stages["simulink_simulation"]["status"] not in {"passed", "skipped"}:
-                    failure_stage = failure_stage or "simulink_simulation"
-                    stages["simulink_simulation"] = _stage("failed", str(exc))
-                elif stages["simulink_simulation"]["status"] == "passed" and stages["simulink_compare"]["status"] == "skipped":
-                    failure_stage = failure_stage or "simulink_compare"
-                    stages["simulink_compare"] = _stage("failed", str(exc))
-                else:
-                    failure_stage = failure_stage or "other"
+                failure_stage = failure_stage or _mark_unexpected_failure(
+                    stages,
+                    str(exc),
+                    run_simulink=run_simulink,
+                    spec=spec,
+                )
 
             result = _result_row(
                 spec,

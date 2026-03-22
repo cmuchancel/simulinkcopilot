@@ -166,3 +166,17 @@ def test_build_simulink_model_builds_hierarchy_and_assigns_workspace(monkeypatch
 
     handles = [call for call in engine.calls if call[0] == "get_param" and call[2] == "Handle"]
     assert len(handles) == 4
+
+
+def test_build_simulink_model_skips_optional_open(monkeypatch, tmp_path) -> None:
+    builder = _load_backend_builder(monkeypatch)
+    engine = FakeEngine()
+
+    builder.build_simulink_model(
+        engine,
+        _hierarchical_model_dict(SUBSYSTEM_BLOCK),
+        output_dir=tmp_path,
+        open_after_build=False,
+    )
+
+    assert not any(call[0] == "open_system" for call in engine.calls)

@@ -13,6 +13,7 @@ from latex_frontend.matrix_expansion import (
     _consume_scalar_segment,
     _consume_transpose_suffix,
     _evaluate_expr,
+    _evaluate_product_term,
     _evaluate_lhs,
     _expand_vector_derivative,
     _has_matrix_intent,
@@ -21,6 +22,7 @@ from latex_frontend.matrix_expansion import (
     _matrix_equations,
     _matrix_literal_end,
     _multiply_values,
+    _parse_factors,
     _parse_matrix_literal,
     _parse_plain_symbol,
     _scale_matrix,
@@ -66,6 +68,9 @@ def test_split_helpers_handle_nested_structures_and_missing_top_level_equality()
     lhs, rhs = _split_equation("A = [1, sin(x+y)]")
     assert lhs == "A"
     assert rhs == "[1, sin(x+y)]"
+    lhs, rhs = _split_equation(r"\begin{bmatrix}1 & 2\end{bmatrix} = [1, 2]")
+    assert lhs == r"\begin{bmatrix}1 & 2\end{bmatrix}"
+    assert rhs == "[1, 2]"
 
     with pytest.raises(UnsupportedSyntaxError, match="missing top-level"):
         _split_equation("A + B")
@@ -82,9 +87,13 @@ def test_evaluate_lhs_and_expr_handle_literals_derivatives_and_context() -> None
 
     evaluated = _evaluate_expr("x + [1; 2]", context)
     assert evaluated.rows == (("(x_1) + (1)",), ("(x_2) + (2)",))
+    assert _evaluate_expr(r"\deriv{2}{x}", context).rows == ((r"\ddot{x_1}",), (r"\ddot{x_2}",))
+    with pytest.raises(UnsupportedSyntaxError, match="Unsupported empty matrix expression"):
+        _evaluate_expr("   ", {})
 
     assert _has_matrix_intent("x", context) is True
     assert _has_matrix_intent("[1; 2]", context) is True
+    assert _has_matrix_intent(r"\dot{x}", context) is True
     assert _has_matrix_intent("plain_scalar", context) is False
 
 
@@ -94,10 +103,15 @@ def test_derivative_matching_and_symbol_matching_helpers() -> None:
     assert _expand_vector_derivative("\\dot{x}", context).rows == (("\\dot{x_1}",), ("\\dot{x_2}",))
     assert _expand_vector_derivative("\\deriv{3}{x}", context).rows == (("\\deriv{3}{x_1}",), ("\\deriv{3}{x_2}",))
     assert _expand_vector_derivative("\\dot{y}", context) is None
+    assert _expand_vector_derivative("\\deriv{3}{y}", context) is None
 
     match = _match_vector_derivative("\\dot{x} + 1", 0, context)
     assert match is not None
     assert match[0] == len("\\dot{x}")
+    general_match = _match_vector_derivative(r"\deriv{3}{x} + 1", 0, context)
+    assert general_match is not None
+    assert general_match[0] == len(r"\deriv{3}{x}")
+    assert _match_vector_derivative("\\deriv{3}{y}", 0, context) is None
 
     symbol_match = _match_matrix_symbol("xx + x", 0, context)
     assert symbol_match is not None
@@ -111,9 +125,13 @@ def test_derivative_matching_and_symbol_matching_helpers() -> None:
 def test_parse_matrix_literal_covers_environments_transpose_and_validation_errors() -> None:
     env_matrix = _parse_matrix_literal("\\begin{bmatrix}1 & 2 \\\\ 3 & 4\\end{bmatrix}")
     assert env_matrix.rows == (("1", "2"), ("3", "4"))
+    assert _parse_matrix_literal("\\begin{equation}x\\end{equation}") is None
 
     transposed = _parse_matrix_literal("[a, b]^T")
     assert transposed.rows == (("a",), ("b",))
+    assert _parse_matrix_literal("[a, b]^{T}").rows == (("a",), ("b",))
+    assert _parse_matrix_literal(r"[a, b]^{\top}").rows == (("a",), ("b",))
+    assert _parse_matrix_literal(r"[a, b]^\top").rows == (("a",), ("b",))
 
     with pytest.raises(UnsupportedSyntaxError, match="Empty matrix/vector literal"):
         _parse_matrix_literal("[]")
@@ -127,6 +145,9 @@ def test_parse_matrix_literal_covers_environments_transpose_and_validation_error
     with pytest.raises(UnsupportedSyntaxError, match="may not be empty"):
         _validate_matrix_rows((("1", ""),))
 
+    with pytest.raises(UnsupportedSyntaxError, match="Empty matrix/vector literal"):
+        _validate_matrix_rows(tuple())
+
 
 def test_matrix_literal_consumers_cover_balancing_and_transpose_suffixes() -> None:
     assert _consume_matrix_environment("\\begin{bmatrix}1\\end{bmatrix}", 0) == len("\\begin{bmatrix}1\\end{bmatrix}")
@@ -139,6 +160,7 @@ def test_matrix_literal_consumers_cover_balancing_and_transpose_suffixes() -> No
     assert _consume_transpose_suffix("[a]^T", len("[a]")) == len("[a]^T")
     assert _consume_transpose_suffix("[a]", len("[a]")) == len("[a]")
     assert _matrix_literal_end("[a]^T + 1", 0) == len("[a]^T")
+    assert _matrix_literal_end("\\begin{bmatrix}1\\end{bmatrix} + 1", 0) == len("\\begin{bmatrix}1\\end{bmatrix}")
     with pytest.raises(UnsupportedSyntaxError, match="Unterminated square-bracket"):
         _matrix_literal_end("[a", 0)
 
@@ -146,10 +168,37 @@ def test_matrix_literal_consumers_cover_balancing_and_transpose_suffixes() -> No
 def test_additive_and_scalar_segment_helpers_cover_signs_and_boundaries() -> None:
     terms = _split_additive_terms("-a + b - [1; 2]")
     assert terms == [(-1, "a"), (1, "b"), (-1, "[1; 2]")]
+    assert _split_additive_terms("a+-b") == [(1, "a"), (-1, "b")]
+    assert _split_additive_terms("a+ +b") == [(1, "a"), (1, "b")]
+    assert _split_additive_terms("{a+b}-c") == [(1, "{a+b}"), (-1, "c")]
+    assert _split_additive_terms(r"\begin{bmatrix}1 & 2\end{bmatrix} - c") == [(1, r"\begin{bmatrix}1 & 2\end{bmatrix}"), (-1, "c")]
+    assert _split_top_level(r"\begin{bmatrix}1 & 2\end{bmatrix},d", row_delimiter=",") == [
+        r"\begin{bmatrix}1 & 2\end{bmatrix}",
+        "d",
+    ]
+    assert _split_top_level("{a,b},[c,d],(e,f)", row_delimiter=",") == ["{a,b}", "[c,d]", "(e,f)"]
 
     context = {"A": MatrixValue((("a",),))}
     term = "2*(x+y)A"
     assert _consume_scalar_segment(term, 0, context) == len("2")
+    assert _consume_scalar_segment("2[1;2]", 0, context) == len("2")
+    assert _consume_scalar_segment(r"2\dot{x}", 0, {"x": MatrixValue((("x_1",),))}) == len("2")
+    assert _consume_scalar_segment("2A", 0, context) == len("2")
+    assert _consume_scalar_segment("f{a}A", 0, context) == len("f{a}")
+    assert _consume_scalar_segment(r"2\begin{bmatrix}1\\2\end{bmatrix}", 0, context) == len("2")
+    assert _consume_scalar_segment(r"(2\begin{bmatrix}1\\2\end{bmatrix})A", 0, context) == len(r"(2\begin{bmatrix}1\\2\end{bmatrix})")
+    assert _consume_scalar_segment("f([1,2])A", 0, context) == len("f([1,2])")
+
+    assert _parse_factors("A*[1;2]", {"A": MatrixValue((("a", "b"),))})[0].rows == (("a", "b"),)
+    assert _parse_factors(r"  \dot{x}", {"x": MatrixValue((("x_1",),))})[0].rows == ((r"\dot{x_1}",),)
+    with pytest.raises(UnsupportedSyntaxError, match="Unsupported matrix product term"):
+        _evaluate_product_term("   ", {})
+
+
+def test_parse_factors_rejects_empty_scalar_segments_when_consumer_makes_no_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("latex_frontend.matrix_expansion._consume_scalar_segment", lambda term, start, context: start)
+    with pytest.raises(UnsupportedSyntaxError, match="Unable to parse matrix product term"):
+        _parse_factors("?", {})
 
 
 def test_matrix_arithmetic_helpers_cover_success_and_failure_paths() -> None:
@@ -173,7 +222,9 @@ def test_matrix_arithmetic_helpers_cover_success_and_failure_paths() -> None:
     assert _combine_add("0", "x") == "x"
     assert _combine_add("x", "0") == "x"
     assert _combine_mul("1", "x") == "x"
+    assert _combine_mul("x", "1") == "x"
     assert _combine_mul("-1", "x") == "-(x)"
+    assert _combine_mul("x", "-1") == "-(x)"
     assert _combine_mul("0", "x") == "0"
 
     equations = _matrix_equations(MatrixValue((("x",), ("y",))), MatrixValue((("1",), ("2",))))

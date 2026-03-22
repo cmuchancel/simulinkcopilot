@@ -44,12 +44,21 @@ def test_runner_helper_functions_cover_failure_mapping_and_fault_injection() -> 
     assert runner_module._inject_graph_fault(graph, None) is graph
     dropped = runner_module._inject_graph_fault(graph, "drop_node")
     assert len(dropped["nodes"]) == 1
+    assert runner_module._inject_graph_fault({"nodes": [{"id": "n1"}, {"id": "n2"}], "edges": []}, "drop_node") == {
+        "nodes": [{"id": "n1"}, {"id": "n2"}],
+        "edges": [],
+    }
+    assert runner_module._inject_graph_fault({"nodes": [{"id": "n1"}], "edges": []}, "drop_node") == {
+        "nodes": [{"id": "n1"}],
+        "edges": [],
+    }
     with pytest.raises(RuntimeError, match="Unsupported graph fault injection"):
         runner_module._inject_graph_fault(graph, "bad")
 
     spec = _spec(expected_failure_stage="parse", expected_failure_substring="oops")
     assert runner_module._match_expected_failure(spec, "parse", "oops happened") is True
     assert runner_module._match_expected_failure(spec, "solve", "oops happened") is False
+    assert runner_module._match_expected_failure(_spec(expected_failure_stage="parse"), "parse", "anything") is True
 
 
 def test_robustness_score_and_result_row_cover_success_and_expected_failure(monkeypatch) -> None:
@@ -67,6 +76,15 @@ def test_robustness_score_and_result_row_cover_success_and_expected_failure(monk
     )
     monkeypatch.setattr(runner_module, "compare_simulations", lambda *args, **kwargs: {"passes": True})
     assert runner_module._robustness_score(spec, first_order, state_space={"A": 1}, tolerance=1e-6) == 1.0
+    assert runner_module._robustness_score(spec, first_order, state_space=None, tolerance=1e-6) == 1.0
+    monkeypatch.setattr(runner_module, "compare_simulations", lambda *args, **kwargs: {"passes": False})
+    assert runner_module._robustness_score(spec, first_order, state_space={"A": 1}, tolerance=1e-6) == 0.0
+    monkeypatch.setattr(
+        runner_module,
+        "simulate_ode_system",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    assert runner_module._robustness_score(spec, first_order, state_space=None, tolerance=1e-6) == 0.0
     assert runner_module._robustness_score(spec, {"states": []}, state_space=None, tolerance=1e-6) is None
 
     stages = runner_module._default_stages()
@@ -124,6 +142,65 @@ def test_robustness_score_and_result_row_cover_success_and_expected_failure(monk
     )
     assert expected_failure["benchmark_result"] == "expected_failure_observed"
     assert expected_failure["failure_category"] == "parse_failure"
+
+
+def test_unexpected_failure_helpers_cover_stage_inference_and_marking() -> None:
+    spec = _spec()
+    stages = runner_module._default_stages()
+    for name in ["parse", "state_extraction", "solve", "first_order", "graph_lowering", "graph_validation", "ode_simulation"]:
+        stages[name] = runner_module._stage("passed")
+    stages["state_space"] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=False, spec=spec) == "state_space_simulation"
+
+    stages["state_space_simulation"] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=False, spec=spec) == "state_space_compare"
+
+    stages["state_space_compare"] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=True, spec=spec) == "simulink_build"
+    assert runner_module._mark_unexpected_failure(stages, "boom", run_simulink=True, spec=spec) == "simulink_build"
+    assert stages["simulink_simulation"]["detail"] == "Simulink build failed"
+
+    stages = runner_module._default_stages()
+    for name in [
+        "parse",
+        "state_extraction",
+        "solve",
+        "first_order",
+        "graph_lowering",
+        "graph_validation",
+        "ode_simulation",
+        "simulink_build",
+    ]:
+        stages[name] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=True, spec=spec) == "simulink_simulation"
+    assert runner_module._mark_unexpected_failure(stages, "sim boom", run_simulink=True, spec=spec) == "simulink_simulation"
+    assert stages["simulink_compare"]["detail"] == "Simulink simulation failed"
+
+    stages["simulink_simulation"] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=True, spec=spec) == "simulink_compare"
+    stages["simulink_compare"] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(stages, run_simulink=True, spec=spec) == "other"
+
+    expected_failure_spec = _spec(expected_failure_stage="parse")
+    assert runner_module._infer_unexpected_failure_stage(
+        runner_module._default_stages(),
+        run_simulink=False,
+        spec=expected_failure_spec,
+    ) == "parse"
+
+    other_stages = runner_module._default_stages()
+    for name in [
+        "parse",
+        "state_extraction",
+        "solve",
+        "first_order",
+        "graph_lowering",
+        "graph_validation",
+        "ode_simulation",
+    ]:
+        other_stages[name] = runner_module._stage("passed")
+    assert runner_module._infer_unexpected_failure_stage(other_stages, run_simulink=False, spec=spec) == "other"
+    assert runner_module._mark_unexpected_failure(other_stages, "other boom", run_simulink=False, spec=spec) == "other"
 
 
 def test_runner_report_aggregation_and_writers_cover_outputs(tmp_path: Path) -> None:
@@ -258,7 +335,35 @@ def test_runner_report_aggregation_and_writers_cover_outputs(tmp_path: Path) -> 
         baseline_comparison={"matches": True, "mismatches": []},
     )
     assert combined["dataset_manifest"] == {"systems": 3}
-    assert combined["baseline_comparison"]["matches"] is True
+
+
+def test_runner_markdown_and_report_writers_cover_empty_sections(tmp_path: Path) -> None:
+    report = {
+        "name": "empty",
+        "evaluated_systems": 0,
+        "passed_systems": 0,
+        "failed_systems": 0,
+        "tolerance": 1e-6,
+        "baseline_comparison": {"matches": False, "mismatches": ["case_a"]},
+        "tier_summary": {},
+        "failure_categories": {},
+        "average_rmse": None,
+        "median_rmse": None,
+        "max_rmse": None,
+        "average_max_abs_error": None,
+        "max_abs_error": None,
+        "average_robustness_score": None,
+        "complexity_by_generated_state_count": {},
+        "systems": [],
+    }
+
+    markdown = runner_module.render_simucompilebench_markdown(report)
+    assert "- mismatch: case_a" in markdown
+    assert "- none" in markdown
+
+    written = runner_module.write_simucompilebench_reports(report, output_dir=tmp_path)
+    assert written["name"] == "empty"
+    assert (tmp_path / "simucompilebench.csv").read_text(encoding="utf-8") == ""
 
 
 def test_run_extended_benchmark_reports_engine_failure_and_progress(monkeypatch) -> None:

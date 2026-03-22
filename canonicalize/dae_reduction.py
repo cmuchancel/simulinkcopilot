@@ -209,8 +209,6 @@ def _resolve_solution_map(
                         simultaneous=True,
                     )
                 )
-            if sympy.Symbol(symbol_name) in resolved.free_symbols:
-                raise ValueError("Self-referential algebraic solutions are unsupported.")
             unresolved_candidates = {
                 symbol.name
                 for symbol in resolved.free_symbols

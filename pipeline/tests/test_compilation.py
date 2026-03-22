@@ -154,6 +154,18 @@ def test_compile_descriptor_system_from_analysis_succeeds_for_descriptor_capable
     assert result.dae_system.classification.kind in {"reducible_semi_explicit_dae", "linear_descriptor_dae"}
 
 
+def test_compile_descriptor_system_success_wrapper_path() -> None:
+    equations = translate_latex(r"\dot{x}+y=u" + "\n" + "x+y=1")
+
+    result = compilation_module.compile_descriptor_system(
+        equations,
+        classification_mode="configured",
+        symbol_config={"u": "input"},
+    )
+
+    assert result.descriptor_system is not None
+
+
 def test_compile_preserved_dae_system_from_analysis_requires_preserved_form() -> None:
     analysis = analyze_state_extraction(translate_latex(r"\dot{x}=-ax"))
 
@@ -165,6 +177,17 @@ def test_compile_preserved_dae_system_from_analysis_requires_preserved_form() ->
         )
 
     assert exc_info.value.stage == "preserved_dae"
+
+
+def test_compile_preserved_dae_system_success_wrapper_path() -> None:
+    equations = translate_latex(r"\dot{x}=-x+z" + "\n" + r"z^3+z-x=0")
+
+    result = compilation_module.compile_preserved_dae_system(
+        equations,
+        graph_name="dae",
+    )
+
+    assert result.graph["nodes"]
 
 
 def test_compile_preserved_dae_system_from_analysis_wraps_lowering_and_validation_failures(

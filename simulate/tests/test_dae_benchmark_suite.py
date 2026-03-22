@@ -158,11 +158,16 @@ def test_lower_supported_case_validates_descriptor_and_uses_first_order_fallback
     assert lowered["name"] == "graph_model"
     assert captured["kwargs"]["state_names"] == ["x"]
 
+    with pytest.raises(Exception, match="lowered graph artifact"):
+        _lower_supported_case(DAE_BENCHMARK_CASES[2], _fake_result(graph=None))
+
 
 def test_execute_supported_case_routes_to_descriptor_graph_and_preserved_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     descriptor_case = DaeBenchmarkCase(name="descriptor", category="cat", latex="x=1", simulink_lowering_kind="descriptor")
     monkeypatch.setattr("simulate.dae_benchmark_suite.execute_simulink_descriptor", lambda *args, **kwargs: "descriptor-result")
     assert _execute_supported_case(descriptor_case, _fake_result(), eng=object(), tolerance=1e-6) == "descriptor-result"
+    with pytest.raises(Exception, match="descriptor artifact"):
+        _execute_supported_case(descriptor_case, _fake_result(descriptor_system=None), eng=object(), tolerance=1e-6)
 
     monkeypatch.setattr("simulate.dae_benchmark_suite.execute_simulink_graph", lambda *args, **kwargs: "graph-result")
     assert (
@@ -174,6 +179,13 @@ def test_execute_supported_case_routes_to_descriptor_graph_and_preserved_paths(m
         )
         == "graph-result"
     )
+    with pytest.raises(Exception, match="lowered graph artifact"):
+        _execute_supported_case(
+            DaeBenchmarkCase(name="graph", category="cat", latex="x=1"),
+            _fake_result(graph=None, first_order={"states": ["x"]}),
+            eng=object(),
+            tolerance=1e-6,
+        )
 
     monkeypatch.setattr("simulate.dae_benchmark_suite.execute_simulink_preserved_dae_graph", lambda *args, **kwargs: "preserved-result")
     assert _execute_supported_case(DAE_BENCHMARK_CASES[2], _fake_result(), eng=object(), tolerance=1e-6) == "preserved-result"
@@ -220,6 +232,52 @@ def test_run_dae_benchmark_records_classification_mismatch(monkeypatch: pytest.M
     case = report["cases"][0]
     assert case["failure_stage"] == "classification"
     assert case["stages"]["classification"]["status"] == "failed"
+
+
+def test_run_dae_benchmark_covers_lowering_without_graph_metrics_and_non_simulink_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supported_case = DaeBenchmarkCase(
+        name="custom_supported",
+        category="cat",
+        latex=r"\dot{x}=-x+z" + "\n" + r"z^3+z-x=0",
+        expected_classification_kind="nonlinear_preserved_semi_explicit_dae",
+        expected_route="preserved_dae",
+        expected_supported=True,
+        expected_preserved_form=True,
+        simulink_expected=False,
+    )
+    monkeypatch.setattr("simulate.dae_benchmark_suite.DAE_BENCHMARK_CASES", (supported_case,))
+    monkeypatch.setattr("simulate.dae_benchmark_suite.translate_latex", lambda text: [text])
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.analyze_state_extraction",
+        lambda *args, **kwargs: _fake_analysis(
+            dae_system=_fake_dae_system(
+                kind="nonlinear_preserved_semi_explicit_dae",
+                route="preserved_dae",
+                supported=True,
+                reduced_to_explicit=False,
+                preserved_form=object(),
+            ),
+            descriptor_system=None,
+        ),
+    )
+    monkeypatch.setattr(
+        "simulate.dae_benchmark_suite.run_pipeline",
+        lambda *args, **kwargs: _fake_result(
+            graph=None,
+            dae_classification={"route": "preserved_dae"},
+            dae_validation={"simulation_success": True, "residual_norm_max": 1e-9, "residual_norm_final": 1e-9},
+        ),
+    )
+    monkeypatch.setattr("simulate.dae_benchmark_suite._lower_supported_case", lambda *args, **kwargs: {"name": "lowered", "blocks": {}})
+
+    report = run_dae_benchmark(selected_cases=["custom_supported"], run_simulink=False)
+
+    case = report["cases"][0]
+    assert case["stages"]["simulink_lowering"]["status"] == "passed"
+    assert case["stages"]["simulink_build"]["detail"] == "Simulink execution not expected"
+    assert case["metrics"]["graph_nodes"] is None
 
 
 def test_run_dae_benchmark_records_missing_descriptor_artifact(monkeypatch: pytest.MonkeyPatch) -> None:

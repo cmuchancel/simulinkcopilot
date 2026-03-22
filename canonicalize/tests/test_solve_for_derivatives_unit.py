@@ -54,6 +54,10 @@ def test_solve_for_highest_derivatives_converts_sympy_edge_cases_to_compile_erro
     with pytest.raises(DeterministicCompileError, match="Expected exactly one deterministic solution"):
         solve_module.solve_for_highest_derivatives(equations)
 
+    monkeypatch.setattr(solve_module.sympy, "solve", lambda *args, **kwargs: [])
+    with pytest.raises(DeterministicCompileError, match="implicit nonlinear derivative coupling"):
+        solve_module.solve_for_highest_derivatives(equations)
+
 
 def test_solve_for_highest_derivatives_rejects_missing_implicit_and_unresolved_solutions(
     monkeypatch: pytest.MonkeyPatch,
@@ -78,3 +82,27 @@ def test_solve_for_highest_derivatives_rejects_missing_implicit_and_unresolved_s
     monkeypatch.setattr(solve_module.sympy, "solve", lambda *args, **kwargs: [{target: sympy.Symbol("u") + 1}])
     with pytest.raises(DeterministicCompileError, match="System retains unresolved algebraic constraints"):
         solve_module.solve_for_highest_derivatives(one_target)
+
+    monkeypatch.setattr(solve_module.sympy, "nsimplify", lambda expr: (_ for _ in ()).throw(ValueError("bad")))
+    with pytest.raises(DeterministicCompileError, match="System retains unresolved algebraic constraints"):
+        solve_module.solve_for_highest_derivatives(one_target)
+
+
+def test_solve_for_highest_derivatives_rejects_zero_order_targets(monkeypatch: pytest.MonkeyPatch) -> None:
+    equations = translate_latex(r"\dot{x}=u")
+
+    monkeypatch.setattr(solve_module, "collect_derivative_orders", lambda _equations: {"x": 0})
+    with pytest.raises(DeterministicCompileError, match="No derivatives found"):
+        solve_module.solve_for_highest_derivatives(equations)
+
+
+def test_solved_derivative_to_dict_and_nsimplify_zero_helper_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    equations = translate_latex(r"\dot{x}=u")
+    target = sympy.Symbol("D1_x")
+
+    monkeypatch.setattr(solve_module.sympy, "solve", lambda *args, **kwargs: [{target: sympy.Symbol("u") + sympy.Symbol("eps")}])
+    monkeypatch.setattr(solve_module.sympy, "nsimplify", lambda expr: sympy.Integer(0))
+
+    solved = solve_module.solve_for_highest_derivatives(equations)
+
+    assert solved[0].to_dict()["base"] == "x"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -96,6 +97,51 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(state_space_result["input_names"], ["u_1", "u_2"])
         comparison = compare_simulations(direct, state_space_result, tolerance=1e-6)
         self.assertTrue(comparison["passes"])
+
+    def test_simulators_raise_runtime_error_on_solver_failure(self) -> None:
+        class FailedSolution:
+            success = False
+            message = "solver broke"
+
+        with patch("simulate.ode_sim.solve_ivp", return_value=FailedSolution()):
+            with self.assertRaisesRegex(RuntimeError, "ODE simulation failed: solver broke"):
+                simulate_ode_system(
+                    self.first_order,
+                    parameter_values=self.parameters,
+                    initial_conditions=self.initial_conditions,
+                    input_function=self.input_function,
+                    t_eval=self.t_eval,
+                )
+
+        with patch("simulate.state_space_sim.solve_ivp", return_value=FailedSolution()):
+            with self.assertRaisesRegex(RuntimeError, "State-space simulation failed: solver broke"):
+                simulate_state_space_system(
+                    self.state_space,
+                    parameter_values=self.parameters,
+                    initial_conditions=self.initial_conditions,
+                    input_function=self.input_function,
+                    t_eval=self.t_eval,
+                )
+
+    def test_state_space_simulation_without_inputs_exercises_output_path(self) -> None:
+        equations = translate_latex(r"\dot{x}=-ax")
+        extraction = extract_states(
+            equations,
+            mode="configured",
+            symbol_config={"a": "parameter"},
+        )
+        first_order = build_first_order_system(equations, extraction=extraction)
+        state_space = build_state_space_system(first_order)
+
+        result = simulate_state_space_system(
+            state_space,
+            parameter_values={"a": 0.5},
+            initial_conditions={"x": 1.0},
+            t_eval=np.linspace(0.0, 0.2, 3),
+        )
+
+        self.assertEqual(result["input_names"], [])
+        self.assertEqual(result["inputs"].shape, (3, 0))
 
 
 if __name__ == "__main__":

@@ -116,10 +116,6 @@ def _seed_metadata(
         metadata[base] = SymbolMetadata(name=base, role="state_candidate", source="inferred")
 
     for independent_name in _configured_independent_variable_names(configured):
-        if independent_name in derivative_orders:
-            raise DeterministicCompileError(
-                f"Configured independent variable {independent_name!r} conflicts with an inferred state candidate."
-            )
         metadata[independent_name] = configured[independent_name]
 
     for name in sorted(state_names):

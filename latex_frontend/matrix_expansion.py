@@ -56,8 +56,6 @@ def expand_matrix_syntax(text: str) -> str:
     context: dict[str, MatrixValue] = {}
     output_lines: list[str] = []
     for statement in _split_statements(text):
-        if not statement:
-            continue
         lhs_text, rhs_text = _split_equation(statement)
         lhs_matrix = _evaluate_lhs(lhs_text, context)
         rhs_has_matrix_intent = _has_matrix_intent(rhs_text, context)

@@ -15,7 +15,7 @@ from ir.expression_nodes import (
     PowNode,
     SymbolNode,
 )
-from ir.operation_catalog import OPERATION_CATALOG, node_operation_name, validate_operation_dict
+from ir.operation_catalog import OPERATION_CATALOG, node_operation_name, validate_operation_dict, validate_supported_node
 from latex_frontend.symbols import DeterministicCompileError
 
 
@@ -40,6 +40,14 @@ class OperationCatalogTests(unittest.TestCase):
     def test_invalid_operation_dict_raises(self) -> None:
         with self.assertRaises(DeterministicCompileError):
             validate_operation_dict({"op": "unknown"})
+
+    def test_operation_catalog_helper_errors(self) -> None:
+        with self.assertRaises(DeterministicCompileError):
+            node_operation_name(object())  # type: ignore[arg-type]
+        with self.assertRaises(DeterministicCompileError):
+            validate_operation_dict({"op": "add", "args": [{"op": "unknown"}]})
+        with self.assertRaises(DeterministicCompileError):
+            validate_supported_node(FunctionNode("mystery", SymbolNode("x")))
 
     def test_equation_round_trip(self) -> None:
         equation = EquationNode(

@@ -70,6 +70,22 @@ def test_matlab_ode_function_component_expressions_and_parameter_vectors_normali
         }
     )
     assert vector_problem.parameters == ("a",)
+    assert vector_problem.to_dict()["equations"][0]["equation"] == "D1_x_1 = -a*x_1 + u_1"
+
+    parameter_only_problem = normalize_problem(
+        {
+            "source_type": "matlab_ode_function",
+            "function_spec": {
+                "representation": "vector_rhs",
+                "state_vector_name": "x",
+                "parameter_vector_name": "p",
+                "rhs": ["-p(1)*x(1)"],
+            },
+            "state_names": ["x_1"],
+            "parameter_names": ["a"],
+        }
+    )
+    assert parameter_only_problem.to_dict()["equations"][0]["equation"] == "D1_x_1 = -a*x_1"
 
 
 def test_load_derivative_map_and_vector_reference_helpers_cover_validation_paths() -> None:

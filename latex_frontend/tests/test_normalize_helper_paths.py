@@ -38,6 +38,10 @@ def test_move_derivative_subscript_inside_group_strips_braces() -> None:
     assert deriv_match is not None
     assert _move_general_derivative_subscript_inside_group(deriv_match) == r"\deriv{3}{x_cart}"
 
+    bare_deriv_match = _TRAILING_SUBSCRIPT_GENERAL_DERIVATIVE_RE.search(r"\deriv{3}{x}_cart")
+    assert bare_deriv_match is not None
+    assert _move_general_derivative_subscript_inside_group(bare_deriv_match) == r"\deriv{3}{x_cart}"
+
 
 def test_strip_general_derivative_time_argument_normalizes_symbol_name() -> None:
     match = _GENERAL_DERIVATIVE_TIME_ARGUMENT_RE.search(r"\deriv{4}{x_{12}}(t)")

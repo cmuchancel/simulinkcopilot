@@ -71,6 +71,33 @@ def test_validate_simulink_model_dict_normalizes_hierarchy_and_sorts_connections
     assert model["metadata"] == {"kind": "unit"}
 
 
+def test_validate_simulink_model_dict_accepts_tuple_connections_and_default_names() -> None:
+    model = validate_simulink_model_dict(
+        {
+            "name": "tuple_demo",
+            "blocks": {
+                "src": {"lib_path": "simulink/Sources/Constant"},
+                "dst": {"lib_path": "simulink/Sinks/Out1"},
+            },
+            "connections": [("src", 1, "dst", 1)],
+        }
+    )
+
+    assert model["blocks"]["src"]["type"] == "src"
+    assert model["blocks"]["src"]["name"] == "src"
+    assert model["connections"] == [
+        {
+            "system": ROOT_SYSTEM,
+            "src_block": "src",
+            "src_port": "1",
+            "dst_block": "dst",
+            "dst_port": "1",
+            "label": "",
+            "metadata": {},
+        }
+    ]
+
+
 @pytest.mark.parametrize(
     ("payload", "error_type", "pattern"),
     [
@@ -81,6 +108,16 @@ def test_validate_simulink_model_dict_normalizes_hierarchy_and_sorts_connections
             {"name": "demo", "blocks": {"b": {"lib_path": "simulink/Sources/Constant", "metadata": []}}},
             TypeError,
             "metadata must be a mapping",
+        ),
+        (
+            {"name": "demo", "blocks": {"b": {"lib_path": "simulink/Sources/Constant", "params": []}}},
+            TypeError,
+            "non-dictionary params",
+        ),
+        (
+            {"name": "demo", "blocks": {"b": {"lib_path": "simulink/Sources/Constant", "position": [1, 2, 3]}}},
+            ValueError,
+            "position must be a four-value list",
         ),
         (
             {"name": "demo", "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}}, "connections": "bad"},
@@ -95,6 +132,24 @@ def test_validate_simulink_model_dict_normalizes_hierarchy_and_sorts_connections
             },
             TypeError,
             "Invalid connection metadata",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": [{"src_block": "", "src_port": 1, "dst_block": "b", "dst_port": 1}],
+            },
+            ValueError,
+            "Invalid connection entry",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": ["bad"],
+            },
+            ValueError,
+            "Invalid connection entry",
         ),
         (
             {
@@ -155,6 +210,37 @@ def test_validate_simulink_model_dict_normalizes_hierarchy_and_sorts_connections
         (
             {
                 "name": "demo",
+                "blocks": {
+                    "sub": {"lib_path": SUBSYSTEM_BLOCK},
+                    "src": {"lib_path": "simulink/Sources/Constant", "system": "sub"},
+                    "dst": {"lib_path": "simulink/Sources/Constant"},
+                },
+                "connections": [{"system": "sub", "src_block": "src", "src_port": 1, "dst_block": "dst", "dst_port": 1}],
+            },
+            ValueError,
+            "does not belong to connection system",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": [{"src_block": "missing", "src_port": 1, "dst_block": "b", "dst_port": 1}],
+            },
+            ValueError,
+            "unknown source block",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": [{"src_block": "b", "src_port": 1, "dst_block": "missing", "dst_port": 1}],
+            },
+            ValueError,
+            "unknown destination block",
+        ),
+        (
+            {
+                "name": "demo",
                 "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
                 "outputs": "bad",
             },
@@ -164,10 +250,35 @@ def test_validate_simulink_model_dict_normalizes_hierarchy_and_sorts_connections
         (
             {
                 "name": "demo",
+                "blocks": {None: {"lib_path": "simulink/Sources/Constant"}},
+            },
+            ValueError,
+            "Invalid block name",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": []},
+            },
+            TypeError,
+            "must map to a dictionary of properties",
+        ),
+        (
+            {
+                "name": "demo",
                 "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
                 "outputs": [{"name": "", "block": "b", "port": "1"}],
             },
             ValueError,
+            "Invalid output spec",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"b": {"lib_path": "simulink/Sources/Constant"}},
+                "outputs": ["bad"],
+            },
+            TypeError,
             "Invalid output spec",
         ),
         (

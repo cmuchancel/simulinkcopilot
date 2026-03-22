@@ -101,10 +101,6 @@ def inline_algebraic_definitions(equations: list[EquationNode]) -> AlgebraicSubs
                         simultaneous=True,
                     )
                 )
-            if sympy.Symbol(symbol_name) in resolved.free_symbols:
-                raise DeterministicCompileError(
-                    f"Algebraic helper definition for {symbol_name!r} references itself after substitution."
-                )
             resolved_exprs[symbol_name] = sympy.simplify(resolved)
             return resolved_exprs[symbol_name]
         finally:

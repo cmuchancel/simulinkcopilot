@@ -11,8 +11,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from backend.simulate_simulink import SimulinkExecutionResult
 from latex_frontend.symbols import DeterministicCompileError
 from pipeline import run_pipeline as pipeline_module
+from pipeline.input_frontends import normalize_problem
 from simulate.input_sources import detect_constant_input_values, sample_input_signals
 
 
@@ -76,11 +78,20 @@ def _fake_results(*, with_comparison: bool = False, with_simulink: bool = False)
     )
     return {
         "source_path": "/tmp/inline_equations.tex",
+        "dae_classification": {
+            "kind": "explicit_ode",
+            "route": "explicit_ode",
+            "supported": True,
+            "python_validation_supported": True,
+            "simulink_lowering_supported": True,
+            "diagnostic": None,
+        },
         "equations": [],
         "equation_dicts": [],
         "extraction": extraction,
         "solved_derivatives": [],
         "dae_system": dae_system,
+        "dae_validation": None,
         "descriptor_system": None,
         "consistent_initialization": consistent_initialization,
         "first_order": {"states": ["x"], "inputs": [], "state_equations": [{"state": "x", "rhs": {"op": "symbol", "name": "x"}}]},
@@ -249,6 +260,58 @@ def test_simulink_subset_result_extracts_named_columns() -> None:
     assert subset["states"].tolist() == [[2.0, 1.0], [1.5, 0.5]]
 
 
+def test_supported_dae_rejection_message_and_print_results_cover_optional_paths() -> None:
+    assert pipeline_module._supported_dae_rejection_message({"kind": "unsupported_dae", "diagnostic": None}).startswith(
+        "Unsupported DAE class"
+    )
+    assert "Diagnostic: ill posed" in pipeline_module._supported_dae_rejection_message(
+        {"kind": "unsupported_dae", "diagnostic": "ill posed"}
+    )
+
+    default_validation = _fake_results(with_simulink=True)
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        pipeline_module._print_results(
+            default_validation,
+            show_ir=False,
+            show_first_order=False,
+            show_state_space=False,
+            show_graph_validation=False,
+        )
+    assert "vs_ode_rmse: 0.0" in buffer.getvalue()
+
+    unavailable_validation = _fake_results(with_simulink=True) | {"simulink_validation": None}
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        pipeline_module._print_results(
+            unavailable_validation,
+            show_ir=False,
+            show_first_order=False,
+            show_state_space=False,
+            show_graph_validation=False,
+        )
+    assert "validation: unavailable" in buffer.getvalue()
+
+    state_space_validation = _fake_results(with_simulink=True)
+    state_space_validation["simulink_validation"] = {
+        "passes": True,
+        "vs_ode": {"rmse": 0.0, "max_abs_error": 0.0},
+        "vs_state_space": {"rmse": 1.0, "max_abs_error": 2.0},
+    }
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        pipeline_module._print_results(
+            state_space_validation,
+            show_ir=False,
+            show_first_order=False,
+            show_state_space=False,
+            show_graph_validation=False,
+        )
+    output = buffer.getvalue()
+    assert "vs_state_space_rmse: 1.0" in output
+    assert "vs_state_space_max_abs_error: 2.0" in output
+
+
 def test_print_results_covers_descriptor_and_simulink_validation_paths() -> None:
     results = _descriptor_like_results()
     buffer = io.StringIO()
@@ -278,6 +341,10 @@ def test_main_rejects_invalid_cli_combinations(monkeypatch) -> None:
         monkeypatch.setattr(sys, "argv", argv)
         with pytest.raises(SystemExit):
             pipeline_module.main()
+
+    monkeypatch.setattr(sys, "argv", ["run_pipeline.py"])
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
 
 
 def test_main_writes_report_and_verbose_bundle(monkeypatch, tmp_path: Path) -> None:
@@ -516,6 +583,142 @@ def test_main_handles_nonlatex_input_and_verbose_simulink_engine(monkeypatch, tm
     assert pipeline_module.main() == 0
     assert any(call.get("retries") == 1 for call in start_calls if isinstance(call, dict))
     assert {"quit": True} in start_calls
+
+
+def test_main_covers_payload_normalization_and_input_file_gui_export_paths(monkeypatch, tmp_path: Path) -> None:
+    payload_path = tmp_path / "payload.json"
+    report_path = tmp_path / "report.json"
+    payload_path.write_text(json.dumps({"source_type": "matlab_symbolic", "equations": ["diff(x,t) == -x"]}), encoding="utf-8")
+    monkeypatch.setattr(pipeline_module, "run_pipeline_problem", lambda problem, **kwargs: _fake_results() | {"source_type": problem.source_type})
+    monkeypatch.setattr(pipeline_module, "_print_results", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pipeline_module, "summarize_pipeline_results", lambda results: {"ok": True})
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(payload_path),
+            "--no-simulink",
+            "--skip-sim",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 0
+
+    bad_payload_path = tmp_path / "bad_payload.json"
+    bad_payload_path.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(bad_payload_path),
+        ],
+    )
+    with pytest.raises(SystemExit):
+        pipeline_module.main()
+
+    injected_payload_path = tmp_path / "injected_payload.json"
+    injected_payload_path.write_text(json.dumps({"equations": ["xdot = -x"], "states": ["x"]}), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input-payload-json",
+            str(injected_payload_path),
+            "--source-type",
+            "matlab_equation_text",
+            "--no-simulink",
+            "--skip-sim",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 0
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--equations",
+            "diff(x,t) == -x",
+            "--source-type",
+            "matlab_symbolic",
+            "--no-simulink",
+            "--skip-sim",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+    assert pipeline_module.main() == 0
+
+    latex_path = tmp_path / "system.tex"
+    latex_path.write_text(r"\dot{x}=0", encoding="utf-8")
+    export_calls: list[str] = []
+    monkeypatch.setattr(pipeline_module, "run_pipeline", lambda *args, **kwargs: _fake_results(with_simulink=True))
+    monkeypatch.setattr(
+        pipeline_module,
+        "export_results_to_gui_run",
+        lambda results, raw_latex, gui_report_root, symbol_config, input_values: export_calls.append(raw_latex) or {
+            "run_name": "demo",
+            "artifact_dir": str(tmp_path / "demo"),
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline.py",
+            "--input",
+            str(latex_path),
+            "--export-gui-run",
+        ],
+    )
+    assert pipeline_module.main() == 0
+    assert export_calls == [r"\dot{x}=0"]
+
+
+def test_run_pipeline_problem_reuses_external_matlab_engine_without_quitting(monkeypatch) -> None:
+    quit_calls: list[bool] = []
+    engine = SimpleNamespace(quit=lambda: quit_calls.append(True))
+    problem = normalize_problem(
+        {
+            "source_type": "latex",
+            "text": r"\dot{x}=-x",
+            "states": ["x"],
+        }
+    )
+
+    monkeypatch.setattr(
+        "backend.simulate_simulink.execute_simulink_graph",
+        lambda *args, **kwargs: SimulinkExecutionResult(
+            model={"blocks": {"b1": {}}},
+            simulation={"model_name": "demo_model", "model_file": "demo.slx", "signals": {"x": [0.0, 0.0]}, "t": [0.0, 1.0]},
+            validation={"passes": True, "vs_ode": {"rmse": 0.0, "max_abs_error": 0.0}, "vs_state_space": None},
+            build_time_sec=0.1,
+            simulation_time_sec=0.2,
+        ),
+    )
+
+    result = pipeline_module.run_pipeline_problem(
+        problem,
+        run_sim=True,
+        run_simulink=True,
+        runtime_override={
+            "initial_conditions": {"x": 1.0},
+            "t_span": [0.0, 1.0],
+            "sample_count": 5,
+        },
+        matlab_engine=engine,
+    )
+
+    assert result["simulink_validation"]["passes"] is True
+    assert quit_calls == []
 
 
 def test_run_pipeline_falls_back_to_descriptor_simulink_for_nonreduced_dae(monkeypatch, tmp_path: Path) -> None:

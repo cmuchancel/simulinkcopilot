@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import sympy
 import pytest
 
+from canonicalize import algebraic_substitution as substitution_module
 from canonicalize.algebraic_substitution import classify_algebraic_equations, inline_algebraic_definitions
 from ir.equation_dict import equation_to_string
+from ir.expression_nodes import EquationNode, NumberNode, SymbolNode
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 
@@ -92,3 +95,22 @@ def test_inline_algebraic_definitions_preserves_algebraic_constraints_after_help
     result = inline_algebraic_definitions(equations)
 
     assert [equation_to_string(equation) for equation in result.algebraic_constraints] == ["x + y = k*x"]
+
+
+def test_algebraic_substitution_helper_paths_cover_time_symbol_and_empty_substitution() -> None:
+    equations = translate_latex(
+        "\n".join(
+            [
+                "t=1",
+                r"\dot{x}=t",
+            ]
+        )
+    )
+
+    classification = classify_algebraic_equations(equations)
+    assert classification.helper_definitions == {}
+    assert [equation_to_string(equation) for equation in classification.algebraic_constraints] == ["t = 1"]
+
+    passthrough = inline_algebraic_definitions(translate_latex("x+y=1"))
+    assert [equation_to_string(equation) for equation in passthrough.equations] == ["x + y = 1"]
+    assert substitution_module._substitute(expression=sympy.Symbol("x"), substitutions={}) == sympy.Symbol("x")

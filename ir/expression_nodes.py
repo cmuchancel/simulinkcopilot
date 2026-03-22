@@ -91,20 +91,14 @@ def walk_expression(node: ExpressionNode) -> list[ExpressionNode]:
     nodes = [node]
     if isinstance(node, (NumberNode, SymbolNode, DerivativeNode)):
         return nodes
-    if isinstance(node, AddNode):
-        for child in node.args:
-            nodes.extend(walk_expression(child))
-    elif isinstance(node, MulNode):
-        for child in node.args:
-            nodes.extend(walk_expression(child))
+    if isinstance(node, (AddNode, MulNode)):
+        children = node.args
     elif isinstance(node, DivNode):
-        nodes.extend(walk_expression(node.numerator))
-        nodes.extend(walk_expression(node.denominator))
+        children = (node.numerator, node.denominator)
     elif isinstance(node, PowNode):
-        nodes.extend(walk_expression(node.base))
-        nodes.extend(walk_expression(node.exponent))
-    elif isinstance(node, NegNode):
-        nodes.extend(walk_expression(node.operand))
-    elif isinstance(node, FunctionNode):
-        nodes.extend(walk_expression(node.operand))
+        children = (node.base, node.exponent)
+    else:
+        children = (node.operand,)
+    for child in children:
+        nodes.extend(walk_expression(child))
     return nodes

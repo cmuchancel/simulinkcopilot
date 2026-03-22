@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend import layout as layout_module
 from backend.layout import LayoutProfile, apply_deterministic_layout, audit_layout
 from backend.simulink_dict import SUBSYSTEM_BLOCK, validate_simulink_model_dict
 
@@ -237,3 +238,77 @@ def test_apply_deterministic_layout_repairs_cramped_profile() -> None:
     repaired = apply_deterministic_layout(model, profile=cramped_profile)
     assert repaired["metadata"]["layout_quality"]["passes"] is True
     assert repaired["metadata"]["layout_quality"]["iterations"] > 1
+
+
+def test_layout_helper_paths_cover_empty_text_and_missing_positions() -> None:
+    profile = LayoutProfile()
+    block_spec = {"type": "Gain", "name": "gain", "metadata": []}
+    assert layout_module._block_visible_text(block_spec) == "gain"
+    assert layout_module._estimated_text_width("", profile) == 0
+    assert layout_module._estimated_text_lines("   ", profile) == 1
+
+    model = validate_simulink_model_dict(
+        {
+            "name": "layout_helpers",
+            "blocks": {
+                "a": {
+                    "type": "Constant",
+                    "lib_path": "simulink/Sources/Constant",
+                    "system": "root",
+                    "name": "a",
+                    "metadata": {"layout_role": "source"},
+                },
+                "b": {
+                    "type": "Gain",
+                    "lib_path": "simulink/Math Operations/Gain",
+                    "system": "root",
+                    "name": "b",
+                    "metadata": {"layout_role": "shared"},
+                },
+            },
+            "connections": [{"system": "root", "src_block": "a", "src_port": "1", "dst_block": "b", "dst_port": "1", "label": ""}],
+            "outputs": [],
+        }
+    )
+
+    assert layout_module._label_rect(model, model["connections"][0], profile) is None
+    report = audit_layout(model)
+    assert report.block_overlap_count == 0
+
+
+def test_label_rect_returns_none_when_blocks_lack_positions_even_with_a_label() -> None:
+    profile = LayoutProfile()
+    model = validate_simulink_model_dict(
+        {
+            "name": "layout_label_missing_positions",
+            "blocks": {
+                "a": {
+                    "type": "Constant",
+                    "lib_path": "simulink/Sources/Constant",
+                    "system": "root",
+                    "name": "a",
+                    "metadata": {"layout_role": "source"},
+                },
+                "b": {
+                    "type": "Gain",
+                    "lib_path": "simulink/Math Operations/Gain",
+                    "system": "root",
+                    "name": "b",
+                    "metadata": {"layout_role": "shared"},
+                },
+            },
+            "connections": [
+                {"system": "root", "src_block": "a", "src_port": "1", "dst_block": "b", "dst_port": "1", "label": "trace"}
+            ],
+            "outputs": [],
+        }
+    )
+
+    assert layout_module._label_rect(model, model["connections"][0], profile) is None
+
+
+def test_apply_deterministic_layout_zero_iteration_falls_back_to_best_model() -> None:
+    model = validate_simulink_model_dict(_root_spacing_model("u"))
+    laid_out = apply_deterministic_layout(model, max_iterations=0)
+
+    assert "layout_quality" in laid_out["metadata"]

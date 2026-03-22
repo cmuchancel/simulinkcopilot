@@ -142,6 +142,11 @@ def test_load_derivative_map_validates_alias_targets() -> None:
 
 def test_identifier_alias_rewrite_and_output_matching_helpers() -> None:
     alias_map = frontend_module._build_derivative_alias_map(states=("x",), time_variable="t")
+    alias_map_with_second_order = frontend_module._build_derivative_alias_map(
+        states=("x",),
+        time_variable="t",
+        derivative_map={"xddot": ("x", 2)},
+    )
     rewritten = frontend_module._replace_identifier_aliases(
         "xdot + dxdt",
         alias_map,
@@ -149,6 +154,7 @@ def test_identifier_alias_rewrite_and_output_matching_helpers() -> None:
         time_variable="t",
     )
     assert rewritten == f"{derivative_symbol_name('x', 1)} + {derivative_symbol_name('x', 1)}"
+    assert alias_map_with_second_order["xddot"] == derivative_symbol_name("x", 2)
     assert frontend_module._output_matches_state("dxdt", "x", "t") is True
     assert frontend_module._output_matches_state("ydot", "x", "t") is False
 

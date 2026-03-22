@@ -101,6 +101,46 @@ def test_run_full_system_benchmark_covers_state_space_comparison_exception(monke
     assert case["stages"]["comparison"]["status"] == "failed"
 
 
+def test_run_full_system_benchmark_marks_state_space_unavailable_for_nonlinear_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nonlinear_case = benchmark_module.BenchmarkCase(
+        name="nonlinear_no_state_space",
+        category="cat",
+        latex=r"\dot{x}=x^2",
+        simulink_expected=False,
+    )
+    monkeypatch.setattr(benchmark_module, "BENCHMARK_CASES", (nonlinear_case,))
+    monkeypatch.setattr(
+        benchmark_module,
+        "simulate_ode_system",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+    report = benchmark_module.run_full_system_benchmark(selected_cases=["nonlinear_no_state_space"], run_simulink=False)
+    case = report["cases"][0]
+    assert case["stages"]["state_space"]["status"] == "skipped"
+    assert case["stages"]["comparison"]["detail"] == "state-space comparison not available"
+
+
+def test_run_full_system_benchmark_covers_nonlinear_state_space_stage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        benchmark_module,
+        "compile_symbolic_system",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            SymbolicCompilationStageError(
+                "graph_validation",
+                "graph boom",
+                completed_stages=("state_extraction", "solve", "first_order", "state_space"),
+                linearity={"is_linear": False, "A": 0, "B": 0, "offset": 0, "offending_entries": []},
+            )
+        ),
+    )
+    report = benchmark_module.run_full_system_benchmark(selected_cases=["basic_decay"], run_simulink=False)
+    case = report["cases"][0]
+    assert case["stages"]["state_space"]["status"] == "skipped"
+    assert case["stages"]["graph_validation"]["status"] == "failed"
+
+
 def test_run_full_system_benchmark_covers_simulink_success_and_variable_input_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -156,3 +196,47 @@ def test_run_full_system_benchmark_covers_simulink_build_and_compare_failures(
     compare_fail_case = compare_fail_report["cases"][0]
     assert compare_fail_case["stages"]["simulink_compare"]["status"] == "failed"
     assert compare_fail_case["overall_pass"] is False
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "execute_simulink_graph",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SimulinkExecutionStageError("simulink_simulation", "sim boom")),
+    )
+    simulation_fail_report = benchmark_module.run_full_system_benchmark(selected_cases=["basic_decay"], run_simulink=True)
+    simulation_fail_case = simulation_fail_report["cases"][0]
+    assert simulation_fail_case["failure_stage"] == "simulink_simulation"
+    assert simulation_fail_case["stages"]["simulink_compare"]["status"] == "skipped"
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "execute_simulink_graph",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SimulinkExecutionStageError("simulink_compare", "compare boom")),
+    )
+    compare_error_report = benchmark_module.run_full_system_benchmark(selected_cases=["basic_decay"], run_simulink=True)
+    compare_error_case = compare_error_report["cases"][0]
+    assert compare_error_case["failure_stage"] == "simulink_compare"
+    assert compare_error_case["stages"]["simulink_compare"]["status"] == "failed"
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "execute_simulink_graph",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("generic compare boom")),
+    )
+    generic_error_report = benchmark_module.run_full_system_benchmark(selected_cases=["basic_decay"], run_simulink=True)
+    generic_error_case = generic_error_report["cases"][0]
+    assert generic_error_case["failure_stage"] == "simulink_compare"
+    assert generic_error_case["stages"]["simulink_compare"]["status"] == "failed"
+
+
+def test_run_full_system_benchmark_skips_simulink_for_non_simulink_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    no_sim_case = benchmark_module.BenchmarkCase(
+        name="no_sim_case",
+        category="cat",
+        latex=r"\dot{x}=-x",
+        simulink_expected=False,
+    )
+    monkeypatch.setattr(benchmark_module, "BENCHMARK_CASES", (no_sim_case,))
+    report = benchmark_module.run_full_system_benchmark(selected_cases=["no_sim_case"], run_simulink=True)
+    case = report["cases"][0]
+    assert case["stages"]["simulink_build"]["status"] == "skipped"
+    assert case["stages"]["simulink_compare"]["status"] == "skipped"

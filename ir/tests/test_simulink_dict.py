@@ -88,6 +88,24 @@ def test_example_model_returns_valid_minimal_chain() -> None:
             {
                 "name": "demo",
                 "blocks": {"const1": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": [("const1", 1, 2)],
+            },
+            ValueError,
+            "Invalid connection entry",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"const1": {"lib_path": "simulink/Sources/Constant"}},
+                "connections": [("missing", 1, "const1", 1)],
+            },
+            ValueError,
+            "unknown source block",
+        ),
+        (
+            {
+                "name": "demo",
+                "blocks": {"const1": {"lib_path": "simulink/Sources/Constant"}},
                 "connections": [("const1", 1, "missing", 1)],
             },
             ValueError,

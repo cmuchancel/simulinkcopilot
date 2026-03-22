@@ -33,6 +33,14 @@ def test_benchmark_suite_helper_functions_cover_sampling_and_failures() -> None:
         input_function=lambda t: {"u": t},
     )
     assert detect_constant_input_values(varying.input_function, ["u"], t_span=varying.t_span) is None
+    substring_case = benchmark_module.BenchmarkCase(
+        name="substring",
+        category="cat",
+        latex=r"\dot{x}=u",
+        expected_failure_stages=("parse",),
+        expected_failure_substring="expected",
+    )
+    assert not benchmark_module._check_expected_failure(substring_case, "parse", "different")
 
 
 def test_finalize_case_handles_expected_failures_and_success_paths() -> None:
@@ -72,6 +80,7 @@ def test_finalize_case_handles_expected_failures_and_success_paths() -> None:
         metrics=metrics,
         equations=[],
         linearity={"is_linear": False, "A": 0, "B": 0, "offset": 0, "offending_entries": []},
+        simulink_validation={"vs_ode": {"rmse": 0.0, "max_abs_error": 0.0}},
     )
     assert success["overall_pass"] is True
     markdown = benchmark_module.render_full_system_benchmark_markdown(
@@ -80,11 +89,14 @@ def test_finalize_case_handles_expected_failures_and_success_paths() -> None:
             "passed_cases": 1,
             "failed_cases": 0,
             "tolerance": 1e-6,
-            "cases": [success],
+            "cases": [result, success],
         }
     )
     assert "Full System Benchmark" in markdown
     assert "good" in markdown
+    assert "failure_stage: parse" in markdown
+    assert "failure_reason: boom" in markdown
+    assert "simulink_metrics" in markdown
 
 
 def test_run_full_system_benchmark_covers_engine_and_stage_failures(monkeypatch) -> None:

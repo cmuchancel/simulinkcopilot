@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from simucompilebench.baseline import (
+    _quantile,
     compare_legacy_report_to_baseline,
     load_baseline_metrics,
     summarize_legacy_benchmark_report,
@@ -56,6 +57,11 @@ def _sample_report() -> dict[str, object]:
 
 
 class BaselineMetricTests(unittest.TestCase):
+    def test_quantile_handles_empty_singleton_and_exact_index(self) -> None:
+        self.assertEqual(_quantile([], 0.5), 0.0)
+        self.assertEqual(_quantile([4.0], 0.5), 4.0)
+        self.assertEqual(_quantile([1.0, 2.0, 3.0], 0.5), 2.0)
+
     def test_summary_contains_per_system_stage_flags(self) -> None:
         summary = summarize_legacy_benchmark_report(_sample_report())
         self.assertEqual(summary["passed_systems"], 2)
@@ -70,6 +76,12 @@ class BaselineMetricTests(unittest.TestCase):
             self.assertEqual(loaded["source_commit"], "abc123")
             self.assertEqual(loaded["passed_systems"], 2)
 
+    def test_write_baseline_metrics_omits_source_commit_when_unspecified(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "baseline_metrics.json"
+            baseline = write_baseline_metrics(target, _sample_report())
+            self.assertNotIn("source_commit", baseline)
+
     def test_compare_detects_regression(self) -> None:
         baseline = summarize_legacy_benchmark_report(_sample_report())
         current = json.loads(json.dumps(_sample_report()))
@@ -77,6 +89,34 @@ class BaselineMetricTests(unittest.TestCase):
         comparison = compare_legacy_report_to_baseline(current, baseline)
         self.assertFalse(comparison["matches"])
         self.assertTrue(any("rmse regression" in item for item in comparison["mismatches"]))
+
+    def test_compare_detects_count_failure_category_and_system_set_mismatches(self) -> None:
+        baseline = summarize_legacy_benchmark_report(_sample_report())
+        current = json.loads(json.dumps(_sample_report()))
+        current["passed_systems"] = 1
+        current["failed_systems"] = 1
+        current["failure_categories"] = {"solve_failure": 1}
+        current["systems"] = current["systems"][:-1]
+
+        comparison = compare_legacy_report_to_baseline(current, baseline)
+
+        self.assertFalse(comparison["matches"])
+        self.assertTrue(any("passed_systems mismatch" in item for item in comparison["mismatches"]))
+        self.assertTrue(any("failed_systems mismatch" in item for item in comparison["mismatches"]))
+        self.assertTrue(any("failure_categories mismatch" in item for item in comparison["mismatches"]))
+        self.assertTrue(any("system_id mismatch" in item for item in comparison["mismatches"]))
+
+    def test_compare_detects_overall_pass_and_stage_flag_mismatches(self) -> None:
+        baseline = summarize_legacy_benchmark_report(_sample_report())
+        current = json.loads(json.dumps(_sample_report()))
+        current["systems"][0]["overall_pass"] = False
+        current["systems"][0]["graph_success"] = False
+
+        comparison = compare_legacy_report_to_baseline(current, baseline)
+
+        self.assertFalse(comparison["matches"])
+        self.assertTrue(any("overall_pass mismatch" in item for item in comparison["mismatches"]))
+        self.assertTrue(any("stage_flags mismatch" in item for item in comparison["mismatches"]))
 
 
 if __name__ == "__main__":

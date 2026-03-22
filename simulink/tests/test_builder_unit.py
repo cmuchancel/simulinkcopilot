@@ -109,3 +109,33 @@ def test_build_model_creates_blocks_lines_and_simulation(monkeypatch, tmp_path) 
 
     assert ("open_system", "plain_builder_model", 0) in engine.calls
     assert ("sim", "plain_builder_model", 0) in engine.calls
+
+
+def test_build_model_handles_scalar_workspace_values_and_skips_optional_actions(monkeypatch, tmp_path) -> None:
+    builder = _load_builder(monkeypatch)
+    engine = FakeEngine()
+    model_dict = {
+        "name": "plain builder model",
+        "blocks": {
+            "const 1": {
+                "type": "Constant",
+                "lib_path": "simulink/Sources/Constant",
+                "params": {"Value": 5},
+            },
+        },
+        "connections": [],
+    }
+
+    result = builder.build_model(
+        engine,
+        model_dict,
+        output_dir=tmp_path,
+        open_after_build=False,
+        run_simulation=False,
+        preload_workspace_variables={"scalar_gain": 3.0},
+    )
+
+    assert result["model_name"] == "plain_builder_model"
+    assert engine.workspace["scalar_gain"] == 3.0
+    assert not any(call[0] == "open_system" for call in engine.calls)
+    assert not any(call[0] == "sim" for call in engine.calls)

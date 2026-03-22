@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from pathlib import Path
+
 from ir.equation_dict import equation_to_dict
-from latex_frontend.translator import translate_latex
+from latex_frontend.translator import translate_file, translate_latex, translate_latex_to_dicts
 
 
 class TranslatorTests(unittest.TestCase):
@@ -103,6 +105,19 @@ class TranslatorTests(unittest.TestCase):
     def test_multi_equation_system_translates(self) -> None:
         equations = translate_latex("\\dot{x}=v\n\\dot{v}=\\frac{u-cv-kx}{m}")
         self.assertEqual(len(equations), 2)
+
+    def test_translate_helpers_cover_dict_and_file_entrypoints(self) -> None:
+        dicts = translate_latex_to_dicts(r"\dot{x}=v")
+        self.assertEqual(dicts[0]["lhs"]["op"], "derivative")
+
+        path = Path("tmp_translator_case.tex")
+        try:
+            path.write_text(r"\dot{x}=v", encoding="utf-8")
+            equations = translate_file(path)
+        finally:
+            path.unlink(missing_ok=True)
+
+        self.assertEqual(len(equations), 1)
 
 
 if __name__ == "__main__":

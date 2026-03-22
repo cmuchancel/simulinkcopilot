@@ -74,7 +74,9 @@ def _format_mul(factors: list[str]) -> str:
         return "1"
     if factors[0] == "-1" and len(factors) > 1:
         rest = _format_mul(factors[1:])
-        return f"-{_maybe_parenthesize(rest)}" if not _is_atomic(rest) else f"-{rest}"
+        if _is_atomic(rest) or (rest.startswith("(") and rest.endswith(")")):
+            return f"-{rest}"
+        return f"-{_maybe_parenthesize(rest)}"
     if factors[0] == "1" and len(factors) > 1:
         return _format_mul(factors[1:])
     return " * ".join(_maybe_parenthesize(factor) for factor in factors)

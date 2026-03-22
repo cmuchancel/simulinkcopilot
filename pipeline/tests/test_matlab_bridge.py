@@ -4,6 +4,7 @@ import io
 import json
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -72,6 +73,67 @@ def test_run_matlab_bridge_request_returns_ok_response_for_explicit_ode() -> Non
     assert response["normalized_problem"]["source_type"] == "matlab_symbolic"
     assert response["artifacts"]["summary"]["source_type"] == "matlab_symbolic"
     assert response["validation"]["dae_validation"]["simulation_success"] is True
+
+
+def test_run_matlab_bridge_request_accepts_missing_options_and_model_name_passthrough(monkeypatch) -> None:
+    fake_results = {
+        "dae_classification": {"kind": "explicit_ode"},
+        "simulink_result": None,
+        "dae_validation": {"simulation_success": True},
+        "simulink_validation": None,
+        "comparison": None,
+        "consistent_initialization": SimpleNamespace(to_dict=lambda: {"ok": True}),
+        "normalized_problem": SimpleNamespace(to_dict=lambda: {"source_type": "latex"}),
+        "source_type": "latex",
+    }
+    captured: dict[str, object] = {}
+
+    def fake_run_pipeline_payload(payload, **kwargs):
+        captured["payload"] = payload
+        captured["kwargs"] = kwargs
+        return fake_results
+
+    monkeypatch.setattr("pipeline.run_pipeline.run_pipeline_payload", fake_run_pipeline_payload)
+    monkeypatch.setattr("pipeline.run_pipeline.summarize_pipeline_results", lambda results: {"source_type": results["source_type"]})
+
+    response = matlab_bridge.run_matlab_bridge_request(
+        {
+            "source_type": "latex",
+            "text": r"\dot{x} = -x",
+            "model_name": "bridge_demo",
+        }
+    )
+
+    assert captured["payload"] == {
+        "source_type": "latex",
+        "text": r"\dot{x} = -x",
+        "model_name": "bridge_demo",
+        "name": "bridge_demo",
+    }
+    assert captured["kwargs"]["run_simulink"] is False
+    assert response["status"] == "ok"
+    assert response["request_echo"]["model_name"] == "bridge_demo"
+
+
+def test_build_matlab_bridge_response_includes_generated_model_metadata(monkeypatch) -> None:
+    monkeypatch.setattr("pipeline.run_pipeline.summarize_pipeline_results", lambda results: {"route": results["dae_classification"]["kind"]})
+
+    response = matlab_bridge.build_matlab_bridge_response(
+        {
+            "dae_classification": {"kind": "linear_descriptor_dae"},
+            "simulink_result": {"model_file": "/tmp/demo.slx", "model_name": "demo"},
+            "dae_validation": None,
+            "simulink_validation": {"matches": True},
+            "comparison": None,
+            "consistent_initialization": SimpleNamespace(to_dict=lambda: {"ok": True}),
+            "normalized_problem": SimpleNamespace(to_dict=lambda: {"source_type": "matlab_symbolic"}),
+            "source_type": "matlab_symbolic",
+        }
+    )
+
+    assert response["generated_model_path"] == "/tmp/demo.slx"
+    assert response["model_name"] == "demo"
+    assert response["route"] == "linear_descriptor_dae"
 
 
 def test_process_matlab_bridge_request_file_writes_error_response_for_opaque_ode_function(
@@ -186,7 +248,14 @@ def test_build_matlab_bridge_error_response_verbose_includes_traceback() -> None
         (RuntimeError("opaque function handles are unsupported"), "opaque_matlab_ode_function"),
         (RuntimeError("could not determine whether 'xdot' is a state derivative or an ordinary variable"), "ambiguous_derivative_alias"),
         (RuntimeError("structurally singular"), "unsupported_algebraic_subsystem"),
+        (RuntimeError("must declare exactly one independent variable"), "invalid_independent_variable"),
     ],
 )
 def test_bridge_error_code_maps_specific_messages(exc: Exception, expected_code: str) -> None:
     assert matlab_bridge._bridge_error_code(exc) == expected_code
+
+
+def test_optional_string_option_accepts_clean_string_and_rejects_non_string() -> None:
+    assert matlab_bridge._optional_string_option({"classification_mode": " strict "}, "classification_mode") == "strict"
+    with pytest.raises(Exception, match="must be a non-empty string"):
+        matlab_bridge._optional_string_option({"classification_mode": 3}, "classification_mode")  # type: ignore[arg-type]

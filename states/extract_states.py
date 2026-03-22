@@ -20,7 +20,7 @@ from pipeline.normalized_problem import (
 from states.classify_symbols import classify_symbols, load_symbol_config
 from states.rules import ExtractionResult, collect_derivative_orders, derive_state_list
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from canonicalize.solve_for_derivatives import SolvedDerivative
 
 
@@ -86,9 +86,6 @@ def analyze_state_extraction(
         for name, metadata in symbol_metadata.items()
         if metadata.role == "independent_variable"
     )
-    if len(independent_variables) > 1:
-        raise DeterministicCompileError("Exactly one independent variable may be declared.")
-
     extraction = ExtractionResult(
         states=states,
         inputs=inputs,

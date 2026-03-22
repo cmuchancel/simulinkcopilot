@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from canonicalize.first_order import build_first_order_system
 from ir.equation_dict import expression_to_dict
-from ir.expression_nodes import AddNode, MulNode, NegNode, NumberNode, PowNode, SymbolNode
-from ir.graph_lowering import lower_expression_graph, lower_first_order_system_graph
+from ir.expression_nodes import AddNode, DerivativeNode, MulNode, NegNode, NumberNode, PowNode, SymbolNode
+from ir.graph_lowering import GraphBuilder, lower_expression_graph, lower_first_order_system_graph, lower_semi_explicit_dae_graph
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
@@ -96,6 +97,31 @@ class GraphLoweringTests(unittest.TestCase):
         graph = lower_expression_graph(expression, input_names={"u", "v"})
         validated = validate_graph_dict(graph)
         self.assertEqual(validated["name"], "expression_graph")
+
+    def test_derivative_lowering_and_preserved_dae_validation_paths(self) -> None:
+        graph = lower_expression_graph(
+            expression_to_dict(DerivativeNode("x", 1)),
+            state_names={"x_dot"},
+            name="derivative_graph",
+        )
+        ops = {node["op"] for node in graph["nodes"]}
+        self.assertIn("state_signal", ops)
+
+        builder = GraphBuilder(kind="expression_graph", name="bad")
+        with self.assertRaises(DeterministicCompileError):
+            builder.lower_expression({"op": "mystery", "args": []})
+
+        with self.assertRaises(DeterministicCompileError):
+            lower_semi_explicit_dae_graph(
+                SimpleNamespace(
+                    preserved_form=None,
+                    differential_states=("x",),
+                    algebraic_variables=("z",),
+                    inputs=(),
+                    parameters=(),
+                    independent_variable=None,
+                )
+            )
 
 
 if __name__ == "__main__":

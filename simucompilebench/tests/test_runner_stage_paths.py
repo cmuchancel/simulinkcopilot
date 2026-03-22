@@ -70,6 +70,46 @@ def _compiled_linear_result() -> SymbolicCompilationResult:
     )
 
 
+def _compiled_nonlinear_result() -> SymbolicCompilationResult:
+    extraction = type(
+        "Extraction",
+        (),
+        {"states": ("x",), "inputs": (), "parameters": (), "independent_variable": None},
+    )()
+    dae_system = SimpleNamespace(
+        to_dict=lambda: {
+            "differential_states": ["x"],
+            "algebraic_variables": [],
+            "differential_equations": ["D1_x = x^2"],
+            "algebraic_constraints": [],
+            "solved_algebraic_variables": {},
+            "residual_constraints": [],
+            "reduced_equations": ["D1_x = x^2"],
+            "reduced_to_explicit": True,
+        }
+    )
+    return SymbolicCompilationResult(
+        equations=[],
+        equation_dicts=[],
+        extraction=extraction,
+        resolved_equations=[],
+        solved_derivatives=[],
+        dae_system=dae_system,
+        descriptor_system=None,
+        first_order={
+            "states": ["x"],
+            "inputs": [],
+            "parameters": [],
+            "state_equations": [{"state": "x", "rhs": {"op": "pow", "args": [{"op": "symbol", "name": "x"}, {"op": "const", "value": 2}]}}],
+        },
+        explicit_form={"form": "explicit_first_order", "rhs": {"x": 0}},
+        linearity={"is_linear": False},
+        state_space=None,
+        graph={"nodes": [{"id": "n1"}], "edges": []},
+        validated_graph=None,
+    )
+
+
 @dataclass
 class _FakeEngine:
     sim_result: object = field(default_factory=dict)
@@ -186,6 +226,57 @@ def test_run_extended_benchmark_covers_state_space_failure_and_compare_failure(
     assert compare_system["failure_stage"] == "state_space_compare"
     assert compare_system["stages"]["state_space_compare"]["status"] == "failed"
 
+    monkeypatch.setattr(
+        runner_module,
+        "compare_simulations",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("compare boom")),
+    )
+    compare_error_report = runner_module.run_extended_benchmark([_spec()], run_simulink=False)
+    compare_error_system = compare_error_report["systems"][0]
+    assert compare_error_system["failure_stage"] == "state_space_compare"
+    assert compare_error_system["stages"]["state_space_compare"]["status"] == "failed"
+
+    monkeypatch.setattr(runner_module, "compile_symbolic_system", lambda *args, **kwargs: _compiled_nonlinear_result())
+    nonlinear_report = runner_module.run_extended_benchmark([_spec(nonlinear=True)], run_simulink=False)
+    nonlinear_system = nonlinear_report["systems"][0]
+    assert nonlinear_system["stages"]["state_space"]["status"] == "skipped"
+    assert nonlinear_system["stages"]["state_space_simulation"]["status"] == "skipped"
+
+
+def test_run_extended_benchmark_covers_nonlinear_state_space_stage_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_module, "validate_graph_dict", lambda graph: graph)
+    monkeypatch.setattr(
+        runner_module,
+        "compile_symbolic_system",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            SymbolicCompilationStageError(
+                "graph_validation",
+                "graph boom",
+                completed_stages=("state_extraction", "solve", "first_order", "state_space"),
+                linearity={"is_linear": False},
+            )
+        ),
+    )
+    report = runner_module.run_extended_benchmark([_spec()], run_simulink=False)
+    system = report["systems"][0]
+    assert system["stages"]["state_space"]["status"] == "skipped"
+    assert system["stages"]["graph_validation"]["status"] == "failed"
+
+
+def test_run_extended_benchmark_marks_state_space_unavailable_for_nonlinear_systems(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_module, "_robustness_score", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(runner_module, "validate_graph_dict", lambda graph: graph)
+    monkeypatch.setattr(runner_module, "compile_symbolic_system", lambda *args, **kwargs: _compiled_nonlinear_result())
+    monkeypatch.setattr(
+        runner_module,
+        "simulate_ode_system",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+    report = runner_module.run_extended_benchmark([_spec(nonlinear=True)], run_simulink=False)
+    system = report["systems"][0]
+    assert system["stages"]["state_space_simulation"]["detail"] == "state-space unavailable"
+    assert system["stages"]["state_space_compare"]["detail"] == "state-space unavailable"
+
 
 def test_run_extended_benchmark_covers_simulink_success_and_failure_paths(
     monkeypatch: pytest.MonkeyPatch,
@@ -210,6 +301,13 @@ def test_run_extended_benchmark_covers_simulink_success_and_failure_paths(
             simulation_time_sec=0.2,
         ),
     )
+
+    success_engine = _FakeEngine(sim_result=object())
+    monkeypatch.setattr(runner_module, "start_engine", lambda **kwargs: success_engine)
+    success_report = runner_module.run_extended_benchmark([_spec()], run_simulink=True)
+    success_system = success_report["systems"][0]
+    assert success_system["stages"]["simulink_compare"]["status"] == "passed"
+    assert success_engine.quit_called is True
 
     build_fail_engine = _FakeEngine(sim_result=object())
     monkeypatch.setattr(runner_module, "start_engine", lambda **kwargs: build_fail_engine)
@@ -253,3 +351,38 @@ def test_run_extended_benchmark_covers_simulink_success_and_failure_paths(
     assert compare_fail_system["failure_stage"] == "simulink_compare"
     assert compare_fail_system["stages"]["simulink_compare"]["status"] == "failed"
     assert compare_fail_engine.quit_called is True
+
+    compare_error_engine = _FakeEngine()
+    monkeypatch.setattr(runner_module, "start_engine", lambda **kwargs: compare_error_engine)
+    monkeypatch.setattr(
+        runner_module,
+        "execute_simulink_graph",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SimulinkExecutionStageError("simulink_compare", "compare boom")),
+    )
+    compare_error_report = runner_module.run_extended_benchmark([_spec()], run_simulink=True)
+    compare_error_system = compare_error_report["systems"][0]
+    assert compare_error_system["failure_stage"] == "simulink_compare"
+    assert compare_error_system["stages"]["simulink_compare"]["status"] == "failed"
+
+
+def test_run_extended_benchmark_skips_robustness_for_missed_expected_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_module, "validate_graph_dict", lambda graph: graph)
+    monkeypatch.setattr(
+        runner_module,
+        "compile_symbolic_system",
+        lambda *args, **kwargs: _compiled_linear_result(),
+    )
+    monkeypatch.setattr(runner_module, "simulate_state_space_system", lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]})
+    monkeypatch.setattr(runner_module, "compare_simulations", lambda *args, **kwargs: {"passes": True, "rmse": 0.0, "max_abs_error": 0.0})
+    monkeypatch.setattr(
+        runner_module,
+        "_robustness_score",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("robustness should not run")),
+    )
+
+    report = runner_module.run_extended_benchmark(
+        [_spec(expected_failure_stage="parse", expected_failure_substring="expected parse")],
+        run_simulink=False,
+    )
+    system = report["systems"][0]
+    assert system["benchmark_result"] == "missed_expected_failure"

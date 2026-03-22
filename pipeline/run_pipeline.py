@@ -710,19 +710,18 @@ def _print_results(
     print("DAE classification:")
     print(json.dumps(dae_classification, indent=2))
 
-    if show_first_order or True:
-        print("First-order system:")
-        if first_order is None:
-            print("  unavailable: descriptor-only Simulink path")
-        else:
-            for entry in first_order["state_equations"]:  # type: ignore[index]
-                rhs = sympy.sstr(expression_to_sympy(expression_from_dict(entry["rhs"])))
-                print(f"  d/dt {entry['state']} = {rhs}")
+    print("First-order system:")
+    if first_order is None:
+        print("  unavailable: descriptor-only Simulink path")
+    else:
+        for entry in first_order["state_equations"]:  # type: ignore[index]
+            rhs = sympy.sstr(expression_to_sympy(expression_from_dict(entry["rhs"])))
+            print(f"  d/dt {entry['state']} = {rhs}")
 
     print("Linearity:")
     print(f"  is_linear: {results['linearity']['is_linear']}")  # type: ignore[index]
 
-    if state_space is not None and (show_state_space or True):
+    if state_space is not None:
         print("State-space matrices:")
         for name in ["A", "B", "offset"]:
             print(f"  {name} = {matrix_from_dict(state_space[name])}")  # type: ignore[index]
@@ -997,8 +996,6 @@ def main() -> int:
                         }
                     )
             else:
-                if args.equations is None:
-                    parser.error("Either --input, --equations, or --input-payload-json is required.")
                 if effective_source_type == "latex":
                     normalized_problem = normalize_from_latex_text(
                         args.equations,

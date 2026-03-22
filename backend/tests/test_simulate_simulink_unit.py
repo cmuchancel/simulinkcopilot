@@ -199,6 +199,41 @@ def test_execute_simulink_graph_raises_stage_aware_errors(monkeypatch) -> None:
         raise AssertionError("Expected SimulinkExecutionStageError")
 
 
+def test_execute_simulink_graph_wraps_simulation_stage_failures(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    monkeypatch.setattr(
+        module,
+        "graph_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "demo_model", "model_file": "/tmp/demo.slx"},
+    )
+    monkeypatch.setattr(
+        module,
+        "prepare_workspace_variables",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("workspace boom")),
+    )
+
+    with pytest.raises(module.SimulinkExecutionStageError) as exc_info:
+        module.execute_simulink_graph(
+            engine,
+            graph={"nodes": [], "edges": [], "state_chains": []},
+            name="demo_model",
+            state_names=["x"],
+            parameter_values={},
+            initial_conditions={},
+            t_span=(0.0, 1.0),
+            t_eval=[0.0, 1.0],
+        )
+
+    assert exc_info.value.stage == "simulink_simulation"
+
+
 def test_execute_simulink_descriptor_returns_timings(monkeypatch) -> None:
     module = _load_simulate_module(monkeypatch)
     engine = FakeSimEngine()

@@ -4,6 +4,7 @@ import math
 
 import pytest
 
+from backend.graph_numeric import GraphNumericEvaluator
 from backend.graph_partition import _graph_layer
 from backend.graph_to_simulink import GraphToSimulinkLowerer, _safe_reciprocal, graph_to_simulink_model
 from latex_frontend.symbols import DeterministicCompileError
@@ -119,6 +120,10 @@ def test_graph_layer_short_circuits_active_recursion_and_safe_reciprocal_rejects
     assert _graph_layer(lowerer.node_map, "n_rhs", {"n_rhs"}) == 0
     with pytest.raises(DeterministicCompileError, match="zero denominator"):
         _safe_reciprocal(0.0)
+    assert GraphNumericEvaluator(node_map={"x": {"op": "mystery", "inputs": []}})._evaluate_known_op("mystery", []) is None
+    assert GraphNumericEvaluator(
+        node_map={"t": {"op": "symbol_input", "name": "t", "symbol_role": "independent_variable", "inputs": []}}
+    ).value("t") is None
 
 
 def test_graph_to_simulink_model_covers_symbol_input_modes_and_output_validation() -> None:
@@ -197,3 +202,55 @@ def test_graph_to_simulink_model_covers_power_special_cases() -> None:
                 base_node={"id": "a_base", "op": "state_signal", "inputs": ["s_int"], "state": "x"},
             ),
         )
+
+
+def test_graph_to_simulink_lowerer_helper_paths_cover_power_one_and_unsupported_ops(monkeypatch: pytest.MonkeyPatch) -> None:
+    lowerer = GraphToSimulinkLowerer(
+        graph=_pow_graph(
+            exponent_node={"id": "b_exp", "op": "constant", "value": 1.0, "inputs": []},
+            base_node={"id": "a_base", "op": "state_signal", "inputs": ["s_int"], "state": "x"},
+        ),
+        model_name="demo_model",
+    )
+    source = lowerer._materialize_integer_power_node(
+        "n_rhs",
+        owner="root",
+        layer_hint=0,
+        layout_role="rhs",
+        base_id="a_base",
+        exponent_value=1,
+    )
+    assert source == lowerer.resolve_for_system("a_base", "root")
+
+    monkeypatch.setattr("backend.graph_to_simulink.validate_graph_dict", lambda graph: graph)
+    monkeypatch.setattr("backend.graph_to_simulink.build_node_expressions", lambda graph: {"mystery": "mystery"})
+    unsupported = GraphToSimulinkLowerer(
+        graph={
+            "name": "bad_graph",
+            "nodes": [{"id": "mystery", "op": "mystery", "inputs": []}],
+            "edges": [],
+            "state_chains": [],
+            "outputs": {},
+        },
+        model_name="demo_model",
+    )
+    unsupported.node_owners["mystery"] = "root"
+    unsupported.node_layers["mystery"] = 0
+    unsupported.node_map["mystery"] = {"id": "mystery", "op": "mystery", "inputs": []}
+    with pytest.raises(DeterministicCompileError, match="Unsupported graph op 'mystery'"):
+        unsupported.materialize_owned("mystery")
+
+
+def test_graph_to_simulink_lowerer_helper_paths_cover_duplicate_blocks_and_algebraic_inputs() -> None:
+    lowerer = GraphToSimulinkLowerer(graph=_unary_graph("sin", 0.2), model_name="demo_model")
+
+    first = lowerer.add_block("same", "Constant", system="root", name="same", params={"Value": "1"})
+    second = lowerer.add_block("same", "Gain", system="root", name="other", params={"Gain": "2"})
+    assert first == second == "same"
+    assert lowerer.blocks["same"]["type"] == "Constant"
+
+    lowerer.node_map["alg"] = {"id": "alg", "op": "symbol_input", "name": "z", "symbol_role": "algebraic_variable", "inputs": []}
+    lowerer.node_expressions["alg"] = "z"
+    source = lowerer._materialize_symbol_input_node("alg")
+    assert source == ("algebraic_z", "1")
+    assert lowerer.blocks["algebraic_z"]["params"] == {}

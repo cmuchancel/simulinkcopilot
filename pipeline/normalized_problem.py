@@ -198,10 +198,6 @@ def build_normalized_problem(
             "NormalizedProblem symbol roles must be disjoint. Duplicates: "
             + ", ".join(sorted(duplicate_names))
         )
-    if time_variable is not None and time_variable in duplicate_names:
-        raise DeterministicCompileError(
-            f"Independent variable {time_variable!r} conflicts with another declared symbol role."
-        )
     if time_variable is not None and time_variable in {*states_tuple, *algebraics_tuple, *inputs_tuple, *parameters_tuple}:
         raise DeterministicCompileError(
             f"Independent variable {time_variable!r} cannot also be declared as a state/input/parameter/algebraic."

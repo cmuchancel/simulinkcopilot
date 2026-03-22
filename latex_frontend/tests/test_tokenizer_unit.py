@@ -36,6 +36,8 @@ def test_consume_identifier_handles_two_letter_split_and_complex_subscripts() ->
         Token("IDENT", "b", 1),
         Token("EOF", "", 2),
     ]
+    assert tokenize("1.25")[:2] == [Token("NUMBER", "1.25", 0), Token("EOF", "", 4)]
+    assert _consume_identifier("x12", 0) == ("x12", 3)
     assert _consume_identifier("mass_1_2", 0) == ("mass_1_2", 8)
     assert _consume_identifier("x_{alpha_2}", 0) == ("x_{alpha_2}", 11)
 
