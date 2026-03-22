@@ -134,38 +134,29 @@ def simulate_simulink_model(
     }
 
 
-def execute_simulink_graph(
+def _close_model_best_effort(eng, model_name: str | None, *, close_after_run: bool) -> None:
+    """Close the generated model when requested, without masking the primary result."""
+    if not close_after_run or model_name is None:
+        return
+    try:
+        eng.close_system(model_name, 0, nargout=0)
+    except Exception:  # pragma: no cover - cleanup best effort
+        pass
+
+
+def _execute_lowered_model(
     eng,
     *,
-    graph: dict[str, object],
-    name: str,
-    state_names: list[str],
-    parameter_values: dict[str, float],
-    initial_conditions: dict[str, float],
-    t_span: tuple[float, float],
-    t_eval,
-    input_values: dict[str, float] | None = None,
-    input_signals: dict[str, dict[str, list[float]]] | None = None,
+    model: BackendSimulinkModelDict,
+    tolerance: float | None = None,
     ode_result: dict[str, object] | None = None,
     state_space_result: dict[str, object] | None = None,
-    tolerance: float | None = None,
     output_dir: str | Path | None = None,
     open_after_build: bool = False,
     close_after_run: bool = False,
     numeric_result_validator=None,
 ) -> SimulinkExecutionResult:
-    """Lower a graph, build the Simulink model, simulate it, and optionally validate it."""
-    model = graph_to_simulink_model(
-        graph,
-        name=name,
-        state_names=state_names,
-        parameter_values=parameter_values,
-        input_values=input_values,
-        input_signals=input_signals,
-        initial_conditions=initial_conditions,
-        model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
-    )
-
+    """Build, simulate, and optionally compare a normalized Simulink model."""
     model_name: str | None = None
     try:
         try:
@@ -224,11 +215,51 @@ def execute_simulink_graph(
             simulation_time_sec=simulation_time_sec,
         )
     finally:
-        if close_after_run and model_name is not None:
-            try:
-                eng.close_system(model_name, 0, nargout=0)
-            except Exception:  # pragma: no cover - cleanup best effort
-                pass
+        _close_model_best_effort(eng, model_name, close_after_run=close_after_run)
+
+
+def execute_simulink_graph(
+    eng,
+    *,
+    graph: dict[str, object],
+    name: str,
+    state_names: list[str],
+    parameter_values: dict[str, float],
+    initial_conditions: dict[str, float],
+    t_span: tuple[float, float],
+    t_eval,
+    input_values: dict[str, float] | None = None,
+    input_signals: dict[str, dict[str, list[float]]] | None = None,
+    ode_result: dict[str, object] | None = None,
+    state_space_result: dict[str, object] | None = None,
+    tolerance: float | None = None,
+    output_dir: str | Path | None = None,
+    open_after_build: bool = False,
+    close_after_run: bool = False,
+    numeric_result_validator=None,
+) -> SimulinkExecutionResult:
+    """Lower a graph, build the Simulink model, simulate it, and optionally validate it."""
+    model = graph_to_simulink_model(
+        graph,
+        name=name,
+        state_names=state_names,
+        parameter_values=parameter_values,
+        input_values=input_values,
+        input_signals=input_signals,
+        initial_conditions=initial_conditions,
+        model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
+    )
+    return _execute_lowered_model(
+        eng,
+        model=model,
+        tolerance=tolerance,
+        ode_result=ode_result,
+        state_space_result=state_space_result,
+        output_dir=output_dir,
+        open_after_build=open_after_build,
+        close_after_run=close_after_run,
+        numeric_result_validator=numeric_result_validator,
+    )
 
 
 def execute_simulink_descriptor(
@@ -261,58 +292,14 @@ def execute_simulink_descriptor(
         output_names=output_names,
         model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
     )
-
-    model_name: str | None = None
-    try:
-        try:
-            build_start = time.perf_counter()
-            build_info = build_simulink_model(
-                eng,
-                model,
-                output_dir=output_dir,
-                open_after_build=open_after_build,
-            )
-            build_time_sec = time.perf_counter() - build_start
-            model_name = str(build_info["model_name"])
-        except Exception as exc:
-            raise SimulinkExecutionStageError("simulink_build", str(exc)) from exc
-
-        try:
-            prepare_workspace_variables(eng, model)
-            simulation_start = time.perf_counter()
-            sim_output = eng.sim(model_name, "ReturnWorkspaceOutputs", "on", nargout=1)
-            extracted = extract_simulink_signals(
-                eng,
-                sim_output,
-                output_names=[entry["name"] for entry in model["outputs"]],
-            )
-            simulation_time_sec = time.perf_counter() - simulation_start
-            simulation = {
-                **build_info,
-                **extracted,
-            }
-        except Exception as exc:
-            raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
-
-        if numeric_result_validator is not None:
-            try:
-                numeric_result_validator("Simulink simulation", simulation)
-            except Exception as exc:
-                raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
-
-        return SimulinkExecutionResult(
-            model=model,
-            simulation=simulation,
-            validation=None,
-            build_time_sec=build_time_sec,
-            simulation_time_sec=simulation_time_sec,
-        )
-    finally:
-        if close_after_run and model_name is not None:
-            try:
-                eng.close_system(model_name, 0, nargout=0)
-            except Exception:  # pragma: no cover - cleanup best effort
-                pass
+    return _execute_lowered_model(
+        eng,
+        model=model,
+        output_dir=output_dir,
+        open_after_build=open_after_build,
+        close_after_run=close_after_run,
+        numeric_result_validator=numeric_result_validator,
+    )
 
 
 def execute_simulink_preserved_dae_graph(
@@ -345,55 +332,11 @@ def execute_simulink_preserved_dae_graph(
         algebraic_initial_conditions=algebraic_initial_conditions,
         model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
     )
-
-    model_name: str | None = None
-    try:
-        try:
-            build_start = time.perf_counter()
-            build_info = build_simulink_model(
-                eng,
-                model,
-                output_dir=output_dir,
-                open_after_build=open_after_build,
-            )
-            build_time_sec = time.perf_counter() - build_start
-            model_name = str(build_info["model_name"])
-        except Exception as exc:
-            raise SimulinkExecutionStageError("simulink_build", str(exc)) from exc
-
-        try:
-            prepare_workspace_variables(eng, model)
-            simulation_start = time.perf_counter()
-            sim_output = eng.sim(model_name, "ReturnWorkspaceOutputs", "on", nargout=1)
-            extracted = extract_simulink_signals(
-                eng,
-                sim_output,
-                output_names=[entry["name"] for entry in model["outputs"]],
-            )
-            simulation_time_sec = time.perf_counter() - simulation_start
-            simulation = {
-                **build_info,
-                **extracted,
-            }
-        except Exception as exc:
-            raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
-
-        if numeric_result_validator is not None:
-            try:
-                numeric_result_validator("Simulink simulation", simulation)
-            except Exception as exc:
-                raise SimulinkExecutionStageError("simulink_simulation", str(exc)) from exc
-
-        return SimulinkExecutionResult(
-            model=model,
-            simulation=simulation,
-            validation=None,
-            build_time_sec=build_time_sec,
-            simulation_time_sec=simulation_time_sec,
-        )
-    finally:
-        if close_after_run and model_name is not None:
-            try:
-                eng.close_system(model_name, 0, nargout=0)
-            except Exception:  # pragma: no cover - cleanup best effort
-                pass
+    return _execute_lowered_model(
+        eng,
+        model=model,
+        output_dir=output_dir,
+        open_after_build=open_after_build,
+        close_after_run=close_after_run,
+        numeric_result_validator=numeric_result_validator,
+    )

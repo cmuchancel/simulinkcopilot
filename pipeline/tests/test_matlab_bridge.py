@@ -12,6 +12,38 @@ from pipeline import matlab_bridge
 from pipeline.run_pipeline import main
 
 
+def test_run_matlab_bridge_request_rejects_invalid_request_and_options_shapes() -> None:
+    with pytest.raises(Exception, match="JSON object"):
+        matlab_bridge.run_matlab_bridge_request(["not", "a", "mapping"])  # type: ignore[arg-type]
+
+    with pytest.raises(Exception, match="field 'options' must be an object"):
+        matlab_bridge.run_matlab_bridge_request(
+            {
+                "source_type": "latex",
+                "text": r"\dot{x}=-x",
+                "options": ["bad"],
+            }
+        )
+
+    with pytest.raises(Exception, match="must be an object"):
+        matlab_bridge.run_matlab_bridge_request(
+            {
+                "source_type": "latex",
+                "text": r"\dot{x}=-x",
+                "options": {"runtime_override": "bad"},
+            }
+        )
+
+    with pytest.raises(Exception, match="must be a non-empty string"):
+        matlab_bridge.run_matlab_bridge_request(
+            {
+                "source_type": "latex",
+                "text": r"\dot{x}=-x",
+                "options": {"classification_mode": " "},
+            }
+        )
+
+
 def test_run_matlab_bridge_request_returns_ok_response_for_explicit_ode() -> None:
     response = matlab_bridge.run_matlab_bridge_request(
         {
@@ -68,6 +100,23 @@ def test_process_matlab_bridge_request_file_writes_error_response_for_opaque_ode
     assert "opaque function handles" in response["message"]
 
 
+def test_process_matlab_bridge_request_file_writes_error_response_for_non_object_json(
+    tmp_path: Path,
+) -> None:
+    request_path = tmp_path / "request.json"
+    response_path = tmp_path / "response.json"
+    request_path.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+
+    exit_code = matlab_bridge.process_matlab_bridge_request_file(request_path, response_path, verbose=True)
+    response = json.loads(response_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 1
+    assert response["status"] == "error"
+    assert response["error_code"] == "deterministic_compile_error"
+    assert "must decode to an object" in response["message"]
+    assert response["request_echo"] is None
+
+
 def test_main_request_mode_writes_response_json(tmp_path: Path) -> None:
     request_path = tmp_path / "request.json"
     response_path = tmp_path / "response.json"
@@ -114,3 +163,30 @@ def test_main_request_mode_requires_response_path(monkeypatch) -> None:
     monkeypatch.setattr("sys.argv", ["run_pipeline.py", "--request", "req.json"])
     with pytest.raises(SystemExit):
         main()
+
+
+def test_build_matlab_bridge_error_response_verbose_includes_traceback() -> None:
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        response = matlab_bridge.build_matlab_bridge_error_response(
+            exc,
+            request={"source_type": "latex"},
+            verbose=True,
+        )
+
+    assert response["status"] == "error"
+    assert response["source_type"] == "latex"
+    assert any("Traceback" in item for item in response["diagnostics"])
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected_code"),
+    [
+        (RuntimeError("opaque function handles are unsupported"), "opaque_matlab_ode_function"),
+        (RuntimeError("could not determine whether 'xdot' is a state derivative or an ordinary variable"), "ambiguous_derivative_alias"),
+        (RuntimeError("structurally singular"), "unsupported_algebraic_subsystem"),
+    ],
+)
+def test_bridge_error_code_maps_specific_messages(exc: Exception, expected_code: str) -> None:
+    assert matlab_bridge._bridge_error_code(exc) == expected_code

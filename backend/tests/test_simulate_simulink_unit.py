@@ -4,12 +4,15 @@ import importlib
 import sys
 import types
 
+import pytest
+
 
 class FakeSimEngine:
     def __init__(self) -> None:
         self.workspace: dict[str, object] = {}
         self.eval_calls: list[tuple[str, int]] = []
         self.sim_calls: list[tuple[object, ...]] = []
+        self.close_calls: list[tuple[object, ...]] = []
 
     def eval(self, expression: str, nargout: int = 0) -> None:
         self.eval_calls.append((expression, nargout))
@@ -17,6 +20,9 @@ class FakeSimEngine:
     def sim(self, *args, nargout: int = 1):
         self.sim_calls.append((*args, nargout))
         return "sim-output"
+
+    def close_system(self, *args, nargout: int = 0) -> None:
+        self.close_calls.append((*args, nargout))
 
 
 def _load_simulate_module(monkeypatch):
@@ -262,3 +268,176 @@ def test_execute_simulink_descriptor_raises_stage_aware_errors(monkeypatch) -> N
         assert exc.stage == "simulink_build"
     else:  # pragma: no cover - defensive
         raise AssertionError("Expected SimulinkExecutionStageError")
+
+
+def test_execute_simulink_graph_wraps_compare_and_validator_failures(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    monkeypatch.setattr(
+        module,
+        "graph_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "demo_model", "model_file": "/tmp/demo.slx"},
+    )
+    monkeypatch.setattr(module, "prepare_workspace_variables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "extract_simulink_signals",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+    monkeypatch.setattr(
+        module,
+        "compare_simulink_results",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("compare boom")),
+    )
+
+    with pytest.raises(module.SimulinkExecutionStageError) as compare_exc:
+        module.execute_simulink_graph(
+            engine,
+            graph={"nodes": [], "edges": [], "state_chains": []},
+            name="demo_model",
+            state_names=["x"],
+            parameter_values={},
+            initial_conditions={},
+            t_span=(0.0, 1.0),
+            t_eval=[0.0, 1.0],
+            ode_result={"t": [0.0]},
+            tolerance=1e-6,
+        )
+    assert compare_exc.value.stage == "simulink_compare"
+
+    with pytest.raises(module.SimulinkExecutionStageError) as validator_exc:
+        module.execute_simulink_graph(
+            engine,
+            graph={"nodes": [], "edges": [], "state_chains": []},
+            name="demo_model",
+            state_names=["x"],
+            parameter_values={},
+            initial_conditions={},
+            t_span=(0.0, 1.0),
+            t_eval=[0.0, 1.0],
+            numeric_result_validator=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad numeric")),
+        )
+    assert validator_exc.value.stage == "simulink_simulation"
+
+
+def test_execute_simulink_graph_closes_model_when_requested(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    monkeypatch.setattr(
+        module,
+        "graph_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "demo_model", "model_file": "/tmp/demo.slx"},
+    )
+    monkeypatch.setattr(module, "prepare_workspace_variables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "extract_simulink_signals",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+
+    result = module.execute_simulink_graph(
+        engine,
+        graph={"nodes": [], "edges": [], "state_chains": []},
+        name="demo_model",
+        state_names=["x"],
+        parameter_values={},
+        initial_conditions={},
+        t_span=(0.0, 1.0),
+        t_eval=[0.0, 1.0],
+        close_after_run=True,
+    )
+
+    assert result.model_name == "demo_model"
+    assert engine.close_calls == [("demo_model", 0, 0)]
+
+
+def test_execute_simulink_preserved_dae_graph_uses_algebraic_initials(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+    captured_kwargs = {}
+
+    def fake_graph_to_model(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return {"blocks": {"b1": {}}, "outputs": [{"name": "x"}, {"name": "z"}], "workspace_variables": {}}
+
+    monkeypatch.setattr(module, "graph_to_simulink_model", fake_graph_to_model)
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "dae_model", "model_file": "/tmp/dae.slx"},
+    )
+    monkeypatch.setattr(module, "prepare_workspace_variables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "extract_simulink_signals",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0, 0.0]], "state_names": ["x", "z"]},
+    )
+
+    result = module.execute_simulink_preserved_dae_graph(
+        engine,
+        graph={"nodes": [], "edges": [], "algebraic_chains": []},
+        name="dae_model",
+        output_names=["x", "z"],
+        parameter_values={"k": 1.0},
+        differential_initial_conditions={"x": 0.0},
+        algebraic_initial_conditions={"z": 0.2},
+        t_span=(0.0, 1.0),
+        t_eval=[0.0, 1.0],
+        close_after_run=True,
+    )
+
+    assert captured_kwargs["algebraic_initial_conditions"] == {"z": 0.2}
+    assert result.model_file == "/tmp/dae.slx"
+    assert engine.close_calls == [("dae_model", 0, 0)]
+
+
+def test_execute_simulink_descriptor_close_errors_are_swallowed(monkeypatch) -> None:
+    module = _load_simulate_module(monkeypatch)
+    engine = FakeSimEngine()
+
+    def close_boom(*args, **kwargs):
+        raise RuntimeError("close boom")
+
+    engine.close_system = close_boom  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        module,
+        "descriptor_to_simulink_model",
+        lambda *args, **kwargs: {"blocks": {"b1": {}}, "outputs": [{"name": "x"}], "workspace_variables": {}},
+    )
+    monkeypatch.setattr(
+        module,
+        "build_simulink_model",
+        lambda *args, **kwargs: {"model_name": "descriptor_model", "model_file": "/tmp/descriptor.slx"},
+    )
+    monkeypatch.setattr(module, "prepare_workspace_variables", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "extract_simulink_signals",
+        lambda *args, **kwargs: {"t": [0.0], "states": [[0.0]], "state_names": ["x"]},
+    )
+
+    result = module.execute_simulink_descriptor(
+        engine,
+        descriptor_system={"form": "linear_descriptor"},
+        name="descriptor_model",
+        parameter_values={},
+        differential_initial_conditions={"x": 0.0},
+        algebraic_initial_conditions={"y": 0.0},
+        t_span=(0.0, 1.0),
+        t_eval=[0.0, 1.0],
+        close_after_run=True,
+    )
+
+    assert result.model_name == "descriptor_model"

@@ -133,14 +133,16 @@ def process_matlab_bridge_request_file(
     """Run a bridge request from JSON files and write a JSON response."""
     resolved_request_path = Path(request_path)
     resolved_response_path = Path(response_path)
-    request = json.loads(resolved_request_path.read_text(encoding="utf-8"))
-    if not isinstance(request, dict):
-        raise DeterministicCompileError("MATLAB bridge request JSON must decode to an object.")
+    request: dict[str, object] | None = None
 
     try:
+        raw_request = json.loads(resolved_request_path.read_text(encoding="utf-8"))
+        if not isinstance(raw_request, dict):
+            raise DeterministicCompileError("MATLAB bridge request JSON must decode to an object.")
+        request = raw_request
         response = run_matlab_bridge_request(request)
         exit_code = 0
-    except Exception as exc:  # pragma: no cover - covered via caller-level tests
+    except Exception as exc:
         response = build_matlab_bridge_error_response(exc, request=request, verbose=verbose)
         exit_code = 1
 

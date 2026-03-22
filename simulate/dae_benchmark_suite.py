@@ -299,6 +299,7 @@ def run_dae_benchmark(
             }
             failure_stage: str | None = None
             failure_reason: str | None = None
+            classification: dict[str, object] | None = None
             analysis = None
             result = None
             simulink_validation = None
