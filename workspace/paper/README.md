@@ -7,6 +7,7 @@ Files:
 - `references.bib`: bibliography database
 - `asmeconf.cls`, `asmeconf.bst`: local ASME class/style files copied from a template installed elsewhere on this machine
 - `figures/`: regenerated figures and artifact images used in the paper
+- `related_work/`: downloaded PDFs and indexing notes for the literature pass
 
 Build:
 

@@ -2,7 +2,7 @@
 
 All supported front doors normalize into one shared problem wrapper before any downstream classification or DAE routing.
 
-The current schema lives in [pipeline/normalized_problem.py](/Users/chancelavoie/Desktop/simulinkcopilot/pipeline/normalized_problem.py).
+The current schema lives in [pipeline/normalized_problem.py](../pipeline/normalized_problem.py).
 
 ## `NormalizedProblem`
 
@@ -94,8 +94,8 @@ The normalized schema does not replace the existing expression-node IR. It wraps
 
 Core semantic equation representation remains:
 
-- [EquationNode](/Users/chancelavoie/Desktop/simulinkcopilot/ir/expression_nodes.py)
-- [ExpressionNode](/Users/chancelavoie/Desktop/simulinkcopilot/ir/expression_nodes.py)
+- [EquationNode](../ir/expression_nodes.py)
+- [ExpressionNode](../ir/expression_nodes.py)
 
 This is intentional:
 

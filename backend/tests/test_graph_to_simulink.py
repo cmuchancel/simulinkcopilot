@@ -153,6 +153,26 @@ class GraphToSimulinkTests(unittest.TestCase):
         self.assertIn("MathFunction", block_types)
         self.assertIn("Abs", block_types)
 
+    def test_atan2_min_max_and_sat_graph_map_to_backend_blocks(self) -> None:
+        equations = translate_latex(r"\dot{x}=\atan2(u,x)+\min(x,u)+\max(x,b)+\sat(u,u_{min},u_{max})")
+        extraction = extract_states(
+            equations,
+            mode="configured",
+            symbol_config={"u": "input", "b": "parameter", "u_min": "parameter", "u_max": "parameter"},
+        )
+        first_order = build_first_order_system(equations, extraction=extraction)
+        graph = lower_first_order_system_graph(first_order, name="multiarg_functions")
+        model = graph_to_simulink_model(
+            graph,
+            state_names=first_order["states"],
+            parameter_values={"b": 0.4, "u_min": -1.0, "u_max": 1.0},
+            input_mode="inport",
+        )
+        block_types = {spec["type"] for spec in model["blocks"].values()}
+        self.assertIn("TrigonometricFunction", block_types)
+        self.assertIn("MinMax", block_types)
+        self.assertIn("Saturation", block_types)
+
     def test_non_integer_power_uses_math_function_chain(self) -> None:
         first_order = build_first_order_system(translate_latex(r"\dot{x}=x^{\frac{1}{2}}"))
         graph = lower_first_order_system_graph(first_order, name="fractional_power")

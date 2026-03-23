@@ -25,11 +25,13 @@ from ir.operation_catalog import validate_operation_dict, validate_supported_nod
 from latex_frontend.symbols import (
     derivative_display_name,
     derivative_symbol_name,
+    function_arity,
     parse_derivative_symbol_name,
     SUPPORTED_FUNCTION_NAMES,
 )
 
 
+_SAT_FUNCTION = sympy.Function("sat")
 _SYMPY_FUNCTIONS: dict[str, object] = {
     "abs": sympy.Abs,
     "sin": sympy.sin,
@@ -53,8 +55,17 @@ _SYMPY_FUNCTIONS: dict[str, object] = {
     "exp": sympy.exp,
     "log": sympy.log,
     "sqrt": sympy.sqrt,
+    "atan2": sympy.atan2,
+    "min": sympy.Min,
+    "max": sympy.Max,
+    "sat": _SAT_FUNCTION,
 }
 _SYMPY_FUNCTIONS_REVERSE = {value: key for key, value in _SYMPY_FUNCTIONS.items()}
+
+
+def sympy_function_locals() -> dict[str, object]:
+    """Return supported symbolic function locals for front-door parsing."""
+    return dict(_SYMPY_FUNCTIONS)
 
 
 def expression_to_dict(node: ExpressionNode) -> dict[str, Any]:
@@ -77,7 +88,7 @@ def expression_to_dict(node: ExpressionNode) -> dict[str, Any]:
     if isinstance(node, NegNode):
         return {"op": "neg", "args": [expression_to_dict(node.operand)]}
     if isinstance(node, FunctionNode):
-        return {"op": node.function, "args": [expression_to_dict(node.operand)]}
+        return {"op": node.function, "args": [expression_to_dict(arg) for arg in node.args]}
     raise TypeError(f"Unsupported expression node: {type(node).__name__}")
 
 
@@ -108,7 +119,7 @@ def expression_from_dict(node_dict: dict[str, Any]) -> ExpressionNode:
     if op_name == "neg":
         return NegNode(expression_from_dict(node_dict["args"][0]))
     if op_name in SUPPORTED_FUNCTION_NAMES:
-        return FunctionNode(op_name, expression_from_dict(node_dict["args"][0]))
+        return FunctionNode(op_name, tuple(expression_from_dict(child) for child in node_dict["args"]))
     raise TypeError(f"Unsupported serialized expression operation: {op_name}")
 
 
@@ -144,7 +155,7 @@ def expression_to_sympy(node: ExpressionNode) -> sympy.Expr:
     if isinstance(node, NegNode):
         return -expression_to_sympy(node.operand)
     if isinstance(node, FunctionNode):
-        return _SYMPY_FUNCTIONS[node.function](expression_to_sympy(node.operand))
+        return _SYMPY_FUNCTIONS[node.function](*[expression_to_sympy(arg) for arg in node.args])
     raise TypeError(f"Unsupported expression node: {type(node).__name__}")
 
 
@@ -190,8 +201,12 @@ def sympy_to_expression(expr: sympy.Expr) -> ExpressionNode:
     if expr.is_Pow:
         return PowNode(sympy_to_expression(expr.base), sympy_to_expression(expr.exp))
 
-    if expr.func in _SYMPY_FUNCTIONS_REVERSE and len(expr.args) == 1:
-        return FunctionNode(_SYMPY_FUNCTIONS_REVERSE[expr.func], sympy_to_expression(expr.args[0]))
+    if expr.func in _SYMPY_FUNCTIONS_REVERSE:
+        op_name = _SYMPY_FUNCTIONS_REVERSE[expr.func]
+        min_arity, max_arity = function_arity(op_name)
+        if len(expr.args) < min_arity or (max_arity is not None and len(expr.args) > max_arity):
+            raise TypeError(f"Unsupported SymPy expression arity for {op_name!r}: {expr!r}")
+        return FunctionNode(op_name, tuple(sympy_to_expression(arg) for arg in expr.args))
 
     raise TypeError(f"Unsupported SymPy expression for deterministic IR conversion: {expr!r}")
 

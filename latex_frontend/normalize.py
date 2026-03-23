@@ -75,7 +75,7 @@ _TIME_DEPENDENT_SYMBOL_RE = re.compile(
     r"(?<!\\)\b(?P<name>[A-Za-z][A-Za-z0-9_]*(?:_\{?[A-Za-z0-9_]+\}?)?)\s*\(\s*t\s*\)"
 )
 _BEGIN_END_ENV_RE = re.compile(r"\\(?P<command>begin|end)\s*\{\s*(?P<environment>[A-Za-z*]+)\s*\}")
-_GENERIC_SYMBOL_COMMAND_RE = re.compile(r"\\(?P<command>[A-Za-z]+)")
+_GENERIC_SYMBOL_COMMAND_RE = re.compile(r"\\(?P<command>[A-Za-z][A-Za-z0-9]*)")
 _PI_COMMAND_RE = re.compile(r"\\pi(?![A-Za-z])")
 _BARE_FUNCTION_ARGUMENT_RE = re.compile(
     rf"""

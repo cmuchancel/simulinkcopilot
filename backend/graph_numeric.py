@@ -80,6 +80,8 @@ class GraphNumericEvaluator:
             return float(math.acos(child_values[0]))
         if op == "atan":
             return float(math.atan(child_values[0]))
+        if op == "atan2":
+            return float(math.atan2(child_values[0], child_values[1]))
         if op == "sinh":
             return float(math.sinh(child_values[0]))
         if op == "cosh":
@@ -106,4 +108,10 @@ class GraphNumericEvaluator:
             return float(math.sqrt(child_values[0]))
         if op == "abs":
             return float(abs(child_values[0]))
+        if op == "min":
+            return float(min(child_values))
+        if op == "max":
+            return float(max(child_values))
+        if op == "sat":
+            return float(min(max(child_values[0], child_values[1]), child_values[2]))
         return None

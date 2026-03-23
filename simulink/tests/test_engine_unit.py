@@ -89,6 +89,49 @@ def test_detect_matlab_root_skips_missing_and_duplicate_candidates_before_applic
     assert module.detect_matlab_root() == app_root.resolve()
 
 
+def test_detect_matlab_root_uses_linux_standard_install_locations(monkeypatch, tmp_path) -> None:
+    module = _reload_engine_module()
+    linux_root = tmp_path / "usr" / "local" / "MATLAB"
+    matlab_root = linux_root / "R2025b"
+    (matlab_root / "extern/engines/python").mkdir(parents=True)
+
+    def fake_path(value):
+        if value == "/usr/local/MATLAB":
+            return linux_root
+        if value == "/opt/MATLAB":
+            return tmp_path / "missing_opt"
+        return StdPath(value)
+
+    monkeypatch.setattr(module, "Path", fake_path)
+    monkeypatch.setattr(module.sys, "platform", "linux", raising=False)
+    monkeypatch.delenv("MATLABROOT", raising=False)
+    monkeypatch.setattr(module.shutil, "which", lambda _: None)
+
+    assert module.detect_matlab_root() == matlab_root.resolve()
+
+
+def test_detect_matlab_root_uses_windows_standard_install_locations(monkeypatch, tmp_path) -> None:
+    module = _reload_engine_module()
+    program_files = tmp_path / "Program Files"
+    matlab_base = program_files / "MATLAB"
+    matlab_root = matlab_base / "R2025a"
+    (matlab_root / "extern/engines/python").mkdir(parents=True)
+
+    def fake_path(value):
+        if value == str(program_files):
+            return program_files
+        return StdPath(value)
+
+    monkeypatch.setattr(module, "Path", fake_path)
+    monkeypatch.setattr(module.sys, "platform", "win32", raising=False)
+    monkeypatch.setattr(module.os, "name", "nt", raising=False)
+    monkeypatch.setenv("ProgramFiles", str(program_files))
+    monkeypatch.delenv("MATLABROOT", raising=False)
+    monkeypatch.setattr(module.shutil, "which", lambda _: None)
+
+    assert module.detect_matlab_root() == matlab_root.resolve()
+
+
 def test_detect_architecture_name_covers_supported_platforms(monkeypatch) -> None:
     module = _reload_engine_module()
     monkeypatch.setattr(module.sys, "platform", "darwin", raising=False)

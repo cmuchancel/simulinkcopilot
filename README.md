@@ -13,7 +13,26 @@ This repo is a deterministic symbolic compiler backend for restricted equation i
 - `tests/`
   Cross-cutting integration and smoke tests.
 
-Repo conventions are documented in [CODING_STANDARDS.md](/Users/chancelavoie/Desktop/simulinkcopilot/CODING_STANDARDS.md).
+Repo conventions are documented in [CODING_STANDARDS.md](CODING_STANDARDS.md).
+
+## Installation
+
+For a clean local install from the repo root:
+
+```bash
+python3 -m scripts.bootstrap_distribution --install-runtime --editable
+```
+
+That installs runtime dependencies, installs the repo in editable mode, and checks whether MATLAB can be discovered locally.
+
+See [docs/distribution.md](docs/distribution.md) for the full handoff/setup path for Python, the GUI, and MATLAB.
+
+For a manual install:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
+```
 
 The current pipeline:
 
@@ -37,7 +56,7 @@ The current pipeline:
 14. validates supported preserved DAEs in Python with consistent initialization, residual checks, and differential-state trajectories
 15. compares Python and Simulink trajectories for the supported route that was selected
 
-See [docs/input_frontends.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/input_frontends.md) for the front-door payloads, [docs/ir_schema.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md) for the shared normalized schema, and [docs/matlab_bridge.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/matlab_bridge.md) for the first MATLAB-facing bridge layer.
+See [docs/input_frontends.md](docs/input_frontends.md) for the front-door payloads, [docs/ir_schema.md](docs/ir_schema.md) for the shared normalized schema, and [docs/matlab_bridge.md](docs/matlab_bridge.md) for the first MATLAB-facing bridge layer.
 
 ## Deterministic Guarantees
 
@@ -169,15 +188,15 @@ This graph format is the bridge to a later deterministic Simulink exporter.
 
 ## Simulink Backend
 
-The backend modules live in [backend/](/Users/chancelavoie/Desktop/simulinkcopilot/backend):
+The backend modules live in [backend/](backend/):
 
-- [graph_to_simulink.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/graph_to_simulink.py)
-- [simulink_dict.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/simulink_dict.py)
-- [block_library.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/block_library.py)
-- [builder.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/builder.py)
-- [simulate_simulink.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/simulate_simulink.py)
-- [extract_signals.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/extract_signals.py)
-- [validate_simulink.py](/Users/chancelavoie/Desktop/simulinkcopilot/backend/validate_simulink.py)
+- [graph_to_simulink.py](backend/graph_to_simulink.py)
+- [simulink_dict.py](backend/simulink_dict.py)
+- [block_library.py](backend/block_library.py)
+- [builder.py](backend/builder.py)
+- [simulate_simulink.py](backend/simulate_simulink.py)
+- [extract_signals.py](backend/extract_signals.py)
+- [validate_simulink.py](backend/validate_simulink.py)
 
 Current backend behavior:
 
@@ -222,7 +241,7 @@ The repo supports a narrow, explicit set of DAE routes:
 - `unsupported_dae`
   Higher-index, non-square, structurally singular, or otherwise unsupported algebraic structures are rejected explicitly.
 
-See [docs/dae_support.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/dae_support.md) for the route decision tree and the exact support boundary.
+See [docs/dae_support.md](docs/dae_support.md) for the route decision tree and the exact support boundary.
 
 ## CLI
 
@@ -231,6 +250,15 @@ Run the full pipeline from a LaTeX file:
 ```bash
 python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.tex
 ```
+
+Installed console entrypoints are also available after `pip install -e .`:
+
+- `eqn2sim-gui`
+- `eqn2sim-pipeline`
+- `eqn2sim-tests`
+- `eqn2sim-examples`
+- `eqn2sim-benchmark`
+- `eqn2sim-full-benchmark`
 
 Or pass LaTeX directly:
 
@@ -261,7 +289,7 @@ Useful flags:
 
 ## MATLAB Bridge
 
-The repo now includes a first MATLAB-facing bridge layer in [matlab/](/Users/chancelavoie/Desktop/simulinkcopilot/matlab).
+The repo now includes a first MATLAB-facing bridge layer in [matlab/](matlab/).
 
 Public entrypoints:
 

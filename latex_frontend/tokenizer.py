@@ -44,7 +44,7 @@ def tokenize(text: str) -> list[Token]:
             start = i
             i += 1
             command_start = i
-            while i < len(text) and text[i].isalpha():
+            while i < len(text) and text[i].isalnum():
                 i += 1
             command = text[command_start:i]
             if not command:
@@ -80,6 +80,7 @@ def tokenize(text: str) -> list[Token]:
             "/": "SLASH",
             "^": "CARET",
             "=": "EQUALS",
+            ",": "COMMA",
             "(": "LPAREN",
             ")": "RPAREN",
             "{": "LBRACE",

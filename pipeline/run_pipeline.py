@@ -891,18 +891,18 @@ def main() -> int:
     )
     parser.add_argument(
         "--simulink-output-dir",
-        help=f"Directory for generated Simulink models. Defaults to {DEFAULT_SIMULINK_OUTPUT_DIR}.",
+        help="Directory for generated Simulink models. Defaults to the repo workspace demo-model directory.",
     )
     parser.add_argument("--runtime-json", help="Path to a JSON file overriding parameter values, initial conditions, and time settings.")
     parser.add_argument("--report-json", help="Write a JSON pipeline summary to a file.")
     parser.add_argument(
         "--export-gui-run",
         action="store_true",
-        help=f"Export the completed run into {DEFAULT_GUI_REPORT_ROOT} so it can be reopened from the web app.",
+        help="Export the completed run into the default GUI-run artifact directory so it can be reopened from the web app.",
     )
     parser.add_argument(
         "--gui-report-root",
-        help=f"Directory for saved GUI runs. Defaults to {DEFAULT_GUI_REPORT_ROOT}.",
+        help="Directory for saved GUI runs. Defaults to the repo workspace GUI-run directory.",
     )
     parser.set_defaults(run_sim=True)
     parser.set_defaults(expected_linear=None)

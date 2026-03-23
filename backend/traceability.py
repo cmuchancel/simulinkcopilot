@@ -113,9 +113,18 @@ def build_node_expressions(graph: dict[str, object]) -> dict[str, str]:
         elif op == "negate":
             child = render(node["inputs"][0])
             label = f"-{_maybe_parenthesize(child)}" if not _is_atomic(child) else f"-{child}"
+        elif op == "atan2":
+            y_id, x_id = node["inputs"]
+            label = f"atan2({_maybe_parenthesize(render(y_id))}, {_maybe_parenthesize(render(x_id))})"
+        elif op in {"min", "max", "sat"}:
+            rendered = ", ".join(_maybe_parenthesize(render(child_id)) for child_id in node["inputs"])
+            label = f"{op}({rendered})"
         else:
-            child = render(node["inputs"][0])
-            label = f"{op}({_maybe_parenthesize(child) if not _is_atomic(child) else child})"
+            rendered = ", ".join(
+                _maybe_parenthesize(render(child_id)) if not _is_atomic(render(child_id)) else render(child_id)
+                for child_id in node["inputs"]
+            )
+            label = f"{op}({rendered})"
 
         memo[node_id] = label
         return label

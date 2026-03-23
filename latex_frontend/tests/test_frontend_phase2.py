@@ -102,6 +102,14 @@ class FrontendPhase2Tests(unittest.TestCase):
         equations = translate_latex(r"\dot{x}=\sqrt{x}+\lvert y \rvert")
         self.assertEqual(equation_to_string(equations[0]), "D1_x = sqrt(x) + Abs(y)")
 
+    def test_multi_argument_functions_translate(self) -> None:
+        equations = translate_latex(r"\dot{x}=\atan2(y,x)+\min(a,b)+\max(c,d)+\sat(u,u_{min},u_{max})")
+        rendered = equation_to_string(equations[0])
+        self.assertIn("atan2(y, x)", rendered)
+        self.assertIn("Min(a, b)", rendered)
+        self.assertIn("Max(c, d)", rendered)
+        self.assertIn("sat(u, u_min, u_max)", rendered)
+
     def test_nonlinear_damping_equation_translates(self) -> None:
         equations = translate_latex(
             r"m\ddot{x}(t) + \left(c_1 + c_2 \lvert \dot{x}(t) \rvert \right)\dot{x}(t) + kx(t) = F(t)"

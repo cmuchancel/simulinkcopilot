@@ -68,6 +68,14 @@ BLOCK_LIBRARY = {
         "path": "simulink/Math Operations/Abs",
         "ports": ["in", "out"],
     },
+    "MinMax": {
+        "path": "simulink/Math Operations/MinMax",
+        "ports": ["in", "out"],
+    },
+    "Saturation": {
+        "path": "simulink/Discontinuities/Saturation",
+        "ports": ["in", "out"],
+    },
     "Subsystem": {
         "path": "simulink/Ports & Subsystems/Subsystem",
         "ports": ["in", "out"],
@@ -97,7 +105,11 @@ GRAPH_OP_TO_BLOCK = {
     "asinh": "TrigonometricFunction",
     "acosh": "TrigonometricFunction",
     "atanh": "TrigonometricFunction",
+    "atan2": "TrigonometricFunction",
     "abs": "Abs",
+    "min": "MinMax",
+    "max": "MinMax",
+    "sat": "Saturation",
     "exp": "MathFunction",
     "log": "MathFunction",
     "sqrt": "MathFunction",

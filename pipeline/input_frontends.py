@@ -9,37 +9,21 @@ from pathlib import Path
 import sympy
 from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 
-from ir.equation_dict import sympy_to_equation
+from ir.equation_dict import sympy_function_locals, sympy_to_equation
 from latex_frontend.symbols import DeterministicCompileError, derivative_symbol_name
 from latex_frontend.translator import translate_file, translate_latex
 from pipeline.normalized_problem import NormalizedProblem, build_normalized_problem
 
 
 _PARSE_TRANSFORMATIONS = standard_transformations + (convert_xor,)
-_SYMPY_PARSE_LOCALS = {
-    "abs": sympy.Abs,
-    "sin": sympy.sin,
-    "cos": sympy.cos,
-    "tan": sympy.tan,
-    "sec": sympy.sec,
-    "csc": sympy.csc,
-    "cot": sympy.cot,
-    "asin": sympy.asin,
-    "acos": sympy.acos,
-    "atan": sympy.atan,
-    "sinh": sympy.sinh,
-    "cosh": sympy.cosh,
-    "tanh": sympy.tanh,
-    "sech": sympy.sech,
-    "csch": sympy.csch,
-    "coth": sympy.coth,
-    "asinh": sympy.asinh,
-    "acosh": sympy.acosh,
-    "atanh": sympy.atanh,
-    "exp": sympy.exp,
-    "log": sympy.log,
-    "sqrt": sympy.sqrt,
-}
+_SYMPY_PARSE_LOCALS = sympy_function_locals()
+_SYMPY_PARSE_LOCALS.update(
+    {
+        "Abs": sympy.Abs,
+        "Min": sympy.Min,
+        "Max": sympy.Max,
+    }
+)
 _IDENTIFIER_PATTERN = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*\b")
 _DIFF_PATTERN = re.compile(
     r"diff\(\s*(?P<base>[A-Za-z][A-Za-z0-9_]*)\s*,\s*(?P<time>[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(?P<order>\d+)\s*)?\)"

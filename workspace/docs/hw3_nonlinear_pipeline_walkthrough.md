@@ -795,7 +795,7 @@ This function:
 For this run, the exact generated model was:
 
 ```text
-/Users/chancelavoie/Desktop/simulinkcopilot/workspace/generated_models/professor_demo_models/cart_pendulum_hw3_simulink.slx
+workspace/generated_models/professor_demo_models/cart_pendulum_hw3_simulink.slx
 ```
 
 ## 15. Simulation Runtime Used for This Example

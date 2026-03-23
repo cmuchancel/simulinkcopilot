@@ -18,6 +18,7 @@
 \usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{graphicx}
+\usepackage{makecell}
 \usepackage{tabularx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,backgrounds,calc,fit,positioning}
@@ -44,7 +45,7 @@
 \keywords{deterministic compiler, Simulink, equation-based modeling, symbolic computation, benchmark, model-based design}
 
 \begin{abstract}
-Engineers often derive dynamics as equations first and rebuild block diagrams later by hand. That translation step is slow, error-prone, and difficult to validate. This paper presents \EqnToSim, a deterministic compiler that converts a restricted \LaTeX{} representation of ordinary differential equations into validated, human-readable Simulink models. The pipeline normalizes and parses \LaTeX{} into a canonical intermediate representation, deterministically classifies states, isolates highest-order derivatives, lowers explicit first-order systems into a shared-subexpression graph, and generates real \texttt{.slx} models through the MATLAB Engine API. A second backend layer adds deterministic layout, per-state subsystems, integrator-chain organization, and symbolic signal labels without changing numerical behavior. Across a 216-case synthetic benchmark and a 255-case full benchmark suite spanning verified, structural, and adversarial tiers, every case satisfied its benchmark criterion. For compared cases, the average root-mean-square error between Python and Simulink trajectories was $1.36\times10^{-11}$ and the worst observed maximum absolute error was $3.96\times10^{-9}$, both far below the $10^{-6}$ acceptance tolerance. Hard nonlinear coupled examples also produced valid Simulink models and matched reference ODE simulations.
+Engineers often derive dynamics as equations first and rebuild block diagrams later by hand. That translation step is slow, error-prone, and difficult to validate. This paper presents \EqnToSim, a deterministic compiler that converts a restricted \LaTeX{} representation of ordinary differential equations into validated, human-readable Simulink models. The pipeline normalizes and parses equations into a canonical symbolic representation, deterministically classifies states, isolates highest-order derivatives, lowers explicit first-order systems into a shared-subexpression graph, and generates real \texttt{.slx} models through the MATLAB Engine API. A second backend layer adds deterministic layout, per-state subsystems, integrator-chain organization, and symbolic signal labels without changing numerical behavior. Across a 255-case benchmark suite spanning verified, structural, and adversarial tiers, every case satisfied its benchmark criterion. Across compared cases, the average root-mean-square error between Python and Simulink trajectories was $1.36\times10^{-11}$ and the worst observed maximum absolute error was $3.96\times10^{-9}$, both far below the $10^{-6}$ acceptance tolerance. A separate 216-system front-door benchmark also confirmed that the same synthetic systems compile consistently from restricted \LaTeX{}, MATLAB symbolic expressions, and MATLAB equation-text inputs.
 \end{abstract}
 
 \begin{nomenclature}
@@ -73,9 +74,30 @@ The main contributions of this paper are:
 \section{Related Work}
 Equation-oriented modeling languages such as Modelica showed early that physical-system behavior can be compiled from declarative equations instead of being hand-wired as block diagrams \cite{fritzson1998modelica}. OpenModelica extended that tradition with an integrated open-source environment for modeling, symbolic compilation, simulation, optimization, and model exchange \cite{fritzson2020openmodelica}. Work on bootstrapping the OpenModelica compiler also illustrates the depth and complexity of equation-based compilation pipelines \cite{sjolund2014bootstrapping}.
 
-These systems are closely related to \EqnToSim{}, but the problem boundary is different. Modelica and OpenModelica are full modeling languages with large compilation stacks and broad acausal capabilities. \EqnToSim{} instead begins from a deliberately restricted \LaTeX{} notation that resembles how many engineers first write differential equations. The output target is not only an executable simulator state, but also an inspectable Simulink block diagram.
+These systems are closely related to \EqnToSim{}, but the problem boundary is different. Modelica, OpenModelica, and newer embedded equation-based systems such as ModelingToolkit and Modia target broad declarative modeling, symbolic transformation, and efficient solver code generation \cite{ma2021modelingtoolkit,elmqvist2021modia}. \EqnToSim{} instead begins from a deliberately restricted equation notation that resembles how many engineers first write differential equations in homework, design notes, or analysis reports. The target artifact is not only an executable simulator state, but also an inspectable Simulink block diagram that can be opened, reviewed, and edited inside an existing MATLAB workflow.
 
-The implementation also relies on well-established symbolic and numerical infrastructure. SymPy provides the symbolic expression manipulation and structural comparison mechanisms used in the compiler pipeline \cite{meurer2017sympy}. SciPy provides the reference ODE integration path used for direct simulation and numerical validation \cite{virtanen2020scipy}. MATLAB and Simulink supply the block-diagram environment and the Python bridge used for model creation and execution \cite{mathworks2025simulink,mathworks2025python}. Future interoperability work can build on standards such as FMI \cite{fmi302}, but the present contribution is a deterministic equation-to-Simulink pipeline with explicit benchmark boundaries.
+Within the MATLAB ecosystem, Simscape already provides an equation-oriented physical modeling language \cite{mathworks2026simscape}. That is an important industrial baseline, but it still requires the user to write models in Simscape's own component language rather than compiling directly from the equation notation they may already have. At the other end of the workflow, SimCheck demonstrates symbolic analysis and type-oriented checking \emph{on} Simulink models that already exist \cite{roy2010simcheck}. \EqnToSim{} complements that line of work by addressing the earlier automation step: generating the model itself from equations while preserving enough structure for later analysis and review.
+
+The implementation also relies on well-established symbolic and numerical infrastructure. SymPy provides the symbolic expression manipulation and structural comparison mechanisms used in the compiler pipeline \cite{meurer2017sympy}. SciPy provides the reference ODE integration path used for direct simulation and numerical validation \cite{virtanen2020scipy}. MATLAB and Simulink supply the block-diagram environment and the Python bridge used for model creation and execution \cite{mathworks2025simulink,mathworks2025python}. Future interoperability work can build on standards such as FMI \cite{fmi302}, but the present contribution is a deterministic equation-to-Simulink pipeline with explicit benchmark boundaries and a readable generated artifact.
+
+\begin{table*}[t]
+\caption{Positioning of \EqnToSim{} against the status quo.}
+\label{tab:positioning}
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}l X X X X@{}}
+\toprule
+Workflow & User-facing equation entry & Primary output artifact & Strength relative to \EqnToSim{} & Limitation relative to \EqnToSim{} \\
+\midrule
+Manual Simulink assembly \cite{mathworks2025simulink} & Engineer interprets equations manually & Hand-built Simulink diagram & Native Simulink workflow and maximum modeling flexibility & Translation is manual, slow, and hard to validate end to end \\
+Simscape \cite{mathworks2026simscape} & Simscape component language and physical networks & Simscape/Simulink model & Industrial-grade physical modeling inside MATLAB & Requires rewriting the problem into Simscape rather than compiling directly from source equations \\
+Modelica / OpenModelica \cite{fritzson1998modelica,fritzson2020openmodelica} & Full equation-based modeling language & Generated simulation code and tools & Broad acausal modeling and mature equation-based compilation & Different language boundary and not aimed at generating readable Simulink block diagrams from \LaTeX{}-style equations \\
+ModelingToolkit / Modia \cite{ma2021modelingtoolkit,elmqvist2021modia} & Embedded equation-based symbolic systems & Optimized numerical model implementations & Strong symbolic transformation and solver-facing code generation & Target is efficient executable models, not direct Simulink artifact generation and validation \\
+SimCheck \cite{roy2010simcheck} & Existing Simulink model plus annotations & Typed and analyzed Simulink model & Verifies properties on already-built diagrams & Starts after the model exists; it does not automate equation-to-model construction \\
+\EqnToSim{} & Restricted \LaTeX{}, MATLAB symbolic, or MATLAB equation text & Readable, validated Simulink diagram plus reports & Deterministic equation-to-Simulink generation with numerical validation and signal traceability & Narrower language boundary; intentionally rejects unsupported DAEs, PDEs, and unrestricted hybrid logic \\
+\bottomrule
+\end{tabularx}
+\end{table*}
 
 \section{Methods}
 \subsection{Compiler Boundary and Deterministic Frontend}
@@ -121,63 +143,52 @@ Each benchmark case is evaluated stage by stage: parse, state extraction, symbol
 \end{align}
 An adversarial case is considered successful only if it fails at the intended stage with an explicit categorized error.
 
+A separate front-door benchmark replays the preserved synthetic systems through three equivalent input paths: restricted \LaTeX{}, MATLAB symbolic expressions, and MATLAB equation text. This benchmark is intended to test whether the compiler's public interfaces are merely syntactic conveniences or whether they preserve the same compiled meaning and numerical behavior.
+
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   >=Latex,
-  font=\footnotesize,
-  node distance=7mm and 8mm,
-  stage/.style={draw, rounded corners=2pt, align=center, minimum width=2.35cm, minimum height=0.95cm, inner sep=4pt},
+  font=\small,
+  node distance=8mm and 8mm,
+  stage/.style={draw, rounded corners=2pt, align=center, minimum width=2.75cm, minimum height=1.0cm, inner sep=4pt},
   frontend/.style={stage, fill=blue!8},
   core/.style={stage, fill=green!8},
   backend/.style={stage, fill=orange!10},
   validate/.style={stage, fill=purple!8},
-  outline/.style={draw, rounded corners=4pt, inner sep=6pt},
   line/.style={->, thick},
   labelbox/.style={draw, dashed, rounded corners=2pt, fill=white, inner sep=4pt, font=\scriptsize}
 ]
-  \node[frontend] (latex) {Restricted\\\LaTeX{} input};
-  \node[frontend, right=of latex] (parse) {Normalize\\tokenize, parse};
-  \node[core, right=of parse] (ir) {Canonical equation\\IR and dicts};
-  \node[core, right=of ir] (symbols) {State extraction\\symbol metadata};
-  \node[core, right=of symbols] (solve) {Solve highest\\derivatives};
-  \node[core, right=of solve] (graph) {First-order graph\\CSE, stable IDs};
+  \node[frontend] (input) {Equation front doors\\\LaTeX{}, MATLAB symbolic, text};
+  \node[frontend, right=of input] (parse) {Normalize, tokenize, parse};
+  \node[core, right=of parse] (ir) {Canonical equation IR};
+  \node[core, right=of ir] (solve) {State extraction\\and derivative solve};
+  \node[core, right=of solve] (graph) {First-order graph\\stable IDs, CSE};
 
-  \node[validate, below=15mm of solve] (ode) {Python ODE\\simulation};
-  \node[validate, right=of ode] (ss) {State-space branch\\when linear};
+  \node[backend, below=11mm of ir] (dict) {Simulink dict\\block mapping};
+  \node[backend, right=of dict] (layout) {Readable backend\\layout, grouping, labels};
+  \node[backend, right=of layout] (matlab) {MATLAB engine\\build and simulate};
 
-  \node[backend, below=15mm of graph] (sdict) {Simulink dict\\block mapping};
-  \node[backend, right=of sdict] (layout) {v2 readable backend\\layout, grouping, labels};
-  \node[backend, right=of layout] (builder) {MATLAB engine\\build and simulate};
-  \node[validate, right=of builder] (compare) {Signal extraction\\RMSE, max error};
-  \node[validate, below=of compare] (reports) {Verbose artifacts\\JSON, plots, PNGs};
+  \node[validate, below=11mm of solve] (ode) {Python ODE reference};
+  \node[validate, right=of ode] (ss) {State-space reference\\when linear};
+  \node[validate, right=of ss] (compare) {Signal extraction\\RMSE, max error};
+  \node[validate, right=of compare] (reports) {Artifacts and reports\\JSON, plots, PNGs};
 
-  \draw[line] (latex) -- (parse);
+  \draw[line] (input) -- (parse);
   \draw[line] (parse) -- (ir);
-  \draw[line] (ir) -- (symbols);
-  \draw[line] (symbols) -- (solve);
+  \draw[line] (ir) -- (solve);
   \draw[line] (solve) -- (graph);
-  \draw[line] (graph) -- (sdict);
-  \draw[line] (sdict) -- (layout);
-  \draw[line] (layout) -- (builder);
-  \draw[line] (builder) -- (compare);
+  \draw[line] (graph) -- (dict);
+  \draw[line] (dict) -- (layout);
+  \draw[line] (layout) -- (matlab);
+  \draw[line] (matlab) -- (compare);
   \draw[line] (compare) -- (reports);
-
-  \draw[line] (solve) -- node[left, font=\scriptsize] {explicit first-order} (ode);
-  \draw[line] (solve) -- node[below, font=\scriptsize] {linear only} (ss);
+  \draw[line] (solve) -- (ode);
+  \draw[line] (solve) -- (ss);
   \draw[line] (ode.east) -| (compare.west);
   \draw[line] (ss.east) |- (compare.west);
 
-  \node[labelbox, above=3mm of graph] (cse) {shared subexpressions are reused deterministically};
-  \node[labelbox, below=3mm of layout] (trace) {signals retain symbolic meaning inside grouped subsystems};
-
-  \node[outline, fit=(latex)(parse), label=above:{Frontend}] {};
-  \node[outline, fit=(ir)(symbols)(solve)(graph)(ode)(ss), label=above:{Symbolic compiler and simulation references}] {};
-  \node[outline, fit=(sdict)(layout)(builder), label=above:{Simulink backend}] {};
-  \node[outline, fit=(compare)(reports), label=above:{Validation outputs}] {};
 \end{tikzpicture}
-}
 \caption{Eqn2Sim architecture. Restricted \LaTeX{} equations are normalized into canonical symbolic forms, lowered into a reusable graph, compiled into a real Simulink model, and validated against Python reference simulations. The v2 backend adds deterministic layout, subsystem grouping, integrator-chain clarity, and symbolic signal traceability without changing the numerical path.}
 \label{fig:pipeline}
 \end{figure*}
@@ -204,6 +215,27 @@ Total & 255 & Full benchmark suite & 255/255 \\
 \end{table}
 
 Across compared cases in the full benchmark, the average RMSE between Python and Simulink trajectories was $1.36\times10^{-11}$, the average maximum absolute error was $6.49\times10^{-11}$, and the worst observed maximum absolute error was $3.96\times10^{-9}$. All of these values remained well below the acceptance threshold of $10^{-6}$. The explicit failure categories observed in the adversarial tier were four parse failures, five symbolic failures, one graph-invalid case, and one numerical-instability case.
+
+\subsection{Front-Door Equivalence}
+The compiler now exposes three public input paths for equivalent mathematical content: restricted \LaTeX{}, MATLAB symbolic expressions, and MATLAB equation text. To ensure that these front doors are not merely parser variants with different semantics, the preserved synthetic suite was replayed through all three interfaces. On the 216-system suite, all 648 front-door evaluations completed successfully, corresponding to a 100\% pass rate for each front door. The normalized equation forms matched across all 216 systems, and the average ODE RMSE between the non-\LaTeX{} front doors and the \LaTeX{} baseline was on the order of machine precision, showing that the three interfaces preserve the same compiled behavior.
+
+\begin{table}[t]
+\caption{Front-door equivalence benchmark on the preserved synthetic suite.}
+\label{tab:frontdoors}
+\centering
+\footnotesize
+\begin{tabularx}{\columnwidth}{@{}l c c c@{}}
+\toprule
+Front door & Systems & Evaluations & Result \\
+\midrule
+Restricted \LaTeX{} & 216 & 216 & 216/216 \\
+MATLAB symbolic & 216 & 216 & 216/216 \\
+MATLAB equation text & 216 & 216 & 216/216 \\
+\midrule
+Combined & 216 & 648 & 648/648 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \subsection{Scaling on the Preserved Synthetic Suite}
 The legacy 216-case synthetic suite remained fully intact after the backend cleanup and readable-layout integration. Table~\ref{tab:scaling} shows how graph size, Simulink block count, and build time scaled with generated state count on that preserved benchmark.
@@ -257,15 +289,18 @@ Figure~\ref{fig:cartpendulum} shows one of these nonlinear cases: a coupled cart
 
 \begin{figure*}[t]
 \centering
-\begin{minipage}[t]{0.34\textwidth}
+\begin{minipage}[t]{\textwidth}
 \centering
-\includegraphics[width=\linewidth]{figures/cart_pendulum_model.png}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.63\textwidth}
+\includegraphics[width=0.98\textwidth]{figures/cart_pendulum_model_wide.png}
+\end{minipage}
+
+\vspace{2mm}
+
+\begin{minipage}[t]{0.82\textwidth}
 \centering
 \includegraphics[width=\linewidth]{figures/cart_pendulum_simulation.png}
 \end{minipage}
-\caption{A nonlinear cart-pendulum-spring benchmark generated by \EqnToSim{}. Left: the readable v2 Simulink model, organized into per-state subsystems with explicit integrator-chain structure. Right: the corresponding Python ODE and Simulink trajectories for $(q, \dot{q}, x, \dot{x})$; the measured RMSE and maximum absolute error were $1.23\times10^{-9}$ and $2.12\times10^{-8}$, respectively.}
+\caption{A nonlinear cart-pendulum-spring benchmark generated by \EqnToSim{}. Top: the readable v2 Simulink model, organized into per-state subsystems with explicit integrator-chain structure. Bottom: the corresponding Python ODE and Simulink trajectories for $(q, \dot{q}, x, \dot{x})$; the measured RMSE and maximum absolute error were $1.23\times10^{-9}$ and $2.12\times10^{-8}$, respectively.}
 \label{fig:cartpendulum}
 \end{figure*}
 
@@ -274,10 +309,12 @@ The main engineering result is that determinism and usability did not need to be
 
 The benchmark design also sharpened the capability boundary of the compiler. Rather than claiming support for arbitrary mathematical input, \EqnToSim{} makes the supported subset explicit and tests that subset aggressively. Adversarial cases are therefore useful outcomes, not embarrassments: they document where the compiler should stop, report a categorized error, and refuse to guess.
 
-Finally, the readable backend suggests a practical bridge between symbolic compilation and model-based design. Equation-based languages and tools already demonstrate the power of declarative modeling \cite{fritzson1998modelica,fritzson2020openmodelica}. \EqnToSim{} shows that a narrower, deterministic equation frontend can still produce a block diagram that remains meaningful inside a Simulink-centered toolchain.
+Relative to the status quo, \EqnToSim{} occupies a useful middle ground. Modelica-family and Julia-based equation systems remain broader and more expressive \cite{fritzson2020openmodelica,ma2021modelingtoolkit,elmqvist2021modia}. Simscape remains the more natural path when a team is already authoring component libraries inside the MathWorks ecosystem \cite{mathworks2026simscape}. SimCheck-style analysis remains valuable once a Simulink artifact already exists \cite{roy2010simcheck}. The specific niche addressed here is different: start from the equations engineers already have, compile them deterministically into an inspectable Simulink artifact, and validate that artifact numerically against reference simulations.
+
+That niche is especially relevant to engineering automation. Many modeling teams do not need a new general-purpose modeling language; they need a trustworthy way to remove the repetitive hand-translation step between an equation derivation and a reviewable simulation model. The front-door benchmark also matters in that context because it shows that the same backend can be reached from several authoring styles without changing the compiled result.
 
 \section{Limitations}
-\EqnToSim{} is intentionally not a general \LaTeX{} mathematics parser. It does not accept arbitrary environments, arbitrary macros, or general symbolic manipulation beyond the supported operator set. DAE-like systems, underdetermined formulations, overdetermined systems, and implicit nonlinear derivative couplings are rejected instead of being solved heuristically. Nonlinear systems bypass state-space realization, and hybrid or event-like logic is only accepted when it can be represented in the current deterministic operator boundary.
+\EqnToSim{} is intentionally not a general \LaTeX{} mathematics parser. It does not accept arbitrary environments, arbitrary macros, or general symbolic manipulation beyond the supported operator set. DAE-like systems, underdetermined formulations, overdetermined systems, and implicit nonlinear derivative couplings are rejected instead of being solved heuristically. Nonlinear systems bypass state-space realization, and hybrid or event-like logic is only accepted when it can be represented in the current deterministic operator boundary. Piecewise logic, PDE operators, and the broader acausal modeling features found in Modelica-family tools remain outside the present scope.
 
 The backend currently assumes a local MATLAB and Simulink installation. That dependency is appropriate for the target workflow, but it limits portability compared with purely open-source simulation stacks. In addition, the synthetic benchmark generator samples from the supported operator families; it improves coverage, but it does not constitute an unbiased sample of all equations seen in industrial modeling practice.
 

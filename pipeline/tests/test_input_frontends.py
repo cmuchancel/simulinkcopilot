@@ -107,6 +107,45 @@ def test_preserved_nonlinear_dae_matches_across_latex_symbolic_and_text_front_do
     assert classifications == {"nonlinear_preserved_semi_explicit_dae"}
 
 
+def test_multi_argument_functions_match_across_latex_symbolic_and_text_front_doors() -> None:
+    payloads = [
+        {
+            "source_type": "latex",
+            "text": r"\dot{x}=\atan2(u,a)+\min(u,b)+\max(c,d)+\sat(u,l,h)",
+            "states": ["x"],
+            "inputs": ["u"],
+            "parameters": ["a", "b", "c", "d", "l", "h"],
+            "time_variable": "t",
+        },
+        {
+            "source_type": "matlab_symbolic",
+            "equations": ["diff(x,t) == atan2(u,a) + min(u,b) + max(c,d) + sat(u,l,h)"],
+            "states": ["x"],
+            "inputs": ["u"],
+            "parameters": ["a", "b", "c", "d", "l", "h"],
+            "time_variable": "t",
+        },
+        {
+            "source_type": "matlab_equation_text",
+            "equations": ["xdot = atan2(u,a) + min(u,b) + max(c,d) + sat(u,l,h)"],
+            "states": ["x"],
+            "inputs": ["u"],
+            "parameters": ["a", "b", "c", "d", "l", "h"],
+            "time_variable": "t",
+        },
+    ]
+
+    problems = [normalize_problem(payload) for payload in payloads]
+    signatures = [_problem_signature(problem) for problem in problems]
+
+    assert signatures[0] == signatures[1] == signatures[2]
+    rendered = signatures[0]["equations"][0]
+    assert "atan2(a, u)" in rendered or "atan2(u, a)" in rendered
+    assert "Min" in rendered
+    assert "Max" in rendered
+    assert "sat(u, l, h)" in rendered
+
+
 def test_matlab_ode_function_matches_latex_for_simple_explicit_ode() -> None:
     latex_problem = normalize_problem(
         {

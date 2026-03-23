@@ -9,7 +9,7 @@ This repo now supports four parallel front doors:
 
 These are syntax adapters only. They do not create separate downstream math pipelines.
 
-All supported inputs normalize into the same shared [NormalizedProblem schema](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md), then reuse the same downstream stages:
+All supported inputs normalize into the same shared [NormalizedProblem schema](ir_schema.md), then reuse the same downstream stages:
 
 1. normalize
 2. classify
@@ -187,4 +187,4 @@ Representative precise failures:
 - `matlab_ode_function currently supports only structured exported RHS expressions, not opaque function handles or arbitrary MATLAB source`
 - `matlab_symbolic parse failed: diff() uses multiple time variables [...]`
 
-See [docs/dae_support.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/dae_support.md) for the downstream ODE/DAE route boundary.
+See [docs/dae_support.md](dae_support.md) for the downstream ODE/DAE route boundary.

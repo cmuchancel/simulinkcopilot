@@ -18,7 +18,7 @@ from ir.expression_nodes import (
     PowNode,
     SymbolNode,
 )
-from latex_frontend.symbols import DeterministicCompileError, SUPPORTED_FUNCTION_NAMES
+from latex_frontend.symbols import DeterministicCompileError, function_arity, SUPPORTED_FUNCTION_NAMES
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,11 @@ OPERATION_CATALOG: dict[str, OperationSpec] = {
 }
 OPERATION_CATALOG.update(
     {
-        name: OperationSpec(name, "unary", {"family": "transcendental", "block": name})
+        name: OperationSpec(
+            name,
+            "unary" if function_arity(name) == (1, 1) else "variadic",
+            {"family": "transcendental", "block": name},
+        )
         for name in sorted(SUPPORTED_FUNCTION_NAMES)
     }
 )
@@ -104,7 +108,8 @@ def validate_supported_node(node: ExpressionNode | EquationNode) -> None:
         validate_supported_node(node.operand)
         return
     if isinstance(node, FunctionNode):
-        validate_supported_node(node.operand)
+        for child in node.args:
+            validate_supported_node(child)
 
 
 def validate_operation_dict(node_dict: dict[str, Any]) -> None:

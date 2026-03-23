@@ -49,10 +49,40 @@ class NegNode:
     operand: "ExpressionNode"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class FunctionNode:
     function: str
-    operand: "ExpressionNode"
+    args: tuple["ExpressionNode", ...]
+
+    def __init__(
+        self,
+        function: str,
+        *operands: "ExpressionNode",
+        args: tuple["ExpressionNode", ...] | None = None,
+        operand: "ExpressionNode" | None = None,
+    ) -> None:
+        if args is not None and (operands or operand is not None):
+            raise ValueError("Pass either args, operand, or positional operands when constructing FunctionNode.")
+        if operand is not None and operands:
+            raise ValueError("Pass either operand or positional operands when constructing FunctionNode.")
+        if args is not None:
+            normalized_args = tuple(args)
+        elif operand is not None:
+            normalized_args = (operand,)
+        elif len(operands) == 1 and isinstance(operands[0], tuple):
+            normalized_args = tuple(operands[0])
+        else:
+            normalized_args = tuple(operands)
+        if not normalized_args:
+            raise ValueError("FunctionNode requires at least one argument.")
+        object.__setattr__(self, "function", function)
+        object.__setattr__(self, "args", normalized_args)
+
+    @property
+    def operand(self) -> "ExpressionNode":
+        if len(self.args) != 1:
+            raise ValueError(f"Function {self.function!r} does not have a single operand.")
+        return self.args[0]
 
 
 @dataclass(frozen=True)
@@ -97,8 +127,10 @@ def walk_expression(node: ExpressionNode) -> list[ExpressionNode]:
         children = (node.numerator, node.denominator)
     elif isinstance(node, PowNode):
         children = (node.base, node.exponent)
-    else:
+    elif isinstance(node, NegNode):
         children = (node.operand,)
+    else:
+        children = node.args
     for child in children:
         nodes.extend(walk_expression(child))
     return nodes

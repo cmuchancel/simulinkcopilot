@@ -16,23 +16,23 @@ This is a MATLAB front door, not a native MATLAB rewrite of the compiler.
 
 ## Public MATLAB Functions
 
-The bridge lives under [matlab/](/Users/chancelavoie/Desktop/simulinkcopilot/matlab).
+The bridge lives under [matlab/](../matlab/).
 
 Public entrypoints:
 
-- [analyzeEquationSupport.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/analyzeEquationSupport.m)
-- [generateSimulinkFromLatex.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/generateSimulinkFromLatex.m)
-- [generateSimulinkFromEquationText.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/generateSimulinkFromEquationText.m)
-- [generateSimulinkFromSymbolicMatlab.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/generateSimulinkFromSymbolicMatlab.m)
-- [generateSimulinkFromODEFunction.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/generateSimulinkFromODEFunction.m)
+- [analyzeEquationSupport.m](../matlab/analyzeEquationSupport.m)
+- [generateSimulinkFromLatex.m](../matlab/generateSimulinkFromLatex.m)
+- [generateSimulinkFromEquationText.m](../matlab/generateSimulinkFromEquationText.m)
+- [generateSimulinkFromSymbolicMatlab.m](../matlab/generateSimulinkFromSymbolicMatlab.m)
+- [generateSimulinkFromODEFunction.m](../matlab/generateSimulinkFromODEFunction.m)
 
 Internal helpers:
 
-- [backendDefaults.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/+simucopilot/+internal/backendDefaults.m)
-- [callBackend.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/+simucopilot/+internal/callBackend.m)
-- [makeRequestStruct.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/+simucopilot/+internal/makeRequestStruct.m)
-- [parseBackendResponse.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/+simucopilot/+internal/parseBackendResponse.m)
-- [validateOptions.m](/Users/chancelavoie/Desktop/simulinkcopilot/matlab/+simucopilot/+internal/validateOptions.m)
+- [backendDefaults.m](../matlab/+simucopilot/+internal/backendDefaults.m)
+- [callBackend.m](../matlab/+simucopilot/+internal/callBackend.m)
+- [makeRequestStruct.m](../matlab/+simucopilot/+internal/makeRequestStruct.m)
+- [parseBackendResponse.m](../matlab/+simucopilot/+internal/parseBackendResponse.m)
+- [validateOptions.m](../matlab/+simucopilot/+internal/validateOptions.m)
 
 ## Supported Source Types
 
@@ -43,16 +43,32 @@ The MATLAB bridge exposes the same four front doors as the backend:
 - `matlab_equation_text`
 - `matlab_ode_function`
 
-These converge to the same normalized IR described in [ir_schema.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/ir_schema.md).
+These converge to the same normalized IR described in [ir_schema.md](ir_schema.md).
 
-The bridge broadens product access, not math support. DAE support boundaries remain those described in [dae_support.md](/Users/chancelavoie/Desktop/simulinkcopilot/docs/dae_support.md).
+The bridge broadens product access, not math support. DAE support boundaries remain those described in [dae_support.md](dae_support.md).
 
 ## Setup
 
-1. Make sure MATLAB can find the bridge folder:
+1. Add the bridge folder to the MATLAB path.
+
+Recommended:
 
 ```matlab
-addpath(genpath("/Users/chancelavoie/Desktop/simulinkcopilot/matlab"))
+repoRoot = pwd;
+run(fullfile(repoRoot, "matlab", "setupEqn2Sim.m"))
+```
+
+If you are already inside the repo:
+
+```matlab
+run(fullfile(pwd, "matlab", "setupEqn2Sim.m"))
+```
+
+Manual fallback:
+
+```matlab
+repoRoot = pwd;
+addpath(genpath(fullfile(repoRoot, "matlab")))
 ```
 
 2. Make sure Python can import the repo modules.

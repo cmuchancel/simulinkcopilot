@@ -8,7 +8,7 @@ This document defines the repo conventions for implementation, review, and refac
 2. Keep executable entrypoints in `scripts/`, and run them as modules with `python3 -m scripts.<name>`.
 3. Keep generated artifacts, demos, benchmark data, reports, papers, and examples under `workspace/`.
 4. Keep deterministic compiler logic free of LLM dependencies and hidden runtime mutation.
-5. Centralize filesystem defaults in [repo_paths.py](/Users/chancelavoie/Desktop/simulinkcopilot/repo_paths.py). Do not scatter hard-coded repo-relative paths across modules.
+5. Centralize filesystem defaults in [repo_paths.py](repo_paths.py). Do not scatter hard-coded repo-relative paths across modules.
 
 ## Code Quality Rules
 
@@ -50,6 +50,6 @@ Before considering a change complete, verify:
 
 1. The code path is readable without guessing hidden assumptions.
 2. There is no duplicated implementation that should have been consolidated.
-3. There are no new hard-coded root-relative paths outside [repo_paths.py](/Users/chancelavoie/Desktop/simulinkcopilot/repo_paths.py).
+3. There are no new hard-coded root-relative paths outside [repo_paths.py](repo_paths.py).
 4. The change does not leave generated clutter at repo root.
 5. Tests and documentation still reflect the real entrypoints and file layout.

@@ -90,11 +90,15 @@ def _serialize_parse_node(node: EquationNode | ExpressionNode) -> dict[str, obje
     if isinstance(node, NegNode):
         return {"type": "NegNode", "operand": _serialize_parse_node(node.operand)}
     if isinstance(node, FunctionNode):
-        return {
+        payload: dict[str, object] = {
             "type": "FunctionNode",
             "function": node.function,
-            "operand": _serialize_parse_node(node.operand),
         }
+        if len(node.args) == 1:
+            payload["operand"] = _serialize_parse_node(node.operand)
+        else:
+            payload["args"] = [_serialize_parse_node(arg) for arg in node.args]
+        return payload
     if isinstance(node, EquationNode):
         return {
             "type": "EquationNode",

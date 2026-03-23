@@ -19,7 +19,7 @@ from ir.expression_nodes import (
     flatten_add,
     flatten_mul,
 )
-from latex_frontend.symbols import LATEX_FUNCTION_ALIASES, UnsupportedSyntaxError
+from latex_frontend.symbols import LATEX_FUNCTION_ALIASES, function_arity, UnsupportedSyntaxError
 from latex_frontend.tokenizer import Token
 
 
@@ -146,10 +146,42 @@ class Parser:
 
     def parse_function(self) -> ExpressionNode:
         function_name = self.expect("COMMAND").value
-        return FunctionNode(
-            function=LATEX_FUNCTION_ALIASES[function_name],
-            operand=self.parse_group_or_symbol(),
-        )
+        op_name = LATEX_FUNCTION_ALIASES[function_name]
+        min_arity, max_arity = function_arity(op_name)
+        if self.current().kind in {"LPAREN", "LBRACE"}:
+            args = self.parse_function_arguments()
+        elif min_arity == 1 and max_arity == 1:
+            args = (self.parse_group_or_symbol(),)
+        else:
+            token = self.current()
+            raise UnsupportedSyntaxError(
+                f"Function '\\{function_name}' requires an explicit grouped argument list at position {token.position}."
+            )
+        if len(args) < min_arity or (max_arity is not None and len(args) > max_arity):
+            token = self.current()
+            raise UnsupportedSyntaxError(
+                f"Function '\\{function_name}' requires between {min_arity} and "
+                f"{max_arity if max_arity is not None else 'many'} arguments at position {token.position}."
+            )
+        return FunctionNode(function=op_name, args=args)
+
+    def parse_function_arguments(self) -> tuple[ExpressionNode, ...]:
+        opening = self.current()
+        if opening.kind == "LPAREN":
+            closing = "RPAREN"
+        elif opening.kind == "LBRACE":
+            closing = "RBRACE"
+        else:
+            raise UnsupportedSyntaxError(
+                f"Expected function argument list at position {opening.position}, found {opening.kind}."
+            )
+        self.advance()
+        args = [self.parse_expression()]
+        while self.current().kind == "COMMA":
+            self.advance()
+            args.append(self.parse_expression())
+        self.expect(closing)
+        return tuple(args)
 
     def parse_group_or_symbol(self) -> ExpressionNode:
         if self.current().kind == "IDENT":

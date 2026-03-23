@@ -14,7 +14,10 @@ from backend.traceability import build_node_expressions, state_base_name, state_
 from ir.graph_validate import validate_graph_dict
 from latex_frontend.symbols import (
     DeterministicCompileError,
+    DIRECT_SIMULINK_BINARY_TRIG_FUNCTIONS,
     DIRECT_SIMULINK_MATH_FUNCTIONS,
+    DIRECT_SIMULINK_MINMAX_FUNCTIONS,
+    DIRECT_SIMULINK_SATURATION_FUNCTIONS,
     DIRECT_SIMULINK_TRIG_FUNCTIONS,
     RECIPROCAL_FUNCTION_BASES,
 )
@@ -541,6 +544,33 @@ class GraphToSimulinkLowerer:
         self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
         return source
 
+    def _materialize_binary_trig_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        op = str(node["op"])
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"{op}_{node_id}",
+            "TrigonometricFunction",
+            system=owner,
+            name=f"{op}_{_sanitize_for_id(node_id)}",
+            params={"Operator": op},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        for index, child_id in enumerate(node["inputs"], start=1):
+            self.add_connection(
+                owner,
+                self.resolve_for_system(child_id, owner),
+                block_id,
+                index,
+                label=self.node_expressions[child_id],
+            )
+        return source
+
     def _materialize_reciprocal_trig_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
         node = self.node_map[node_id]
         op = str(node["op"])
@@ -626,6 +656,121 @@ class GraphToSimulinkLowerer:
         source = self._remember_source(node_id, (block_id, "1"))
         child_id = node["inputs"][0]
         self.add_connection(owner, self.resolve_for_system(child_id, owner), block_id, 1, label=self.node_expressions[child_id])
+        return source
+
+    def _materialize_minmax_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        op = str(node["op"])
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        block_id = self.add_block(
+            f"{op}_{node_id}",
+            "MinMax",
+            system=owner,
+            name=f"{op}_{_sanitize_for_id(node_id)}",
+            params={"Function": op, "Inputs": str(len(node["inputs"]))},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (block_id, "1"))
+        for index, child_id in enumerate(node["inputs"], start=1):
+            self.add_connection(
+                owner,
+                self.resolve_for_system(child_id, owner),
+                block_id,
+                index,
+                label=self.node_expressions[child_id],
+            )
+        return source
+
+    def _materialize_saturation_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
+        node = self.node_map[node_id]
+        layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
+        input_id, lower_id, upper_id = node["inputs"]
+        lower_value = self.numeric_value(lower_id)
+        upper_value = self.numeric_value(upper_id)
+
+        if lower_value is not None and upper_value is not None:
+            block_id = self.add_block(
+                f"sat_{node_id}",
+                "Saturation",
+                system=owner,
+                name=f"sat_{_sanitize_for_id(node_id)}",
+                params={
+                    "LowerLimit": _numeric_string(lower_value),
+                    "UpperLimit": _numeric_string(upper_value),
+                },
+                metadata={
+                    "layout_role": layout_role,
+                    "layer_hint": layer_hint,
+                    "trace_expression": self.node_expressions[node_id],
+                },
+            )
+            source = self._remember_source(node_id, (block_id, "1"))
+            self.add_connection(
+                owner,
+                self.resolve_for_system(input_id, owner),
+                block_id,
+                1,
+                label=self.node_expressions[input_id],
+            )
+            return source
+
+        max_block_id = self.add_block(
+            f"sat_max_{node_id}",
+            "MinMax",
+            system=owner,
+            name=f"sat_max_{_sanitize_for_id(node_id)}",
+            params={"Function": "max", "Inputs": "2"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": max(0, layer_hint - 1),
+                "trace_expression": f"max({self.node_expressions[input_id]}, {self.node_expressions[lower_id]})",
+            },
+        )
+        min_block_id = self.add_block(
+            f"sat_min_{node_id}",
+            "MinMax",
+            system=owner,
+            name=f"sat_min_{_sanitize_for_id(node_id)}",
+            params={"Function": "min", "Inputs": "2"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        source = self._remember_source(node_id, (min_block_id, "1"))
+        self.add_connection(
+            owner,
+            self.resolve_for_system(input_id, owner),
+            max_block_id,
+            1,
+            label=self.node_expressions[input_id],
+        )
+        self.add_connection(
+            owner,
+            self.resolve_for_system(lower_id, owner),
+            max_block_id,
+            2,
+            label=self.node_expressions[lower_id],
+        )
+        self.add_connection(
+            owner,
+            (max_block_id, "1"),
+            min_block_id,
+            1,
+            label=f"max({self.node_expressions[input_id]}, {self.node_expressions[lower_id]})",
+        )
+        self.add_connection(
+            owner,
+            self.resolve_for_system(upper_id, owner),
+            min_block_id,
+            2,
+            label=self.node_expressions[upper_id],
+        )
         return source
 
     def _materialize_power_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
@@ -826,6 +971,9 @@ class GraphToSimulinkLowerer:
         if op in DIRECT_SIMULINK_TRIG_FUNCTIONS:
             return self._materialize_trig_node(node_id, owner=owner)
 
+        if op in DIRECT_SIMULINK_BINARY_TRIG_FUNCTIONS:
+            return self._materialize_binary_trig_node(node_id, owner=owner)
+
         if op in RECIPROCAL_FUNCTION_BASES:
             return self._materialize_reciprocal_trig_node(node_id, owner=owner)
 
@@ -834,6 +982,12 @@ class GraphToSimulinkLowerer:
 
         if op in DIRECT_SIMULINK_MATH_FUNCTIONS:
             return self._materialize_math_function_node(node_id, owner=owner)
+
+        if op in DIRECT_SIMULINK_MINMAX_FUNCTIONS:
+            return self._materialize_minmax_node(node_id, owner=owner)
+
+        if op in DIRECT_SIMULINK_SATURATION_FUNCTIONS:
+            return self._materialize_saturation_node(node_id, owner=owner)
 
         if op == "pow":
             return self._materialize_power_node(node_id, owner=owner)

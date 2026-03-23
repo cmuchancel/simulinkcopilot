@@ -44,9 +44,7 @@ def detect_matlab_root() -> Path:
             ]
         )
 
-    applications_dir = Path("/Applications")
-    if applications_dir.exists():
-        candidates.extend(sorted(applications_dir.glob("MATLAB_R*.app"), reverse=True))
+    candidates.extend(_platform_matlab_install_candidates())
 
     seen: set[Path] = set()
     for candidate in candidates:
@@ -59,8 +57,39 @@ def detect_matlab_root() -> Path:
             return resolved
 
     raise RuntimeError(
-        "Unable to locate MATLAB. Set the MATLABROOT environment variable or install MATLAB under /Applications."
+        "Unable to locate MATLAB. Set the MATLABROOT environment variable, add 'matlab' to PATH, "
+        "or install MATLAB in a standard platform location."
     )
+
+
+def _platform_matlab_install_candidates() -> list[Path]:
+    """Return standard platform-specific MATLAB installation candidates."""
+    candidates: list[Path] = []
+
+    if sys.platform == "darwin":
+        applications_dir = Path("/Applications")
+        if applications_dir.exists():
+            candidates.extend(sorted(applications_dir.glob("MATLAB_R*.app"), reverse=True))
+        return candidates
+
+    if sys.platform.startswith("linux"):
+        for root in (Path("/usr/local/MATLAB"), Path("/opt/MATLAB")):
+            if root.exists():
+                candidates.extend(sorted(root.glob("R*"), reverse=True))
+        return candidates
+
+    if os.name == "nt":
+        base_dirs: list[Path] = []
+        for env_name in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+            value = os.environ.get(env_name)
+            if value:
+                base_dirs.append(Path(value) / "MATLAB")
+        for root in base_dirs:
+            if root.exists():
+                candidates.extend(sorted(root.glob("R*"), reverse=True))
+        return candidates
+
+    return candidates
 
 
 def _detect_architecture_name() -> str:

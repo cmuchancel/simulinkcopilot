@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ir.graph_dict import ALLOWED_GRAPH_OPS, canonicalize_graph_dict
-from latex_frontend.symbols import DeterministicCompileError, SUPPORTED_FUNCTION_NAMES
+from latex_frontend.symbols import DeterministicCompileError, function_arity, SUPPORTED_FUNCTION_NAMES
 
 
 ARITY_RULES: dict[str, tuple[int, int | None]] = {
@@ -19,7 +19,7 @@ ARITY_RULES: dict[str, tuple[int, int | None]] = {
     "negate": (1, 1),
     "integrator": (1, 1),
 }
-ARITY_RULES.update({name: (1, 1) for name in SUPPORTED_FUNCTION_NAMES})
+ARITY_RULES.update({name: function_arity(name) for name in SUPPORTED_FUNCTION_NAMES})
 
 
 def validate_graph_dict(graph: dict[str, object]) -> dict[str, object]:
