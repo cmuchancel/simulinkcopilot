@@ -1,5 +1,5 @@
 function out = generateNativeExplicitOde(primaryInput, sourceType, opts, invocation, callerWorkspace, nativePreview)
-% generateNativeExplicitOde Build a native MATLAB/Simulink explicit-ODE model and compare it to the Python oracle.
+% generateNativeExplicitOde Build a native MATLAB/Simulink explicit-ODE model and compare it to MATLAB and Python oracles.
 
 nativeModelName = localResolvedModelName(opts.ModelName);
 oracleOpts = opts;
@@ -27,13 +27,30 @@ nativeBuild = localBuildNativeModel( ...
     stateNames, ...
     oracleConfig);
 nativeSimulation = localSimulateModel(nativeBuild.GeneratedModelPath, nativeBuild.ModelName, stateNames);
+matlabReference = localBuildMatlabReferenceSimulation( ...
+    nativePreview, ...
+    opts, ...
+    stateNames, ...
+    oracleConfig, ...
+    oracleSimulation);
 
 tolerance = localResolvedTolerance(opts);
-simulationComparison = localCompareSimulations(nativeSimulation, oracleSimulation, tolerance);
+nativeVsMatlab = localCompareSimulations(matlabReference, nativeSimulation, tolerance);
+pythonVsMatlab = localCompareSimulations(matlabReference, oracleSimulation, tolerance);
+nativeVsPython = localCompareSimulations(oracleSimulation, nativeSimulation, tolerance);
 oracleValidationPasses = localOracleValidationPasses(oracleOut.Validation);
 nativeValidation = struct( ...
-    "passes", logical(simulationComparison.passes) && oracleValidationPasses, ...
-    "vs_python_delegate", simulationComparison, ...
+    "passes", logical(nativeVsMatlab.passes) && logical(pythonVsMatlab.passes) && logical(nativeVsPython.passes), ...
+    "reference_kind", "matlab_ode", ...
+    "reference_solver", matlabReference.reference_solver, ...
+    "native_vs_matlab_reference", nativeVsMatlab, ...
+    "python_vs_matlab_reference", pythonVsMatlab, ...
+    "native_vs_python_delegate", nativeVsPython, ...
+    "vs_python_delegate", nativeVsPython, ...
+    "surface_passes", struct( ...
+        "native_vs_matlab_reference", logical(nativeVsMatlab.passes), ...
+        "python_vs_matlab_reference", logical(pythonVsMatlab.passes), ...
+        "native_vs_python_delegate", logical(nativeVsPython.passes)), ...
     "oracle_validation_passes", oracleValidationPasses ...
 );
 
@@ -42,7 +59,10 @@ parityReport = localAugmentParityReport( ...
     parityReport, ...
     nativeBuild.SourceBlockFamilies, ...
     oracleSourceFamilies, ...
-    simulationComparison, ...
+    matlabReference, ...
+    nativeVsMatlab, ...
+    pythonVsMatlab, ...
+    nativeVsPython, ...
     nativeValidation, ...
     oracleOut.Validation);
 
@@ -62,6 +82,7 @@ out.NormalizedProblem = oracleOut.NormalizedProblem;
 out.FirstOrder = oracleOut.FirstOrder;
 out.NativeSimulation = nativeSimulation;
 out.PythonOracleSimulation = oracleSimulation;
+out.MatlabReferenceSimulation = matlabReference;
 out.PythonOracle = oracleOut;
 out.SourceBlockFamilies = nativeBuild.SourceBlockFamilies;
 out.OracleSourceBlockFamilies = oracleSourceFamilies;
@@ -382,6 +403,180 @@ error("matlabv2native:MissingSignalDependency", ...
     "Missing signal dependency '%s' while wiring the native explicit-ODE model.", dependency);
 end
 
+function reference = localBuildMatlabReferenceSimulation(preview, opts, stateNames, modelConfig, oracleSimulation)
+timeVariable = char(string(localScalar(preview, "TimeVariable", "t")));
+parameterNames = localOrderedCell(preview, "Parameters");
+inputNames = localOrderedCell(preview, "Inputs");
+parameterValues = localStruct(opts.RuntimeOverride, "parameter_values");
+inputValues = localStruct(opts.RuntimeOverride, "input_values");
+inputSpecs = localStruct(opts.RuntimeOverride, "input_specs");
+initialConditions = localStruct(opts.RuntimeOverride, "initial_conditions");
+referenceTime = double(oracleSimulation.t(:));
+y0 = zeros(numel(stateNames), 1);
+for index = 1:numel(stateNames)
+    y0(index) = double(localScalar(initialConditions, stateNames{index}, 0));
+end
+
+tSym = sym(timeVariable);
+stateSyms = localNamedSymbols(stateNames);
+inputExpressions = cell(1, numel(inputNames));
+for index = 1:numel(inputNames)
+    inputExpressions{index} = localInputExpression( ...
+        inputNames{index}, ...
+        inputValues, ...
+        inputSpecs, ...
+        tSym);
+    for paramIndex = 1:numel(parameterNames)
+        paramName = parameterNames{paramIndex};
+        inputExpressions{index} = subs(inputExpressions{index}, sym(paramName), double(localScalar(parameterValues, paramName, 0)));
+    end
+end
+
+stateEquations = preview.FirstOrderPreview.StateEquations;
+rhsExpressions = sym(zeros(numel(stateNames), 1));
+for index = 1:numel(stateNames)
+    rhsText = localStateEquationRhs(stateEquations, stateNames{index});
+    rhsExpression = str2sym(rhsText);
+    for inputIndex = 1:numel(inputNames)
+        rhsExpression = subs(rhsExpression, sym(inputNames{inputIndex}), inputExpressions{inputIndex});
+    end
+    for paramIndex = 1:numel(parameterNames)
+        paramName = parameterNames{paramIndex};
+        rhsExpression = subs(rhsExpression, sym(paramName), double(localScalar(parameterValues, paramName, 0)));
+    end
+    rhsExpressions(index) = rhsExpression;
+end
+
+solverName = localResolvedReferenceSolver(modelConfig.Solver);
+solverHandle = str2func(solverName);
+solverOptions = localReferenceSolverOptions(modelConfig);
+rhsHandle = matlabFunction(rhsExpressions, "Vars", [{tSym}, num2cell(stateSyms)]);
+odeRhs = @(t, y) localEvaluateStateVector(rhsHandle, t, y);
+
+if isempty(solverOptions)
+    [solverTime, solverStates] = solverHandle(odeRhs, referenceTime, y0);
+else
+    [solverTime, solverStates] = solverHandle(odeRhs, referenceTime, y0, solverOptions);
+end
+
+alignedStates = localAlignStateSamples(referenceTime, double(solverTime(:)), double(solverStates));
+signals = struct();
+for index = 1:numel(stateNames)
+    signals.(matlab.lang.makeValidName(stateNames{index})) = alignedStates(:, index);
+end
+
+reference = struct( ...
+    "t", referenceTime, ...
+    "states", alignedStates, ...
+    "state_names", {reshape(stateNames, 1, [])}, ...
+    "signals", signals, ...
+    "reference_kind", "matlab_ode", ...
+    "reference_solver", solverName, ...
+    "solver_t", double(solverTime(:)), ...
+    "solver_states", double(solverStates) ...
+);
+end
+
+function expression = localInputExpression(inputName, inputValues, inputSpecs, timeSymbol)
+if isfield(inputValues, inputName)
+    expression = sym(double(localScalar(inputValues, inputName, 0)));
+    return;
+end
+
+if ~isfield(inputSpecs, inputName)
+    expression = sym(0);
+    return;
+end
+
+spec = inputSpecs.(inputName);
+kind = lower(char(string(localScalar(spec, "kind", "expression"))));
+switch kind
+    case "constant"
+        expression = sym(double(localScalar(spec, "value", 0)));
+    case "step"
+        before = double(localScalar(spec, "initial_value", 0));
+        after = double(localScalar(spec, "final_value", 1));
+        stepTime = double(localScalar(spec, "step_time", 0));
+        expression = sym(before) + sym(after - before) * heaviside(timeSymbol - sym(stepTime));
+    case "expression"
+        expression = str2sym(char(string(localScalar(spec, "expression", "0"))));
+    otherwise
+        if isfield(spec, "expression")
+            expression = str2sym(char(string(spec.expression)));
+        else
+            error("matlabv2native:UnsupportedReferenceInputSpec", ...
+                "Unsupported reference input spec kind '%s' for input '%s'.", kind, inputName);
+        end
+end
+end
+
+function rhsText = localStateEquationRhs(stateEquations, stateName)
+rhsText = "";
+for index = 1:numel(stateEquations)
+    if strcmp(char(string(stateEquations(index).state)), char(string(stateName)))
+        rhsText = char(string(stateEquations(index).rhs));
+        return;
+    end
+end
+error("matlabv2native:MissingReferenceStateEquation", ...
+    "Missing first-order state equation for '%s' while building the MATLAB reference solve.", stateName);
+end
+
+function symbols = localNamedSymbols(names)
+symbols = sym.empty(1, 0);
+for index = 1:numel(names)
+    symbols(1, index) = sym(names{index});
+end
+end
+
+function values = localEvaluateStateVector(handle, t, y)
+args = [{double(t)}, num2cell(double(y(:).'))];
+values = handle(args{:});
+values = double(values(:));
+end
+
+function aligned = localAlignStateSamples(referenceTime, sampleTime, sampleStates)
+if isequal(referenceTime, sampleTime)
+    aligned = sampleStates;
+    return;
+end
+
+aligned = zeros(numel(referenceTime), size(sampleStates, 2));
+for column = 1:size(sampleStates, 2)
+    aligned(:, column) = interp1(sampleTime, sampleStates(:, column), referenceTime, "linear", "extrap");
+end
+end
+
+function solverName = localResolvedReferenceSolver(configuredSolver)
+token = lower(strtrim(char(string(configuredSolver))));
+switch token
+    case {"ode15s", "ode45", "ode23", "ode23s", "ode23t", "ode113"}
+        solverName = token;
+    otherwise
+        solverName = "ode45";
+end
+end
+
+function solverOptions = localReferenceSolverOptions(modelConfig)
+nameValue = {};
+relTol = localMinPositive(str2double(char(string(modelConfig.RelTol))), 1e-9);
+absTol = localMinPositive(str2double(char(string(modelConfig.AbsTol))), 1e-12);
+nameValue = [nameValue, {"RelTol", relTol, "AbsTol", absTol}]; %#ok<AGROW>
+maxStep = str2double(char(string(modelConfig.MaxStep)));
+if ~isnan(maxStep) && maxStep > 0
+    nameValue = [nameValue, {"MaxStep", maxStep}]; %#ok<AGROW>
+end
+solverOptions = odeset(nameValue{:});
+end
+
+function value = localMinPositive(parsed, fallback)
+if isnan(parsed) || parsed <= 0
+    value = fallback;
+else
+    value = min(parsed, fallback);
+end
+end
+
 function simulation = localSimulateModel(modelPath, modelName, stateNames)
 load_system(modelPath);
 simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
@@ -447,20 +642,29 @@ comparison = struct( ...
 );
 end
 
-function parityReport = localAugmentParityReport(parityReport, nativeFamilies, oracleFamilies, comparison, nativeValidation, oracleValidation)
+function parityReport = localAugmentParityReport(parityReport, nativeFamilies, oracleFamilies, matlabReference, nativeVsMatlab, pythonVsMatlab, nativeVsPython, nativeValidation, oracleValidation)
 nativeFamilyMatch = localCompareFamilyStructs(nativeFamilies, oracleFamilies);
 oraclePasses = localOracleValidationPasses(oracleValidation);
 
-parityReport.Kind = "parity_phase3_native_build";
+parityReport.Kind = "parity_phase4_matlab_reference";
 parityReport.Matches.source_block_family = nativeFamilyMatch;
-parityReport.Matches.simulation_traces = logical(comparison.passes);
-parityReport.Matches.validation_status = logical(nativeValidation.passes) == logical(oraclePasses);
-parityReport.ComparedFields = localUniqueStable([parityReport.ComparedFields, {"source_block_family", "simulation_traces", "validation_status"}]);
+parityReport.Matches.simulation_traces = logical(nativeVsMatlab.passes) && logical(pythonVsMatlab.passes) && logical(nativeVsPython.passes);
+parityReport.Matches.native_vs_matlab_reference = logical(nativeVsMatlab.passes);
+parityReport.Matches.python_vs_matlab_reference = logical(pythonVsMatlab.passes);
+parityReport.Matches.native_vs_python_delegate = logical(nativeVsPython.passes);
+parityReport.Matches.validation_status = logical(nativeValidation.passes);
+parityReport.ComparedFields = localUniqueStable([parityReport.ComparedFields, {"source_block_family", "simulation_traces", "native_vs_matlab_reference", "python_vs_matlab_reference", "native_vs_python_delegate", "validation_status"}]);
 parityReport.AllComparedFieldsMatch = all(cellfun(@(name) logical(parityReport.Matches.(name)), parityReport.ComparedFields));
 parityReport.Native.source_block_family = nativeFamilies;
 parityReport.Python.source_block_family = oracleFamilies;
+parityReport.Reference = struct( ...
+    "kind", matlabReference.reference_kind, ...
+    "solver", matlabReference.reference_solver);
 parityReport.Native.validation = nativeValidation;
-parityReport.Python.validation = oracleValidation;
+parityReport.Python.validation = struct( ...
+    "oracle_validation", oracleValidation, ...
+    "vs_matlab_reference", pythonVsMatlab, ...
+    "oracle_validation_passes", oraclePasses);
 parityReport.Native.lowering_mode = "native_explicit_ode";
 parityReport.Python.lowering_mode = "python_delegate";
 end

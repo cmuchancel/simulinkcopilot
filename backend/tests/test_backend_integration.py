@@ -225,7 +225,14 @@ class BackendIntegrationTests(unittest.TestCase):
         first_order_state_match = self.eng.eval("out.ParityReport.Matches.first_order_states", nargout=1)
         source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
         simulation_trace_match = self.eng.eval("out.ParityReport.Matches.simulation_traces", nargout=1)
+        native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+        python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+        native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
         validation_status_match = self.eng.eval("out.ParityReport.Matches.validation_status", nargout=1)
+        reference_kind = self.eng.eval("out.Validation.reference_kind", nargout=1)
+        native_vs_matlab_passes = self.eng.eval("out.Validation.native_vs_matlab_reference.passes", nargout=1)
+        python_vs_matlab_passes = self.eng.eval("out.Validation.python_vs_matlab_reference.passes", nargout=1)
+        native_vs_python_passes = self.eng.eval("out.Validation.native_vs_python_delegate.passes", nargout=1)
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
@@ -237,7 +244,14 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertTrue(first_order_state_match)
         self.assertTrue(source_family_match)
         self.assertTrue(simulation_trace_match)
+        self.assertTrue(native_vs_matlab_match)
+        self.assertTrue(python_vs_matlab_match)
+        self.assertTrue(native_vs_python_match)
         self.assertTrue(validation_status_match)
+        self.assertEqual(reference_kind, "matlab_ode")
+        self.assertTrue(native_vs_matlab_passes)
+        self.assertTrue(python_vs_matlab_passes)
+        self.assertTrue(native_vs_python_passes)
         self.assertEqual(block_type, "Step")
 
     def test_matlabv2native_generate_builds_native_first_order_anchor_model(self) -> None:
@@ -259,7 +273,11 @@ class BackendIntegrationTests(unittest.TestCase):
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
         simulation_trace_match = self.eng.eval("out.ParityReport.Matches.simulation_traces", nargout=1)
+        native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+        python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+        native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
         validation_status_match = self.eng.eval("out.ParityReport.Matches.validation_status", nargout=1)
+        reference_kind = self.eng.eval("out.Validation.reference_kind", nargout=1)
         validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
@@ -268,7 +286,11 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(block_type, "Step")
         self.assertTrue(source_family_match)
         self.assertTrue(simulation_trace_match)
+        self.assertTrue(native_vs_matlab_match)
+        self.assertTrue(python_vs_matlab_match)
+        self.assertTrue(native_vs_python_match)
         self.assertTrue(validation_status_match)
+        self.assertEqual(reference_kind, "matlab_ode")
         self.assertTrue(validation_passes)
 
     def test_matlabv2native_generate_uses_matlab_function_source_for_unsupported_input_expression(self) -> None:
@@ -289,6 +311,8 @@ class BackendIntegrationTests(unittest.TestCase):
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         sf_block_type = self.eng.eval("get_param([out.ModelName '/u'], 'SFBlockType')", nargout=1)
         source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+        native_vs_matlab_passes = self.eng.eval("out.Validation.native_vs_matlab_reference.passes", nargout=1)
+        python_vs_matlab_passes = self.eng.eval("out.Validation.python_vs_matlab_reference.passes", nargout=1)
         validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
@@ -296,6 +320,8 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(block_type, "SubSystem")
         self.assertEqual(sf_block_type, "MATLAB Function")
         self.assertTrue(source_family_match)
+        self.assertTrue(native_vs_matlab_passes)
+        self.assertTrue(python_vs_matlab_passes)
         self.assertTrue(validation_passes)
 
     def _run_input_validation_case(
