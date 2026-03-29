@@ -33,6 +33,14 @@ Preferred MATLAB-first package:
 - [matlab/+matlabv1/analyze.m](../matlab/+matlabv1/analyze.m)
 - [matlab/+matlabv1/setup.m](../matlab/+matlabv1/setup.m)
 
+Experimental native-backend scaffold:
+
+- [matlabv2native_setup.m](../matlabv2native_setup.m)
+- [matlab/+matlabv2native/generate.m](../matlab/+matlabv2native/generate.m)
+- [matlab/+matlabv2native/analyze.m](../matlab/+matlabv2native/analyze.m)
+- [matlab/+matlabv2native/validate.m](../matlab/+matlabv2native/validate.m)
+- [matlab/+matlabv2native/compareWithPython.m](../matlab/+matlabv2native/compareWithPython.m)
+
 Internal helpers:
 
 - [backendDefaults.m](../matlab/+simucopilot/+internal/backendDefaults.m)
@@ -276,3 +284,4 @@ Defaults:
 - The bridge does not reimplement the classifier or DAE logic in MATLAB.
 - The final `.slx` generation still runs through the existing Python pipeline and existing `matlab.engine` build path.
 - This is not yet a native MATLAB-only backend.
+- `matlabv2native` is currently a phase-1 native scaffold: MATLAB-side intake and metadata preview are native, but route analysis and model generation still delegate to Python. See [matlab_native_backend_architecture.md](matlab_native_backend_architecture.md).

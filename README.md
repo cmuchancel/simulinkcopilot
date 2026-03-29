@@ -103,6 +103,8 @@ out = matlabv1.generate(eqn, ...
 
 `matlabv1.generate(...)` infers the source type, reads numeric parameters and input definitions from the caller workspace, and routes into the same validated backend pipeline used by the existing wrappers. Use `matlabv1.analyze(...)` for analysis-only requests.
 
+An experimental additive native-backend scaffold also exists under `matlabv2native`. It currently performs MATLAB-side intake and parity checking, then delegates final route analysis and build to Python. See [docs/matlab_native_backend_architecture.md](docs/matlab_native_backend_architecture.md).
+
 ## Deterministic Guarantees
 
 - No LLMs, no probabilistic parsing, no random IDs.

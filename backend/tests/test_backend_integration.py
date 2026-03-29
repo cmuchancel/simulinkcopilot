@@ -146,6 +146,56 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(route, "explicit_ode")
         self.assertEqual(states, ("x",))
 
+    def test_matlabv2native_compare_with_python_reports_metadata_parity(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear cmp eqn x u m c k", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) m c k u(t)", nargout=0)
+        self.eng.eval("eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);", nargout=0)
+        self.eng.eval("m = 5; c = 10; k = 20; u(t) = heaviside(t);", nargout=0)
+        self.eng.eval("cmp = matlabv2native.compareWithPython(eqn, 'State', 'x');", nargout=0)
+
+        backend_kind = self.eng.eval("cmp.BackendKind", nargout=1)
+        source_type = self.eng.eval("cmp.SourceType", nargout=1)
+        route = self.eng.eval("cmp.PythonRoute", nargout=1)
+        parity_passes = self.eng.eval("cmp.ParityReport.AllComparedFieldsMatch", nargout=1)
+        native_parameters = tuple(self.eng.eval("cmp.NativePreview.Parameters", nargout=1))
+        python_parameters = tuple(self.eng.eval("cmp.PythonNormalizedProblem.parameters", nargout=1))
+
+        self.assertEqual(backend_kind, "python_delegate")
+        self.assertEqual(source_type, "matlab_symbolic")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(parity_passes)
+        self.assertEqual(native_parameters, python_parameters)
+
+    def test_matlabv2native_generate_builds_and_returns_parity_report(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqn x u m c k", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) m c k u(t)", nargout=0)
+        self.eng.eval("eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);", nargout=0)
+        self.eng.eval("m = 5; c = 10; k = 20; u(t) = heaviside(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'ModelName', 'matlabv2native_symbolic_integration', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        generated_model_path = self.eng.eval("out.GeneratedModelPath", nargout=1)
+        parity_passes = self.eng.eval("out.ParityReport.AllComparedFieldsMatch", nargout=1)
+        block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "python_delegate")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(generated_model_path.endswith(".slx"))
+        self.assertTrue(parity_passes)
+        self.assertEqual(block_type, "Step")
+
     def _run_input_validation_case(
         self,
         *,
