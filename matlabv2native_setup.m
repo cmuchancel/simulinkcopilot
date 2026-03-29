@@ -11,5 +11,5 @@ addpath(genpath(matlabRoot));
 
 info = setupEqn2Sim(varargin{:});
 info.Api = "matlabv2native";
-info.BackendKind = "native_phase1_scaffold";
+info.BackendKind = "native_phase3_explicit_ode";
 end

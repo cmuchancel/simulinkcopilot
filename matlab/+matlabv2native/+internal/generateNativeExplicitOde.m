@@ -1,0 +1,694 @@
+function out = generateNativeExplicitOde(primaryInput, sourceType, opts, invocation, callerWorkspace, nativePreview)
+% generateNativeExplicitOde Build a native MATLAB/Simulink explicit-ODE model and compare it to the Python oracle.
+
+nativeModelName = localResolvedModelName(opts.ModelName);
+oracleOpts = opts;
+oracleOpts.OpenModel = false;
+oracleOpts.ModelName = [nativeModelName '_python_oracle'];
+
+oracleRequest = simucopilot.internal.makeRequestStruct(sourceType, primaryInput, oracleOpts);
+oracleOut = simucopilot.internal.callBackend(oracleRequest, oracleOpts);
+
+stateNames = localOrderedCell(oracleOut.FirstOrder, "states");
+if isempty(stateNames)
+    stateNames = localOrderedCell(nativePreview.FirstOrderPreview, "States");
+end
+
+outputDir = localResolvedOutputDir(opts);
+oracleConfig = localReadModelConfig(oracleOut.GeneratedModelPath, oracleOut.ModelName);
+oracleSourceFamilies = localSourceBlockFamiliesForModel(oracleOut.GeneratedModelPath, oracleOut.ModelName, localOrderedCell(nativePreview, "Inputs"));
+oracleSimulation = localSimulateModel(oracleOut.GeneratedModelPath, oracleOut.ModelName, stateNames);
+nativeBuild = localBuildNativeModel( ...
+    nativeModelName, ...
+    outputDir, ...
+    nativePreview, ...
+    opts, ...
+    callerWorkspace, ...
+    stateNames, ...
+    oracleConfig);
+nativeSimulation = localSimulateModel(nativeBuild.GeneratedModelPath, nativeBuild.ModelName, stateNames);
+
+tolerance = localResolvedTolerance(opts);
+simulationComparison = localCompareSimulations(nativeSimulation, oracleSimulation, tolerance);
+oracleValidationPasses = localOracleValidationPasses(oracleOut.Validation);
+nativeValidation = struct( ...
+    "passes", logical(simulationComparison.passes) && oracleValidationPasses, ...
+    "vs_python_delegate", simulationComparison, ...
+    "oracle_validation_passes", oracleValidationPasses ...
+);
+
+parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, oracleOut);
+parityReport = localAugmentParityReport( ...
+    parityReport, ...
+    nativeBuild.SourceBlockFamilies, ...
+    oracleSourceFamilies, ...
+    simulationComparison, ...
+    nativeValidation, ...
+    oracleOut.Validation);
+
+out = oracleOut;
+out.Api = "matlabv2native";
+out.BackendKind = "native_explicit_ode";
+out.SourceType = sourceType;
+out.Invocation = invocation;
+out.NativePreview = nativePreview;
+out.PublicOptions = localPublicOptions(opts);
+out.Route = "explicit_ode";
+out.GeneratedModelPath = nativeBuild.GeneratedModelPath;
+out.ModelName = nativeBuild.ModelName;
+out.Validation = nativeValidation;
+out.ParityReport = parityReport;
+out.NormalizedProblem = oracleOut.NormalizedProblem;
+out.FirstOrder = oracleOut.FirstOrder;
+out.NativeSimulation = nativeSimulation;
+out.PythonOracleSimulation = oracleSimulation;
+out.PythonOracle = oracleOut;
+out.SourceBlockFamilies = nativeBuild.SourceBlockFamilies;
+out.OracleSourceBlockFamilies = oracleSourceFamilies;
+
+if opts.OpenModel
+    open_system(out.GeneratedModelPath);
+end
+end
+
+function build = localBuildNativeModel(modelName, outputDir, preview, opts, callerWorkspace, stateNames, oracleConfig)
+load_system("simulink");
+if bdIsLoaded(modelName)
+    close_system(modelName, 0);
+end
+new_system(modelName);
+cleanupModel = onCleanup(@() localBestEffortClose(modelName));
+
+localApplyModelConfig(modelName, oracleConfig);
+
+stateNames = reshape(stateNames, 1, []);
+inputNames = localOrderedCell(preview, "Inputs");
+parameterNames = localOrderedCell(preview, "Parameters");
+timeVariable = char(string(localScalar(preview, "TimeVariable", "t")));
+initialConditions = localStruct(opts.RuntimeOverride, "initial_conditions");
+parameterValues = localStruct(opts.RuntimeOverride, "parameter_values");
+inputValues = localStruct(opts.RuntimeOverride, "input_values");
+inputSpecs = localStruct(opts.RuntimeOverride, "input_specs");
+
+positions = localLayoutPlan(numel(inputNames), numel(parameterNames), numel(stateNames));
+signalSources = struct();
+
+for index = 1:numel(stateNames)
+    stateName = stateNames{index};
+    blockName = ['int_' localSanitize(stateName)];
+    blockPath = [modelName '/' blockName];
+    add_block("simulink/Continuous/Integrator", blockPath, ...
+        "Position", positions.integrators(index, :), ...
+        "InitialCondition", localNumericString(localScalar(initialConditions, stateName, 0)));
+    signalSources.(stateName) = [blockName '/1'];
+end
+
+for index = 1:numel(parameterNames)
+    parameterName = parameterNames{index};
+    blockPath = [modelName '/' parameterName];
+    add_block("simulink/Sources/Constant", blockPath, ...
+        "Value", localNumericString(localScalar(parameterValues, parameterName, 0)), ...
+        "Position", positions.parameters(index, :));
+    signalSources.(parameterName) = [parameterName '/1'];
+end
+
+clockBlockName = '';
+clockSignal = '';
+inputFamilies = struct();
+for index = 1:numel(inputNames)
+    inputName = inputNames{index};
+    inputPlacement = positions.inputs(index, :);
+    [signalPort, family, clockBlockName, clockSignal] = localAddInputSource( ...
+        modelName, ...
+        inputName, ...
+        inputPlacement, ...
+        inputValues, ...
+        inputSpecs, ...
+        signalSources, ...
+        parameterNames, ...
+        stateNames, ...
+        timeVariable, ...
+        clockBlockName, ...
+        clockSignal);
+    signalSources.(inputName) = signalPort;
+    inputFamilies.(inputName) = family;
+end
+
+stateEquations = preview.FirstOrderPreview.StateEquations;
+deferredBlocks = struct("state", {}, "block_name", {}, "dependencies", {});
+for index = 1:numel(stateEquations)
+    stateName = char(string(stateEquations(index).state));
+    rhsText = strtrim(char(string(stateEquations(index).rhs)));
+    targetPort = ['int_' localSanitize(stateName) '/1'];
+    directPort = localDirectSignalPort(rhsText, signalSources);
+    if ~isempty(directPort)
+        add_line(modelName, directPort, targetPort, "autorouting", "on");
+        continue;
+    end
+    numericValue = str2double(rhsText);
+    if ~isnan(numericValue)
+        constName = ['rhs_const_' localSanitize(stateName)];
+        add_block("simulink/Sources/Constant", [modelName '/' constName], ...
+            "Value", localNumericString(numericValue), ...
+            "Position", positions.rhs(index, :));
+        add_line(modelName, [constName '/1'], targetPort, "autorouting", "on");
+        continue;
+    end
+
+    blockName = ['rhs_' localSanitize(stateName)];
+    blockPath = [modelName '/' blockName];
+    add_block("simulink/User-Defined Functions/MATLAB Function", blockPath, ...
+        "Position", positions.rhs(index, :));
+    dependencies = localExpressionDependencies(rhsText, stateNames, inputNames, parameterNames, timeVariable);
+    localSetMatlabFunctionScript(blockPath, blockName, dependencies, rhsText, "rhs");
+    deferredBlocks(end + 1) = struct("state", stateName, "block_name", blockName, "dependencies", {dependencies}); %#ok<AGROW>
+end
+
+set_param(modelName, "SimulationCommand", "Update");
+
+for index = 1:numel(deferredBlocks)
+    blockName = deferredBlocks(index).block_name;
+    dependencies = deferredBlocks(index).dependencies;
+    for portIndex = 1:numel(dependencies)
+        dependency = dependencies{portIndex};
+        dependencyPort = localSignalPortForDependency(dependency, signalSources, clockSignal, timeVariable);
+        add_line(modelName, dependencyPort, [blockName '/' num2str(portIndex)], "autorouting", "on");
+    end
+    add_line(modelName, [blockName '/1'], ['int_' localSanitize(deferredBlocks(index).state) '/1'], "autorouting", "on");
+end
+
+for index = 1:numel(stateNames)
+    stateName = stateNames{index};
+    outName = ['out_' localSanitize(stateName)];
+    add_block("simulink/Sinks/Out1", [modelName '/' outName], ...
+        "Position", positions.outputs(index, :), ...
+        "Port", num2str(index));
+    add_line(modelName, ['int_' localSanitize(stateName) '/1'], [outName '/1'], "autorouting", "on");
+end
+
+if ~isfolder(outputDir)
+    mkdir(outputDir);
+end
+generatedModelPath = fullfile(outputDir, [modelName '.slx']);
+save_system(modelName, generatedModelPath);
+clear cleanupModel
+close_system(modelName, 0);
+
+build = struct( ...
+    "ModelName", modelName, ...
+    "GeneratedModelPath", generatedModelPath, ...
+    "SourceBlockFamilies", inputFamilies ...
+);
+end
+
+function [signalPort, family, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, inputName, position, inputValues, inputSpecs, signalSources, parameterNames, stateNames, timeVariable, clockBlockName, clockSignal)
+
+if isfield(inputValues, inputName)
+    add_block("simulink/Sources/Constant", [modelName '/' inputName], ...
+        "Value", localNumericString(localScalar(inputValues, inputName, 0)), ...
+        "Position", position);
+    signalPort = [inputName '/1'];
+    family = "Constant";
+    return;
+end
+
+spec = [];
+if isfield(inputSpecs, inputName)
+    spec = inputSpecs.(inputName);
+end
+[nativeKind, payload] = localClassifyInputSpec(spec, inputName, timeVariable);
+
+switch nativeKind
+    case "Constant"
+        add_block("simulink/Sources/Constant", [modelName '/' inputName], ...
+            "Value", localNumericString(payload.value), ...
+            "Position", position);
+        signalPort = [inputName '/1'];
+        family = "Constant";
+    case "Step"
+        add_block("simulink/Sources/Step", [modelName '/' inputName], ...
+            "Time", localNumericString(payload.step_time), ...
+            "Before", localNumericString(payload.before), ...
+            "After", localNumericString(payload.after), ...
+            "Position", position);
+        signalPort = [inputName '/1'];
+        family = "Step";
+    otherwise
+        [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
+        add_block("simulink/User-Defined Functions/MATLAB Function", [modelName '/' inputName], ...
+            "Position", position);
+        dependencies = localExpressionDependencies(payload.expression, stateNames, {inputName}, parameterNames, timeVariable);
+        dependencies = setdiff(dependencies, {inputName}, "stable");
+        localSetMatlabFunctionScript([modelName '/' inputName], inputName, dependencies, payload.expression, "y");
+        set_param(modelName, "SimulationCommand", "Update");
+        for portIndex = 1:numel(dependencies)
+            dependencyPort = localSignalPortForDependency(dependencies{portIndex}, signalSources, clockSignal, timeVariable);
+            add_line(modelName, dependencyPort, [inputName '/' num2str(portIndex)], "autorouting", "on");
+        end
+        signalPort = [inputName '/1'];
+        family = "MATLAB Function";
+end
+end
+
+function [kind, payload] = localClassifyInputSpec(spec, inputName, timeVariable)
+if isempty(spec)
+    kind = "Constant";
+    payload = struct("value", 0);
+    return;
+end
+
+specKind = char(string(localScalar(spec, "kind", "expression")));
+switch lower(specKind)
+    case "constant"
+        kind = "Constant";
+        payload = struct("value", double(localScalar(spec, "value", 0)));
+        return;
+    case "step"
+        kind = "Step";
+        payload = struct( ...
+            "step_time", double(localScalar(spec, "step_time", 0)), ...
+            "before", double(localScalar(spec, "initial_value", 0)), ...
+            "after", double(localScalar(spec, "final_value", 1)) ...
+        );
+        return;
+    case "expression"
+        expression = char(string(localScalar(spec, "expression", "")));
+        [isStep, stepPayload] = localExpressionIsStep(expression, timeVariable);
+        if isStep
+            kind = "Step";
+            payload = stepPayload;
+            return;
+        end
+        numericValue = str2double(strtrim(expression));
+        if ~isnan(numericValue)
+            kind = "Constant";
+            payload = struct("value", numericValue);
+            return;
+        end
+        kind = "MATLAB Function";
+        payload = struct("expression", expression, "input_name", inputName);
+        return;
+    otherwise
+        kind = "MATLAB Function";
+        payload = struct("expression", char(string(localScalar(spec, "expression", specKind))), "input_name", inputName);
+end
+end
+
+function [isStep, payload] = localExpressionIsStep(expression, timeVariable)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+
+if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
+    isStep = true;
+    payload = struct("step_time", 0, "before", 0, "after", 1);
+    return;
+end
+
+match = regexp(expr, ['^heaviside\(' timeToken '\-(?<delay>[-+]?[0-9]*\.?[0-9]+)\)$'], "names");
+if ~isempty(match)
+    isStep = true;
+    payload = struct("step_time", str2double(match.delay), "before", 0, "after", 1);
+    return;
+end
+
+isStep = false;
+payload = struct("step_time", 0, "before", 0, "after", 0);
+end
+
+function [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal)
+if strlength(string(clockBlockName)) ~= 0
+    return;
+end
+clockBlockName = 'clock_t';
+add_block("simulink/Sources/Clock", [modelName '/' clockBlockName], ...
+    "Position", [40 240 70 260]);
+clockSignal = [clockBlockName '/1'];
+end
+
+function localSetMatlabFunctionScript(blockPath, blockName, dependencies, expression, outputName)
+rt = sfroot;
+chart = rt.find('-isa', 'Stateflow.EMChart', 'Path', blockPath);
+if isempty(chart)
+    error("matlabv2native:MissingMatlabFunctionChart", ...
+        "Could not resolve MATLAB Function chart for block '%s'.", blockPath);
+end
+functionName = matlab.lang.makeValidName(blockName);
+signatureArgs = strjoin(dependencies, ", ");
+if isempty(signatureArgs)
+    header = sprintf("function %s = %s()", outputName, functionName);
+else
+    header = sprintf("function %s = %s(%s)", outputName, functionName, signatureArgs);
+end
+chart.Script = sprintf("%s\n%s = %s;\n", header, outputName, expression);
+end
+
+function dependencies = localExpressionDependencies(expression, stateNames, inputNames, parameterNames, timeVariable)
+matches = regexp(char(string(expression)), "[A-Za-z][A-Za-z0-9_]*", "match");
+orderedPool = [reshape(stateNames, 1, []), reshape(inputNames, 1, []), reshape(parameterNames, 1, []), {char(string(timeVariable))}];
+dependencies = {};
+for index = 1:numel(orderedPool)
+    candidate = orderedPool{index};
+    if isempty(candidate)
+        continue;
+    end
+    if any(strcmp(matches, candidate))
+        dependencies{end + 1} = candidate; %#ok<AGROW>
+    end
+end
+dependencies = reshape(unique(dependencies, "stable"), 1, []);
+end
+
+function port = localDirectSignalPort(rhsText, signalSources)
+rhsText = strtrim(char(string(rhsText)));
+if isfield(signalSources, rhsText)
+    port = signalSources.(rhsText);
+else
+    port = '';
+end
+end
+
+function port = localSignalPortForDependency(dependency, signalSources, clockSignal, timeVariable)
+dependency = char(string(dependency));
+if strcmp(dependency, char(string(timeVariable)))
+    port = clockSignal;
+    return;
+end
+if isfield(signalSources, dependency)
+    port = signalSources.(dependency);
+    return;
+end
+error("matlabv2native:MissingSignalDependency", ...
+    "Missing signal dependency '%s' while wiring the native explicit-ODE model.", dependency);
+end
+
+function simulation = localSimulateModel(modelPath, modelName, stateNames)
+load_system(modelPath);
+simOut = sim(modelName, "ReturnWorkspaceOutputs", "on");
+yout = simOut.get("yout");
+time = double(yout.time(:));
+states = zeros(numel(time), numel(stateNames));
+signals = struct();
+for index = 1:numel(stateNames)
+    values = double(yout.signals(index).values(:));
+    states(:, index) = values;
+    signals.(matlab.lang.makeValidName(stateNames{index})) = values;
+end
+simulation = struct( ...
+    "t", time, ...
+    "states", states, ...
+    "state_names", {reshape(stateNames, 1, [])}, ...
+    "signals", signals, ...
+    "model_name", modelName, ...
+    "model_file", modelPath ...
+);
+close_system(modelName, 0);
+end
+
+function comparison = localCompareSimulations(referenceResult, candidateResult, tolerance)
+referenceTime = double(referenceResult.t(:));
+referenceStates = double(referenceResult.states);
+candidateTime = double(candidateResult.t(:));
+candidateStates = double(candidateResult.states);
+stateNames = reshape(referenceResult.state_names, 1, []);
+
+if size(referenceStates, 2) ~= size(candidateStates, 2)
+    error("matlabv2native:StateDimensionMismatch", ...
+        "Native/Python comparison requires matching state dimensions.");
+end
+
+if isequal(referenceTime, candidateTime)
+    alignedCandidate = candidateStates;
+else
+    alignedCandidate = zeros(numel(referenceTime), size(candidateStates, 2));
+    for column = 1:size(candidateStates, 2)
+        alignedCandidate(:, column) = interp1(candidateTime, candidateStates(:, column), referenceTime, "linear", "extrap");
+    end
+end
+
+errorMatrix = referenceStates - alignedCandidate;
+rmse = sqrt(mean(errorMatrix(:).^2));
+maxAbs = max(abs(errorMatrix(:)));
+perStateRmse = struct();
+perStateMax = struct();
+for index = 1:numel(stateNames)
+    field = matlab.lang.makeValidName(stateNames{index});
+    perStateRmse.(field) = sqrt(mean(errorMatrix(:, index).^2));
+    perStateMax.(field) = max(abs(errorMatrix(:, index)));
+end
+
+comparison = struct( ...
+    "rmse", rmse, ...
+    "max_abs_error", maxAbs, ...
+    "per_state_rmse", perStateRmse, ...
+    "per_state_max_abs_error", perStateMax, ...
+    "tolerance", tolerance, ...
+    "passes", rmse < tolerance && maxAbs < tolerance ...
+);
+end
+
+function parityReport = localAugmentParityReport(parityReport, nativeFamilies, oracleFamilies, comparison, nativeValidation, oracleValidation)
+nativeFamilyMatch = localCompareFamilyStructs(nativeFamilies, oracleFamilies);
+oraclePasses = localOracleValidationPasses(oracleValidation);
+
+parityReport.Kind = "parity_phase3_native_build";
+parityReport.Matches.source_block_family = nativeFamilyMatch;
+parityReport.Matches.simulation_traces = logical(comparison.passes);
+parityReport.Matches.validation_status = logical(nativeValidation.passes) == logical(oraclePasses);
+parityReport.ComparedFields = localUniqueStable([parityReport.ComparedFields, {"source_block_family", "simulation_traces", "validation_status"}]);
+parityReport.AllComparedFieldsMatch = all(cellfun(@(name) logical(parityReport.Matches.(name)), parityReport.ComparedFields));
+parityReport.Native.source_block_family = nativeFamilies;
+parityReport.Python.source_block_family = oracleFamilies;
+parityReport.Native.validation = nativeValidation;
+parityReport.Python.validation = oracleValidation;
+parityReport.Native.lowering_mode = "native_explicit_ode";
+parityReport.Python.lowering_mode = "python_delegate";
+end
+
+function families = localSourceBlockFamiliesForModel(modelPath, modelName, inputNames)
+families = struct();
+load_system(modelPath);
+cleanupModel = onCleanup(@() localBestEffortClose(modelName));
+for index = 1:numel(inputNames)
+    inputName = inputNames{index};
+    blockPath = [modelName '/' inputName];
+    handle = getSimulinkBlockHandle(blockPath);
+    if ~isnumeric(handle) || handle <= 0
+        continue;
+    end
+    families.(inputName) = localBlockFamily(blockPath);
+end
+clear cleanupModel
+close_system(modelName, 0);
+end
+
+function family = localBlockFamily(blockPath)
+blockType = char(string(get_param(blockPath, "BlockType")));
+if strcmp(blockType, "SubSystem")
+    try
+        sfType = char(string(get_param(blockPath, "SFBlockType")));
+        if strcmp(sfType, "MATLAB Function")
+            family = "MATLAB Function";
+            return;
+        end
+    catch
+        % Fall through to BlockType.
+    end
+end
+family = blockType;
+end
+
+function config = localReadModelConfig(modelPath, modelName)
+load_system(modelPath);
+config = struct( ...
+    "StartTime", char(string(get_param(modelName, "StartTime"))), ...
+    "StopTime", char(string(get_param(modelName, "StopTime"))), ...
+    "Solver", char(string(get_param(modelName, "Solver"))), ...
+    "RelTol", char(string(get_param(modelName, "RelTol"))), ...
+    "AbsTol", char(string(get_param(modelName, "AbsTol"))), ...
+    "MaxStep", char(string(get_param(modelName, "MaxStep"))), ...
+    "OutputOption", char(string(get_param(modelName, "OutputOption"))), ...
+    "OutputTimes", char(string(get_param(modelName, "OutputTimes"))), ...
+    "SaveOutput", char(string(get_param(modelName, "SaveOutput"))), ...
+    "OutputSaveName", char(string(get_param(modelName, "OutputSaveName"))), ...
+    "SaveFormat", char(string(get_param(modelName, "SaveFormat"))) ...
+);
+end
+
+function localApplyModelConfig(modelName, config)
+set_param(modelName, ...
+    "StartTime", config.StartTime, ...
+    "StopTime", config.StopTime, ...
+    "Solver", config.Solver, ...
+    "RelTol", config.RelTol, ...
+    "AbsTol", config.AbsTol, ...
+    "MaxStep", config.MaxStep, ...
+    "OutputOption", config.OutputOption, ...
+    "OutputTimes", config.OutputTimes, ...
+    "SaveOutput", "on", ...
+    "OutputSaveName", "yout", ...
+    "SaveFormat", "StructureWithTime");
+end
+
+function positions = localLayoutPlan(numInputs, numParameters, numStates)
+inputCount = max(numInputs, 1);
+paramCount = max(numParameters, 1);
+stateCount = max(numStates, 1);
+
+positions.inputs = zeros(inputCount, 4);
+for index = 1:inputCount
+    y = 80 + 90 * (index - 1);
+    positions.inputs(index, :) = [40 y 140 y + 40];
+end
+
+positions.parameters = zeros(paramCount, 4);
+for index = 1:paramCount
+    y = 220 + 80 * (index - 1);
+    positions.parameters(index, :) = [40 y 140 y + 40];
+end
+
+positions.rhs = zeros(stateCount, 4);
+positions.integrators = zeros(stateCount, 4);
+positions.outputs = zeros(stateCount, 4);
+for index = 1:stateCount
+    y = 80 + 120 * (index - 1);
+    positions.rhs(index, :) = [330 y 470 y + 60];
+    positions.integrators(index, :) = [610 y + 10 650 y + 40];
+    positions.outputs(index, :) = [860 y + 10 890 y + 30];
+end
+end
+
+function outputDir = localResolvedOutputDir(opts)
+if ~isempty(strtrim(char(string(opts.SimulinkOutputDir))))
+    outputDir = char(string(opts.SimulinkOutputDir));
+    return;
+end
+outputDir = fullfile(opts.RepoRoot, "workspace", "bedillion_demo");
+end
+
+function value = localResolvedModelName(rawModelName)
+modelName = strtrim(char(string(rawModelName)));
+if isempty(modelName)
+    value = "matlabv2native_explicit_ode";
+else
+    value = matlab.lang.makeValidName(modelName);
+end
+value = char(string(value));
+end
+
+function tolerance = localResolvedTolerance(opts)
+if isempty(opts.Tolerance)
+    tolerance = 1e-6;
+else
+    tolerance = double(opts.Tolerance);
+end
+end
+
+function tf = localOracleValidationPasses(validation)
+tf = false;
+if ~isstruct(validation) || ~isfield(validation, "simulink_validation")
+    return;
+end
+simValidation = validation.simulink_validation;
+if ~isstruct(simValidation) || ~isfield(simValidation, "passes")
+    return;
+end
+tf = logical(simValidation.passes);
+end
+
+function publicOptions = localPublicOptions(opts)
+publicOptions = struct( ...
+    "States", {opts.States}, ...
+    "Algebraics", {opts.Algebraics}, ...
+    "Inputs", {opts.Inputs}, ...
+    "Parameters", {opts.Parameters}, ...
+    "TimeVariable", opts.TimeVariable, ...
+    "ModelName", opts.ModelName, ...
+    "OpenModel", opts.OpenModel ...
+);
+end
+
+function values = localOrderedCell(container, fieldName)
+if isstruct(container) && isfield(container, fieldName)
+    raw = container.(fieldName);
+else
+    raw = {};
+end
+if isempty(raw)
+    values = {};
+    return;
+end
+if ischar(raw)
+    values = {char(raw)};
+    return;
+end
+if isstring(raw)
+    values = cellstr(raw(:).');
+    return;
+end
+if iscell(raw)
+    values = reshape(cellfun(@(item) char(string(item)), raw, "UniformOutput", false), 1, []);
+    return;
+end
+values = {char(string(raw))};
+end
+
+function value = localScalar(container, fieldName, fallback)
+if isstruct(container) && isfield(container, fieldName)
+    value = container.(fieldName);
+else
+    value = fallback;
+end
+end
+
+function values = localUniqueStable(values)
+if isempty(values)
+    values = {};
+    return;
+end
+values = reshape(cellfun(@(item) char(string(item)), values, "UniformOutput", false), 1, []);
+values = unique(values, "stable");
+end
+
+function value = localStruct(container, fieldName)
+if isstruct(container) && isfield(container, fieldName) && isstruct(container.(fieldName))
+    value = container.(fieldName);
+else
+    value = struct();
+end
+end
+
+function tf = localCompareFamilyStructs(nativeFamilies, oracleFamilies)
+nativeNames = sort(fieldnames(nativeFamilies));
+oracleNames = sort(fieldnames(oracleFamilies));
+if ~isequal(nativeNames, oracleNames)
+    tf = false;
+    return;
+end
+tf = true;
+for index = 1:numel(nativeNames)
+    name = nativeNames{index};
+    if ~strcmp(char(string(nativeFamilies.(name))), char(string(oracleFamilies.(name))))
+        tf = false;
+        return;
+    end
+end
+end
+
+function token = localSanitize(name)
+token = regexprep(char(string(name)), "[^A-Za-z0-9_]", "_");
+end
+
+function text = localNumericString(value)
+text = num2str(double(value), 17);
+end
+
+function localBestEffortClose(modelName)
+if bdIsLoaded(modelName)
+    try
+        close_system(modelName, 0);
+    catch
+        % Best effort cleanup only.
+    end
+end
+end

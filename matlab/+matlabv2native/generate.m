@@ -1,9 +1,10 @@
 function out = generate(primaryInput, varargin)
 % matlabv2native.generate Generate a Simulink model through the native MATLAB scaffold.
 %
-% Phase 2 behavior:
+% Phase 3 behavior:
 %   - performs native MATLAB preview, explicit-ODE preview, and parity checking
-%   - delegates actual model build, simulation, and validation to the existing backend
+%   - builds explicit symbolic ODE anchor cases natively when eligible
+%   - otherwise delegates build, simulation, and validation to the existing backend
 
 [sourceType, opts, invocation] = matlabv2native.internal.prepareInvocation( ...
     struct("Build", true, "OpenModel", false), ...
@@ -26,6 +27,18 @@ end
 nativePreview = matlabv2native.internal.nativeAnalyze(sourceType, primaryInput, opts, callerWorkspace);
 delegateOpts = matlabv2native.internal.applyNativePreview(opts, nativePreview);
 delegateOpts = simucopilot.internal.enrichProblemMetadata(sourceType, primaryInput, delegateOpts, callerWorkspace);
+[canNativeLower, ~] = matlabv2native.internal.isNativeExplicitOdeEligible(sourceType, nativePreview);
+if canNativeLower
+    out = matlabv2native.internal.generateNativeExplicitOde( ...
+        primaryInput, ...
+        sourceType, ...
+        delegateOpts, ...
+        invocation, ...
+        callerWorkspace, ...
+        nativePreview);
+    return;
+end
+
 request = simucopilot.internal.makeRequestStruct(sourceType, primaryInput, delegateOpts);
 backendOut = simucopilot.internal.callBackend(request, delegateOpts);
 parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, backendOut);

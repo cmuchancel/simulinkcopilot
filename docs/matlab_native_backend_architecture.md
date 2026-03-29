@@ -4,12 +4,14 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-2 explicit-ODE scaffold**:
+`matlabv2native` currently exists as a **phase-3 explicit-ODE backend checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
-- it delegates route analysis, build, simulation, and validation to the existing Python backend
-- it returns a parity report comparing MATLAB-side preview data against the Python backend
+- it can build eligible MATLAB symbolic explicit ODEs natively in Simulink
+- it simulates those native models in MATLAB
+- it compares them against a Python-backed oracle build and validation result
+- it still delegates non-eligible cases to the existing Python backend
 
 This is intentional. The goal is to build the native path safely while keeping the Python backend as the oracle.
 
@@ -44,6 +46,13 @@ These behaviors are implemented on the MATLAB side today:
 - basic input vs parameter inference from caller-workspace values
 - explicit-ODE route preview for MATLAB symbolic equations when `odeToVectorField` succeeds
 - native first-order state preview for those explicit ODEs
+- native-lowering eligibility checks for MATLAB symbolic explicit ODEs
+- native Simulink lowering for the current explicit-ODE anchor cases
+- native simulation of those generated explicit-ODE models
+- native input-source lowering for the currently supported native families:
+  - constant
+  - step / delayed step
+  - unsupported symbolic input expression lowered to a MATLAB Function source block
 - parity comparison against the Python backend for:
   - states
   - algebraics
@@ -52,19 +61,22 @@ These behaviors are implemented on the MATLAB side today:
   - time variable
   - route
   - first-order state order
+  - source block family
+  - simulation traces
+  - validation status
 
 ### Still Delegated to Python
 
-These behaviors still use the existing Python backend:
+These behaviors still use the existing Python backend, either as the primary execution path or as the oracle:
 
-- authoritative route classification
-- full normalization
-- Simulink lowering
-- model build
-- simulation
-- validation
+- authoritative handling for non-symbolic front doors
+- non-explicit or ambiguous systems
+- broader normalization beyond the current explicit-ODE native preview boundary
+- the Python oracle model used for native-vs-oracle parity and validation
+- input families not yet lowered natively in MATLAB
+- broader lowering/validation coverage beyond the current anchor matrix
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, but it is not yet a fully native compiler path.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real native explicit-ODE lowering path, but it is not yet a full native compiler with broad parity coverage.
 
 ## Internal Module Boundaries
 
@@ -82,13 +94,15 @@ Important internal helpers:
 - [equationTexts.m](../matlab/+matlabv2native/+internal/equationTexts.m)
 - [nativeAnalyze.m](../matlab/+matlabv2native/+internal/nativeAnalyze.m)
 - [applyNativePreview.m](../matlab/+matlabv2native/+internal/applyNativePreview.m)
+- [isNativeExplicitOdeEligible.m](../matlab/+matlabv2native/+internal/isNativeExplicitOdeEligible.m)
+- [generateNativeExplicitOde.m](../matlab/+matlabv2native/+internal/generateNativeExplicitOde.m)
 - [comparePreviewToProblem.m](../matlab/+matlabv2native/+internal/comparePreviewToProblem.m)
 
 ## Parity Strategy
 
 During the native migration, the Python backend remains the reference oracle.
 
-Current parity checks compare:
+Current parity checks compare these preview-level fields for native and delegated cases:
 
 - states
 - algebraics
@@ -98,20 +112,25 @@ Current parity checks compare:
 - route for native explicit-ODE previews
 - first-order state order for native explicit-ODE previews
 
-Fields not yet compared natively:
+For native-generated explicit-ODE models, the current generate path also compares:
 
 - source block families
-- generated block structure
 - simulation traces
-- validation metrics
-- first-order RHS semantics
+- validation status
 
-Those will be added as the native backend matures beyond the scaffold.
+Fields not yet compared automatically across the full API surface:
+
+- generated block structure beyond semantic source-family checks
+- first-order RHS semantics
+- the wider explicit-ODE input matrix listed in the campaign prompt
+- non-explicit systems
+
+Those will be added as the native backend matures beyond the current anchor-level native lowering checkpoint.
 
 ## Immediate Next Steps
 
-1. add native Simulink lowering for explicit ODEs
-2. expand parity checks to input block families and simulation traces
+1. widen native explicit-ODE input lowering beyond constant/step/fallback anchor coverage
+2. extend `compareWithPython(...)` so it can report block-family and simulation parity for native-eligible cases
 3. compare native vs Python first-order RHS semantics
-4. widen native coverage beyond symbolic explicit ODEs
-5. keep the Python backend and `matlabv1` green throughout
+4. reduce MATLAB Function usage where native block compositions exist
+5. widen native coverage beyond symbolic explicit ODEs while keeping the Python backend and `matlabv1` green
