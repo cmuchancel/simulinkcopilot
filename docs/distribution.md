@@ -7,6 +7,14 @@ This repo is now structured so a recipient can install and run it without editin
 From the repo root:
 
 ```bash
+uv sync --extra dev
+```
+
+This is the preferred development path. It installs the project and contributor tooling into a managed virtual environment that matches CI.
+
+If you want the pip-based bootstrap path instead:
+
+```bash
 python3 -m scripts.bootstrap_distribution --install-runtime --editable
 ```
 

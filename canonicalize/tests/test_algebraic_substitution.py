@@ -6,7 +6,6 @@ import pytest
 from canonicalize import algebraic_substitution as substitution_module
 from canonicalize.algebraic_substitution import classify_algebraic_equations, inline_algebraic_definitions
 from ir.equation_dict import equation_to_string
-from ir.expression_nodes import EquationNode, NumberNode, SymbolNode
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 

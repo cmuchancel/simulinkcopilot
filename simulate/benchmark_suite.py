@@ -7,13 +7,12 @@ import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Mapping
 
 import numpy as np
 
 from backend.simulate_simulink import SimulinkExecutionStageError, execute_simulink_graph
 from ir.equation_dict import equation_to_string
-from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 from pipeline.compilation import SymbolicCompilationStageError, compile_symbolic_system
 from repo_paths import GENERATED_MODELS_ROOT, REPORTS_ROOT

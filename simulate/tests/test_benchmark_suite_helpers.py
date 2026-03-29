@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from pipeline.compilation import SymbolicCompilationStageError
 from simulate import benchmark_suite as benchmark_module

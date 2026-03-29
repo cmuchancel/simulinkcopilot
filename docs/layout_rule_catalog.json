@@ -1,0 +1,266 @@
+{
+  "generated_on": "2026-03-26",
+  "rules": [
+    {
+      "rule_id": "LAYOUT-001",
+      "short_name": "main_signal_flow_left_to_right",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline db_0141: Signal flow in Simulink models",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/slcheck/ref/check-signal-flow-in-model.html",
+      "clause_guideline_or_section": "db_0141_a, db_0141_b",
+      "scope": "Simulink model and subsystem signal-flow direction",
+      "finding": "Sequential signal flow should run left to right; feedback is the explicit exception; parallel groups should be arranged top to bottom.",
+      "deterministic_mapping": "Root and subsystem blocks are assigned to stable role columns; reverse-flow edges are tolerated as feedback-like exceptions; column refinement preserves left-to-right layering while improving local ordering.",
+      "exceptions": "Right-to-left routing is tolerated for feedback-like edges.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_deterministic_layout_preserves_or_improves_metric_score_vs_legacy",
+        "backend/tests/test_layout.py::test_measure_layout_reports_reverse_flow_for_feedback_connection",
+        "workspace/layout_bench/coupled_system/summary.json",
+        "workspace/layout_bench/two_mass_coupled/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-002",
+      "short_name": "inports_left_outports_right",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline db_0042: Usage of Inport and Outport blocks",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/simulink/mdl_gd/maab/db_0042usageofinportandoutportblocks.html",
+      "clause_guideline_or_section": "db_0042_a, db_0042_b",
+      "scope": "Positioning of Inport and Outport blocks",
+      "finding": "Inports belong on the left side of the diagram and Outports belong on the right, with crossing-avoidance as the stated exception.",
+      "deterministic_mapping": "Fixed root and subsystem port columns anchor port placement using stable X coordinates.",
+      "exceptions": "Small vertical offsets are still allowed if readability improves without violating hard constraints.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_root_column_spacing_grows_with_long_connection_labels",
+        "backend/tests/test_layout.py::test_root_row_spacing_grows_with_multiline_trace_budget",
+        "workspace/layout_bench/simple_gain_chain/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-003",
+      "short_name": "block_outputs_face_right",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline jc_0110: Direction of block",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/simulink/mdl_gd/maab/jc_0110directionofblock.html",
+      "clause_guideline_or_section": "jc_0110_a",
+      "scope": "Block orientation and diagram reading direction",
+      "finding": "Blocks should be arranged so the output is to the right; delay blocks in feedback loops are the explicit exception.",
+      "deterministic_mapping": "Feedforward blocks stay in left-to-right column order; reverse-flow edges are treated as exceptional paths rather than normal ordering cues.",
+      "exceptions": "Delay-like feedback exceptions are recorded but not yet specially placed.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_measure_layout_reports_reverse_flow_for_feedback_connection",
+        "workspace/layout_bench/driven_oscillator/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-004",
+      "short_name": "signal_line_crossings_and_block_overdraw_minimized",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline db_0032: Signal line connections",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/simulink/mdl_gd/maab/db_0032signallineconnections.html",
+      "clause_guideline_or_section": "db_0032_b, db_0032_c",
+      "scope": "Signal-line readability",
+      "finding": "Signal lines should be resized for layout and should not bend multiple times unnecessarily; crossings and line clutter impair readability.",
+      "deterministic_mapping": "Layout metrics compute connection crossings, block-line crossings, and bend counts; the visual validator rejects candidate patches that worsen block-line crossings.",
+      "exceptions": "The backend uses deterministic orthogonal route proxies because the model dictionary does not store final Simulink autoroute geometry.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_deterministic_layout_preserves_or_improves_metric_score_vs_legacy",
+        "backend/tests/test_layout_visual_corrector.py::test_visual_patch_validator_rejects_resizing_moves",
+        "workspace/layout_bench/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-005",
+      "short_name": "subsystems_express_functional_units",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline db_0144: Use of subsystems",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/simulink/mdl_gd/maab/db_0144useofsubsystems.html",
+      "clause_guideline_or_section": "db_0144_a",
+      "scope": "Subsystem usage and readability",
+      "finding": "Blocks should be grouped into subsystems based on functional decomposition rather than merely to save space.",
+      "deterministic_mapping": "Existing subsystem ownership is preserved; subsystem blocks receive dedicated root columns; subsystem balance is measured; the visual-corrector may not change subsystem membership.",
+      "exceptions": "",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout_visual_corrector.py::test_apply_visual_repair_noops_when_patch_has_no_moves",
+        "workspace/layout_bench/three_mass_coupled/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-006",
+      "short_name": "page_fit_reviewability",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks Model Quality Objectives MQR-01",
+      "source_version_or_date": "Version 1.0 white paper, accessed 2026-03-26",
+      "source_url": "https://in.mathworks.com/content/dam/mathworks/white-paper/mqo-paper-v1-0.pdf",
+      "clause_guideline_or_section": "3.2.1 Model layout, MQR-01",
+      "scope": "Model-review readability on screen and paper",
+      "finding": "Model diagrams should be completely visible on A4 paper size; zoom ratios below roughly 80% are harder to review.",
+      "deterministic_mapping": "measure_layout() computes canvas width, canvas height, and an estimated page-count proxy; the visual validator rejects patches that increase page count.",
+      "exceptions": "The backend uses a coarse page proxy, not a literal Simulink zoom metric.",
+      "confidence": "medium",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout_visual_corrector.py::test_apply_visual_repair_accepts_improving_patch_and_records_metadata",
+        "workspace/layout_bench/coupled_system/summary.json",
+        "workspace/layout_bench/three_mass_coupled/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-007",
+      "short_name": "crossings_have_priority_over_bends",
+      "source_type": "empirical_literature",
+      "source_title": "Helen Purchase, Which Aesthetic Has the Greatest Effect on Human Understanding?",
+      "source_version_or_date": "1997",
+      "source_url": "https://eprints.gla.ac.uk/35804/",
+      "clause_guideline_or_section": "abstract / empirical result summary",
+      "scope": "Graph readability heuristics",
+      "finding": "Edge crossings have the strongest effect on human understanding; bends matter, but less.",
+      "deterministic_mapping": "Composite scoring weights crossing penalties substantially more heavily than bend penalties.",
+      "exceptions": "This is a readability heuristic, not a formal standard.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "workspace/layout_bench/summary.md",
+        "workspace/layout_bench/coupled_system/summary.json",
+        "workspace/layout_bench/two_mass_coupled/summary.json"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-008",
+      "short_name": "layered_orthogonal_column_layout",
+      "source_type": "house_rule",
+      "source_title": "Derived implementation rule informed by ELK layered-layout documentation and MathWorks signal-flow guidance",
+      "source_version_or_date": "accessed 2026-03-26",
+      "source_url": "https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html",
+      "clause_guideline_or_section": "layered direction and orthogonal-routing description",
+      "scope": "Deterministic auto-layout algorithm selection",
+      "finding": "A layered strategy that keeps most edges in one direction and uses orthogonal routing is a strong implementation fit for engineering block diagrams.",
+      "deterministic_mapping": "The engine uses stable role-based columns, layer hints, orthogonal route proxies, and iterative spacing repair rather than unconstrained force layout.",
+      "exceptions": "This is an implementation choice, not a formal requirement.",
+      "confidence": "medium",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_root_column_spacing_grows_with_long_connection_labels",
+        "backend/tests/test_layout.py::test_subsystem_column_spacing_grows_with_long_internal_trace_labels"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-009",
+      "short_name": "explicit_integrator_chain_ordering",
+      "source_type": "house_rule",
+      "source_title": "Derived readability rule from state-order metadata, MAB signal-flow goals, and repo traceability data",
+      "source_version_or_date": "adopted 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/slcheck/ref/check-signal-flow-in-model.html",
+      "clause_guideline_or_section": "derived from db_0141 readability goal plus repo state-order metadata",
+      "scope": "Higher-order state-chain presentation",
+      "finding": "Formal standards do not specify how to present chained integrators, but explicitly ordered state chains are materially easier to read than mixed or hidden state placement.",
+      "deterministic_mapping": "annotate_integrator_orders() adds state_order metadata; subsystem layouts use a dedicated integrator column and vertical ordering by derivative order; the visual-corrector includes align_integrator_chain as a reason code.",
+      "exceptions": "The exact vertical convention is a project rule, not a formal standard.",
+      "confidence": "medium",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_integrator_chain_layout_orders_higher_derivatives_above_lower_state_blocks",
+        "backend/tests/test_layout.py::test_subsystem_column_spacing_grows_with_long_internal_trace_labels"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-010",
+      "short_name": "column_barycenter_refinement",
+      "source_type": "house_rule",
+      "source_title": "Derived deterministic post-pass for readability scaling",
+      "source_version_or_date": "adopted 2026-03-26",
+      "source_url": "https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html",
+      "clause_guideline_or_section": "derived from layered crossing-minimization practice",
+      "scope": "Intra-column ordering for dense models",
+      "finding": "The MAB rules define readability goals but not a specific auto-layout algorithm, so a deterministic column-refinement sweep is required to improve ordering inside shared columns.",
+      "deterministic_mapping": "_refine_system_layout() repeatedly sorts non-port, non-integrator column members by weighted neighbor barycenter and restacks them with deterministic tie-breakers.",
+      "exceptions": "Ports and integrator columns are excluded from refinement to preserve stronger invariants.",
+      "confidence": "medium",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout.py::test_deterministic_layout_preserves_or_improves_metric_score_vs_legacy",
+        "workspace/layout_bench/summary.md"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-011",
+      "short_name": "image_feedback_patch_only_visual_repair",
+      "source_type": "house_rule",
+      "source_title": "Project guardrail for post-layout visual correction",
+      "source_version_or_date": "adopted 2026-03-26",
+      "source_url": "https://platform.openai.com/docs/guides/images-vision",
+      "clause_guideline_or_section": "project policy, not external layout standard",
+      "scope": "Optional post-layout visual polish",
+      "finding": "The standards and official Simulink guidance do not define a final pixel-level repair stage, so the repo uses a constrained image-feedback loop that can move blocks but cannot change semantics.",
+      "deterministic_mapping": "backend/layout_visual_corrector.py renders the current system to PNG, obtains a structured critique and patch, validates schema and bounded motion, and applies only score-improving block-position moves.",
+      "exceptions": "Fail-closed no-op is mandatory when the patch is invalid or non-improving.",
+      "confidence": "high",
+      "adopted": true,
+      "rejection_reason": "",
+      "tests": [
+        "backend/tests/test_layout_visual_corrector.py::test_apply_visual_repair_accepts_improving_patch_and_records_metadata",
+        "backend/tests/test_layout_visual_corrector.py::test_apply_visual_repair_noops_when_patch_has_no_moves",
+        "backend/tests/test_layout_visual_corrector.py::test_visual_patch_validator_rejects_resizing_moves"
+      ]
+    },
+    {
+      "rule_id": "LAYOUT-012",
+      "short_name": "delay_block_hierarchy_for_feedback_loops",
+      "source_type": "vendor_guidance",
+      "source_title": "MathWorks MAB guideline jc_0653: Delay block layout in feedback loops",
+      "source_version_or_date": "Version 6.0, accessed 2026-03-26",
+      "source_url": "https://www.mathworks.com/help/simulink/mdl_gd/maab/jc_0653delayblocklayoutinfeedbackloops.html",
+      "clause_guideline_or_section": "jc_0653_a",
+      "scope": "Delay placement across subsystem boundaries in feedback loops",
+      "finding": "Delay blocks in feedback loops across subsystems should reside in the hierarchy that describes the feedback loop.",
+      "deterministic_mapping": "Not yet implemented.",
+      "exceptions": "",
+      "confidence": "high",
+      "adopted": false,
+      "rejection_reason": "The current repo layout engine does not yet build special-case hierarchy placement for Delay or Memory blocks in cross-subsystem feedback loops.",
+      "tests": []
+    },
+    {
+      "rule_id": "LAYOUT-013",
+      "short_name": "iso_iec_symbol_standards_as_direct_auto_layout_rules",
+      "source_type": "normative_standard",
+      "source_title": "ISO 14617 / IEC 61082-1 / IEC 60617",
+      "source_version_or_date": "ISO 14617-1:2025, ISO 14617-2:2025, IEC 61082-1:2014, accessed 2026-03-26",
+      "source_url": "https://www.iso.org/standard/85641.html",
+      "clause_guideline_or_section": "standards scope statements and catalog definitions",
+      "scope": "Diagram symbols, notation, and documentation preparation",
+      "finding": "These standards govern symbol semantics and document preparation discipline, but they do not provide a direct Simulink-specific auto-layout policy for integrator columns, feedback routing, or pixel spacing.",
+      "deterministic_mapping": "None.",
+      "exceptions": "",
+      "confidence": "high",
+      "adopted": false,
+      "rejection_reason": "Using ISO / IEC symbol standards as if they defined Simulink block-placement policy would overstate the evidence.",
+      "tests": []
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,7 +12,8 @@ from backend.simulate_simulink import simulation_model_params, simulate_simulink
 from backend.validate_simulink import compare_simulink_results
 from ir.graph_lowering import lower_first_order_system_graph
 from latex_frontend.translator import translate_latex
-from repo_paths import GENERATED_MODELS_ROOT
+from repo_paths import GENERATED_MODELS_ROOT, REPO_ROOT
+from simulate.input_specs import build_input_function, normalize_input_specs
 from simulate.ode_sim import constant_inputs, simulate_ode_system
 from simulate.state_space_sim import simulate_state_space_system
 from simulink.engine import start_engine
@@ -102,6 +102,306 @@ class BackendIntegrationTests(unittest.TestCase):
         )
         self.assertIsNone(validation["vs_state_space"])
         self.assertTrue(validation["passes"])
+
+    def test_matlabv1_generate_symbolic_builds_with_workspace_inference(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqn x u m c k", nargout=0)
+        self.eng.eval("info = matlabv1_setup();", nargout=0)
+        self.eng.eval("syms x(t) m c k u(t)", nargout=0)
+        self.eng.eval("eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);", nargout=0)
+        self.eng.eval("m = 5; c = 10; k = 20; u(t) = heaviside(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv1.generate(eqn, 'State', 'x', 'ModelName', 'matlabv1_symbolic_integration', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        source_type = self.eng.eval("out.SourceType", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        generated_model_path = self.eng.eval("out.GeneratedModelPath", nargout=1)
+        block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(source_type, "matlab_symbolic")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(generated_model_path.endswith(".slx"))
+        self.assertEqual(block_type, "Step")
+
+    def test_matlabv1_analyze_infers_equation_text_source_type(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear report", nargout=0)
+        self.eng.eval("info = matlabv1_setup();", nargout=0)
+        self.eng.eval(
+            "report = matlabv1.analyze('xdot = -x + u', 'State', 'x', 'Inputs', {'u'});",
+            nargout=0,
+        )
+
+        source_type = self.eng.eval("report.SourceType", nargout=1)
+        route = self.eng.eval("report.Route", nargout=1)
+        states = tuple(self.eng.eval("report.PublicOptions.States", nargout=1))
+
+        self.assertEqual(source_type, "matlab_equation_text")
+        self.assertEqual(route, "explicit_ode")
+        self.assertEqual(states, ("x",))
+
+    def _run_input_validation_case(
+        self,
+        *,
+        case_name: str,
+        raw_input_spec: dict[str, object],
+        t_span: tuple[float, float],
+        sample_count: int,
+        tolerance: float,
+        required_blocks: list[tuple[str, str | None, str | None]],
+        forbidden_block_types: set[str],
+    ) -> None:
+        equations = translate_latex(r"\dot{x}=-x+u")
+        first_order = build_first_order_system(equations)
+        graph = lower_first_order_system_graph(first_order, name=f"{case_name}_backend_test")
+        t_eval = np.linspace(float(t_span[0]), float(t_span[1]), sample_count)
+        normalized_specs = normalize_input_specs(input_specs={"u": raw_input_spec}, t_span=t_span)
+        input_function = build_input_function(input_specs=normalized_specs, t_span=t_span)
+
+        model = graph_to_simulink_model(
+            graph,
+            name=f"{case_name}_backend_test",
+            state_names=first_order["states"],
+            input_specs=normalized_specs,
+            initial_conditions={"x": 0.0},
+            model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
+        )
+        block_specs = list(model["blocks"].values())
+        block_types = {spec["type"] for spec in block_specs}
+        for block_type, param_name, expected_value in required_blocks:
+            self.assertTrue(
+                any(
+                    spec["type"] == block_type
+                    and (
+                        param_name is None
+                        or str(spec.get("params", {}).get(param_name)) == str(expected_value)
+                    )
+                    for spec in block_specs
+                ),
+                msg=f"{case_name}: expected block {block_type} with {param_name}={expected_value}",
+            )
+        self.assertTrue(
+            block_types.isdisjoint(forbidden_block_types),
+            msg=f"{case_name}: forbidden block types present: {block_types & forbidden_block_types}",
+        )
+
+        simulink_result = simulate_simulink_model(self.eng, model, output_dir=self.output_dir)
+        ode_result = simulate_ode_system(
+            first_order,
+            initial_conditions={"x": 0.0},
+            input_function=input_function,
+            t_eval=t_eval,
+        )
+        validation = compare_simulink_results(
+            simulink_result,
+            ode_result,
+            None,
+            tolerance=tolerance,
+        )
+        self.assertTrue(
+            validation["passes"],
+            msg=(
+                f"{case_name}: validation failed with "
+                f"rmse={validation['vs_ode']['rmse']} max_abs_error={validation['vs_ode']['max_abs_error']}"
+            ),
+        )
+
+    def test_supported_input_validation_matrix_builds_and_matches_python(self) -> None:
+        cases = [
+            {
+                "name": "step_native",
+                "input_spec": {"kind": "expression", "expression": "2*heaviside(t - 0.5) - 0.25", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("Step", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "impulse_native",
+                "input_spec": {"kind": "expression", "expression": "1.5*dirac(t - 0.5)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 5e-3,
+                "required_blocks": [("PulseGenerator", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "pulse_native",
+                "input_spec": {"kind": "expression", "expression": "2*heaviside(t - 0.3) - 2*heaviside(t - 0.5)", "time_variable": "t"},
+                "t_span": (0.0, 1.2),
+                "sample_count": 241,
+                "tolerance": 1e-4,
+                "required_blocks": [("PulseGenerator", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "ramp_native",
+                "input_spec": {"kind": "expression", "expression": "1.2*(t - 0.25)*heaviside(t - 0.25) + 0.1", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("Ramp", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "sine_native",
+                "input_spec": {"kind": "expression", "expression": "1.5*sin(2*t + 0.1) - 0.2", "time_variable": "t"},
+                "t_span": (0.0, 2.0),
+                "sample_count": 401,
+                "tolerance": 1e-5,
+                "required_blocks": [("SineWave", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "square_native",
+                "input_spec": {"kind": "expression", "expression": "1.2*sign(sin(3*t - 0.2)) + 0.3", "time_variable": "t"},
+                "t_span": (0.0, 2.0),
+                "sample_count": 401,
+                "tolerance": 1e-4,
+                "required_blocks": [("SineWave", None, None), ("Sign", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "sawtooth_native",
+                "input_spec": {"kind": "expression", "expression": "1.1*sawtooth(4*t)", "time_variable": "t"},
+                "t_span": (0.0, 2.0),
+                "sample_count": 401,
+                "tolerance": 1e-4,
+                "required_blocks": [("RepeatingSequence", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "triangle_native",
+                "input_spec": {"kind": "expression", "expression": "0.8*sawtooth(3*t, 0.5)", "time_variable": "t"},
+                "t_span": (0.0, 2.0),
+                "sample_count": 401,
+                "tolerance": 1e-4,
+                "required_blocks": [("RepeatingSequence", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "saturation_native",
+                "input_spec": {"kind": "expression", "expression": "min(max(2*sin(t), -0.5), 0.75)", "time_variable": "t"},
+                "t_span": (0.0, 2.0),
+                "sample_count": 401,
+                "tolerance": 1e-5,
+                "required_blocks": [("Saturation", None, None), ("SineWave", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "dead_zone_native",
+                "input_spec": {
+                    "kind": "expression",
+                    "expression": "piecewise((0, abs(t) < 0.5), (t - 0.5, t > 0.5), (t + 0.5, True))",
+                    "time_variable": "t",
+                },
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("DeadZone", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "minmax_native",
+                "input_spec": {"kind": "expression", "expression": "max(sin(t), t - 0.5)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("MinMax", "Function", "max")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "atan_native",
+                "input_spec": {"kind": "expression", "expression": "atan(t)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("TrigonometricFunction", "Operator", "atan")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "atan2_native",
+                "input_spec": {"kind": "expression", "expression": "atan2(t, t + 1)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("TrigonometricFunction", "Operator", "atan2")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "sec_native",
+                "input_spec": {"kind": "expression", "expression": "sec(0.3*t)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("TrigonometricFunction", "Operator", "cos"), ("Divide", None, None)],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "tanh_native",
+                "input_spec": {"kind": "expression", "expression": "tanh(t)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("TrigonometricFunction", "Operator", "tanh")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "log_native",
+                "input_spec": {"kind": "expression", "expression": "log(t + 2)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("MathFunction", "Operator", "log")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "sqrt_native",
+                "input_spec": {"kind": "expression", "expression": "sqrt(t + 1)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("MathFunction", "Operator", "sqrt")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "exp_native",
+                "input_spec": {"kind": "expression", "expression": "exp(-0.5*t)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("MathFunction", "Operator", "exp")],
+                "forbidden": {"FromWorkspace", "MATLABFunction"},
+            },
+            {
+                "name": "fallback_erf",
+                "input_spec": {"kind": "expression", "expression": "erf(t)", "time_variable": "t"},
+                "t_span": (0.0, 1.5),
+                "sample_count": 301,
+                "tolerance": 1e-5,
+                "required_blocks": [("MATLABFunction", None, None), ("Clock", None, None)],
+                "forbidden": {"FromWorkspace"},
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                self._run_input_validation_case(
+                    case_name=case["name"],
+                    raw_input_spec=case["input_spec"],
+                    t_span=case["t_span"],
+                    sample_count=case["sample_count"],
+                    tolerance=case["tolerance"],
+                    required_blocks=case["required_blocks"],
+                    forbidden_block_types=case["forbidden"],
+                )
 
 
 if __name__ == "__main__":

@@ -28,12 +28,52 @@ BLOCK_LIBRARY = {
         "path": "simulink/Sources/Constant",
         "ports": ["out"],
     },
+    "Step": {
+        "path": "simulink/Sources/Step",
+        "ports": ["out"],
+    },
+    "Ramp": {
+        "path": "simulink/Sources/Ramp",
+        "ports": ["out"],
+    },
+    "PulseGenerator": {
+        "path": "simulink/Sources/Pulse Generator",
+        "ports": ["out"],
+    },
+    "SineWave": {
+        "path": "simulink/Sources/Sine Wave",
+        "ports": ["out"],
+    },
+    "MATLABFunction": {
+        "path": "simulink/User-Defined Functions/MATLAB Function",
+        "ports": ["in", "out"],
+    },
     "FromWorkspace": {
         "path": "simulink/Sources/From Workspace",
         "ports": ["out"],
     },
     "Clock": {
         "path": "simulink/Sources/Clock",
+        "ports": ["out"],
+    },
+    "SignalGenerator": {
+        "path": "simulink/Sources/Signal Generator",
+        "ports": ["out"],
+    },
+    "RepeatingSequence": {
+        "path": "simulink/Sources/Repeating Sequence",
+        "ports": ["out"],
+    },
+    "RandomNumber": {
+        "path": "simulink/Sources/Random Number",
+        "ports": ["out"],
+    },
+    "UniformRandomNumber": {
+        "path": "simulink/Sources/Uniform Random Number",
+        "ports": ["out"],
+    },
+    "BandLimitedWhiteNoise": {
+        "path": "simulink/Sources/Band-Limited White Noise",
         "ports": ["out"],
     },
     "Inport": {
@@ -74,6 +114,34 @@ BLOCK_LIBRARY = {
     },
     "Saturation": {
         "path": "simulink/Discontinuities/Saturation",
+        "ports": ["in", "out"],
+    },
+    "DeadZone": {
+        "path": "simulink/Discontinuities/Dead Zone",
+        "ports": ["in", "out"],
+    },
+    "Relay": {
+        "path": "simulink/Discontinuities/Relay",
+        "ports": ["in", "out"],
+    },
+    "TransportDelay": {
+        "path": "simulink/Continuous/Transport Delay",
+        "ports": ["in", "out"],
+    },
+    "Switch": {
+        "path": "simulink/Signal Routing/Switch",
+        "ports": ["in", "out"],
+    },
+    "RelationalOperator": {
+        "path": "simulink/Logic and Bit Operations/Relational Operator",
+        "ports": ["in", "out"],
+    },
+    "LogicOperator": {
+        "path": "simulink/Logic and Bit Operations/Logical Operator",
+        "ports": ["in", "out"],
+    },
+    "Sign": {
+        "path": "simulink/Math Operations/Sign",
         "ports": ["in", "out"],
     },
     "Subsystem": {

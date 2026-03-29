@@ -345,7 +345,6 @@ def _compile_preserved_functions(
     differential_symbols = [sympy.Symbol(name) for name in dae_system.differential_states]
     algebraic_symbols = [sympy.Symbol(name) for name in dae_system.algebraic_variables]
     input_symbols = [sympy.Symbol(name) for name in dae_system.inputs]
-    parameter_symbols = [sympy.Symbol(name) for name in dae_system.parameters]
 
     substitutions = {
         sympy.Symbol(name): sympy.Float(float(value))

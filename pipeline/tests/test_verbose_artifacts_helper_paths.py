@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from ir.expression_nodes import AddNode, DivNode, FunctionNode, NegNode, NumberNode, PowNode, SymbolNode
+from ir.expression_nodes import DivNode, FunctionNode, NegNode, NumberNode, PowNode, SymbolNode
 from pipeline import verbose_artifacts as verbose_module
 
 

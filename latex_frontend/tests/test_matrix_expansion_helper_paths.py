@@ -5,7 +5,6 @@ import pytest
 from latex_frontend.matrix_expansion import (
     MatrixValue,
     _add_matrices,
-    _apply_derivative,
     _combine_add,
     _combine_mul,
     _consume_balanced,

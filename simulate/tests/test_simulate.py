@@ -75,7 +75,10 @@ class SimulationTests(unittest.TestCase):
         state_space = build_state_space_system(first_order)
         parameters = {"a": -0.4, "b": 2.0, "c": -1.0}
         initial_conditions = {"x": 0.25}
-        input_function = lambda t: {"u_1": float(np.sin(t)), "u_2": float(np.cos(t))}
+
+        def input_function(t: float) -> dict[str, float]:
+            return {"u_1": float(np.sin(t)), "u_2": float(np.cos(t))}
+
         t_eval = np.linspace(0.0, 4.0, 240)
 
         direct = simulate_ode_system(

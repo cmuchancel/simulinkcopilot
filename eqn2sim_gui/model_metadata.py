@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from canonicalize.algebraic_substitution import inline_algebraic_definitions
-from ir.expression_nodes import DerivativeNode, EquationNode, SymbolNode, walk_expression
+from ir.expression_nodes import EquationNode, SymbolNode, walk_expression
 from latex_frontend.symbols import DeterministicCompileError
 from states.rules import collect_derivative_orders, derive_state_list
 

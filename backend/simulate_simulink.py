@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import time
 
-import matlab
 import numpy as np
 
 from backend.builder import build_simulink_model
@@ -15,6 +14,7 @@ from backend.extract_signals import extract_simulink_signals
 from backend.graph_to_simulink import graph_to_simulink_model
 from backend.simulink_dict import BackendSimulinkModelDict, validate_simulink_model_dict
 from backend.validate_simulink import compare_simulink_results
+from simulink.engine import import_matlab_engine
 
 
 class SimulinkExecutionStageError(RuntimeError):
@@ -101,6 +101,7 @@ def simulation_model_params(
 def prepare_workspace_variables(eng, model_dict: BackendSimulinkModelDict | dict[str, object]) -> None:
     """Populate MATLAB workspace variables required by a backend model dictionary."""
     normalized = validate_simulink_model_dict(model_dict)
+    matlab = import_matlab_engine()
     for name, value in normalized.get("workspace_variables", {}).items():
         if (
             isinstance(value, list)
@@ -229,6 +230,7 @@ def execute_simulink_graph(
     t_span: tuple[float, float],
     t_eval,
     input_values: dict[str, float] | None = None,
+    input_specs: dict[str, dict[str, object]] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     ode_result: dict[str, object] | None = None,
     state_space_result: dict[str, object] | None = None,
@@ -245,6 +247,7 @@ def execute_simulink_graph(
         state_names=state_names,
         parameter_values=parameter_values,
         input_values=input_values,
+        input_specs=input_specs,
         input_signals=input_signals,
         initial_conditions=initial_conditions,
         model_params=simulation_model_params(t_span=t_span, t_eval=t_eval),
@@ -274,6 +277,7 @@ def execute_simulink_descriptor(
     t_eval,
     output_names: list[str] | None = None,
     input_values: dict[str, float] | None = None,
+    input_specs: dict[str, dict[str, object]] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     output_dir: str | Path | None = None,
     open_after_build: bool = False,
@@ -286,6 +290,7 @@ def execute_simulink_descriptor(
         name=name,
         parameter_values=parameter_values,
         input_values=input_values,
+        input_specs=input_specs,
         input_signals=input_signals,
         differential_initial_conditions=differential_initial_conditions,
         algebraic_initial_conditions=algebraic_initial_conditions,
@@ -314,6 +319,7 @@ def execute_simulink_preserved_dae_graph(
     t_span: tuple[float, float],
     t_eval,
     input_values: dict[str, float] | None = None,
+    input_specs: dict[str, dict[str, object]] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     output_dir: str | Path | None = None,
     open_after_build: bool = False,
@@ -327,6 +333,7 @@ def execute_simulink_preserved_dae_graph(
         state_names=output_names,
         parameter_values=parameter_values,
         input_values=input_values,
+        input_specs=input_specs,
         input_signals=input_signals,
         initial_conditions=differential_initial_conditions,
         algebraic_initial_conditions=algebraic_initial_conditions,

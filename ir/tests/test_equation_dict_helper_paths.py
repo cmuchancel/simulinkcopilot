@@ -3,7 +3,6 @@ from __future__ import annotations
 import sympy
 import pytest
 
-from ir import equation_dict as equation_dict_module
 from ir.equation_dict import (
     derivative_equation_label,
     equation_from_dict,

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from canonicalize import dae_system as dae_system_module
 from canonicalize.dae_reduction import reduce_semi_explicit_dae
 from canonicalize.dae_system import build_semi_explicit_dae_system
-from ir.expression_nodes import EquationNode, SymbolNode
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 from simulate import dae_init as dae_init_module

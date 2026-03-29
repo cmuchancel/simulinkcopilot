@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from backend import layout as layout_module
-from backend.layout import LayoutProfile, apply_deterministic_layout, audit_layout
+from backend.layout import LayoutProfile, apply_deterministic_layout, apply_legacy_layout, audit_layout
+from backend.layout_metrics import measure_layout
 from backend.simulink_dict import SUBSYSTEM_BLOCK, validate_simulink_model_dict
 
 
@@ -144,6 +145,66 @@ def _row_spacing_model(label: str) -> dict[str, object]:
             {"system": "root", "src_block": "subsystem", "src_port": "1", "dst_block": "out", "dst_port": "1", "label": "y"},
         ],
         "outputs": [{"name": "y", "block": "out", "port": "1"}],
+    }
+
+
+def _integrator_chain_model() -> dict[str, object]:
+    return {
+        "name": "integrator_chain_demo",
+        "blocks": {
+            "subsystem": {
+                "type": "Subsystem",
+                "lib_path": SUBSYSTEM_BLOCK,
+                "system": "root",
+                "name": "chain",
+                "metadata": {"layout_role": "subsystem", "inport_count": 1, "outport_count": 1},
+            },
+            "in": {
+                "type": "Inport",
+                "lib_path": "simulink/Ports & Subsystems/In1",
+                "system": "subsystem",
+                "name": "u",
+                "params": {"Port": 1},
+                "metadata": {"layout_role": "inport", "trace_expression": "u"},
+            },
+            "sum": {
+                "type": "Sum",
+                "lib_path": "simulink/Math Operations/Sum",
+                "system": "subsystem",
+                "name": "sum",
+                "params": {"Inputs": "++"},
+                "metadata": {"layout_role": "compute", "layer_hint": 0, "trace_expression": "u-x"},
+            },
+            "int_x_dot": {
+                "type": "Integrator",
+                "lib_path": "simulink/Continuous/Integrator",
+                "system": "subsystem",
+                "name": "x_dot",
+                "metadata": {"layout_role": "integrator", "state": "x_dot", "state_order": 1, "trace_expression": "x_dot"},
+            },
+            "int_x": {
+                "type": "Integrator",
+                "lib_path": "simulink/Continuous/Integrator",
+                "system": "subsystem",
+                "name": "x",
+                "metadata": {"layout_role": "integrator", "state": "x", "state_order": 0, "trace_expression": "x"},
+            },
+            "out": {
+                "type": "Outport",
+                "lib_path": "simulink/Ports & Subsystems/Out1",
+                "system": "subsystem",
+                "name": "y",
+                "params": {"Port": 1},
+                "metadata": {"layout_role": "outport", "trace_expression": "x"},
+            },
+        },
+        "connections": [
+            {"system": "subsystem", "src_block": "in", "src_port": "1", "dst_block": "sum", "dst_port": "1", "label": "u"},
+            {"system": "subsystem", "src_block": "sum", "src_port": "1", "dst_block": "int_x_dot", "dst_port": "1", "label": "u-x"},
+            {"system": "subsystem", "src_block": "int_x_dot", "src_port": "1", "dst_block": "int_x", "dst_port": "1", "label": "x_dot"},
+            {"system": "subsystem", "src_block": "int_x", "src_port": "1", "dst_block": "out", "dst_port": "1", "label": "x"},
+        ],
+        "outputs": [],
     }
 
 
@@ -312,3 +373,56 @@ def test_apply_deterministic_layout_zero_iteration_falls_back_to_best_model() ->
     laid_out = apply_deterministic_layout(model, max_iterations=0)
 
     assert "layout_quality" in laid_out["metadata"]
+
+
+def test_deterministic_layout_preserves_or_improves_metric_score_vs_legacy() -> None:
+    model = validate_simulink_model_dict(_subsystem_spacing_model("extremely_long_internal_debug_trace_expression_for_rhs_signal"))
+
+    legacy = apply_legacy_layout(model)
+    deterministic = apply_deterministic_layout(model)
+
+    assert measure_layout(deterministic).score >= measure_layout(legacy).score
+
+
+def test_measure_layout_reports_reverse_flow_for_feedback_connection() -> None:
+    model = validate_simulink_model_dict(
+        {
+            "name": "reverse_flow_demo",
+            "blocks": {
+                "src": {
+                    "type": "Constant",
+                    "lib_path": "simulink/Sources/Constant",
+                    "system": "root",
+                    "name": "src",
+                    "metadata": {"layout_role": "source", "trace_expression": "u"},
+                },
+                "gain": {
+                    "type": "Gain",
+                    "lib_path": "simulink/Math Operations/Gain",
+                    "system": "root",
+                    "name": "gain",
+                    "metadata": {"layout_role": "shared", "layer_hint": 0, "trace_expression": "fb"},
+                },
+            },
+            "connections": [
+                {"system": "root", "src_block": "gain", "src_port": "1", "dst_block": "src", "dst_port": "1", "label": "fb"}
+            ],
+            "outputs": [],
+        }
+    )
+    laid_out = apply_deterministic_layout(model)
+
+    metrics = measure_layout(laid_out)
+
+    assert metrics.reverse_flow_edge_count >= 1
+
+
+def test_integrator_chain_layout_orders_higher_derivatives_above_lower_state_blocks() -> None:
+    model = validate_simulink_model_dict(_integrator_chain_model())
+
+    laid_out = apply_deterministic_layout(model)
+
+    int_x_dot = laid_out["blocks"]["int_x_dot"]["position"]
+    int_x = laid_out["blocks"]["int_x"]["position"]
+    assert int_x_dot[0] == int_x[0]
+    assert int_x_dot[1] < int_x[1]

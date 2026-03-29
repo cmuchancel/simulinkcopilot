@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import sympy
 
 from backend.block_library import BLOCK_LIBRARY
-from backend.layout import apply_deterministic_layout
+from backend.layout_visual_corrector import VisualRepairConfig
+from backend.layout_workflow import LayoutMode, apply_layout_workflow
 from backend.simulink_dict import BackendSimulinkModelDict, ROOT_SYSTEM, validate_simulink_model_dict
 from ir.equation_dict import matrix_from_dict
-from latex_frontend.symbols import DeterministicCompileError
+from latex_frontend.symbols import DeterministicCompileError, RECIPROCAL_FUNCTION_BASES
+from simulate.input_specs import normalize_input_specs
 from simulink.utils import sanitize_block_name
 
 
@@ -25,12 +28,27 @@ def _numeric_string(value: sympy.Expr) -> str:
     return sympy.sstr(simplified)
 
 
+def _float_string(value: float) -> str:
+    if float(value).is_integer():
+        return str(int(round(float(value))))
+    return repr(float(value))
+
+
+def _matrix_signal_literal(time_values: list[float], sample_values: list[float]) -> str:
+    rows = [
+        f"{repr(float(time_value))} {repr(float(sample_value))}"
+        for time_value, sample_value in zip(time_values, sample_values)
+    ]
+    return "[" + "; ".join(rows) + "]"
+
+
 @dataclass
 class DescriptorToSimulinkLowerer:
     descriptor_system: dict[str, object]
     model_name: str
     parameter_values: dict[str, float] = field(default_factory=dict)
     input_values: dict[str, float] = field(default_factory=dict)
+    input_specs: dict[str, dict[str, object]] = field(default_factory=dict)
     input_signals: dict[str, dict[str, list[float]]] = field(default_factory=dict)
     differential_initial_conditions: dict[str, float] = field(default_factory=dict)
     algebraic_initial_conditions: dict[str, float] = field(default_factory=dict)
@@ -193,6 +211,1064 @@ class DescriptorToSimulinkLowerer:
         )
         return (block_id, "1")
 
+    def _native_input_source(self, input_name: str, *, layer_hint: int) -> tuple[str, str] | None:
+        spec = self.input_specs.get(input_name)
+        if spec is None:
+            return None
+        metadata = {"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name}
+        if not self._is_supported_native_input_spec(spec):
+            return None
+        return self._build_native_input_source(input_name, spec, layer_hint=layer_hint, display_name=input_name, metadata=metadata)
+
+    def _is_supported_native_input_spec(self, spec: dict[str, object]) -> bool:
+        kind = str(spec.get("kind", ""))
+        if kind in {
+            "constant",
+            "time",
+            "step",
+            "impulse",
+            "pulse",
+            "sine",
+            "square",
+            "sawtooth",
+            "triangle",
+            "ramp",
+            "random_number",
+            "white_noise",
+            "expression",
+        }:
+            return True
+        if kind in {"sum", "product"}:
+            terms = spec.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                isinstance(term, dict) and self._is_supported_native_input_spec(term) for term in terms
+            )
+        if kind in {
+            "power",
+            "exp",
+            "delay",
+            "trig_function",
+            "reciprocal_trig_function",
+            "math_function",
+            "saturation",
+            "dead_zone",
+            "abs",
+            "sign",
+            "relay",
+        }:
+            inner = spec.get("input")
+            return isinstance(inner, dict) and self._is_supported_native_input_spec(inner)
+        if kind == "binary_trig_function":
+            lhs = spec.get("lhs")
+            rhs = spec.get("rhs")
+            return (
+                isinstance(lhs, dict)
+                and self._is_supported_native_input_spec(lhs)
+                and isinstance(rhs, dict)
+                and self._is_supported_native_input_spec(rhs)
+            )
+        if kind == "minmax":
+            terms = spec.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                isinstance(term, dict) and self._is_supported_native_input_spec(term) for term in terms
+            )
+        if kind == "piecewise":
+            branches = spec.get("branches")
+            otherwise = spec.get("otherwise")
+            return (
+                isinstance(branches, list)
+                and bool(branches)
+                and all(
+                    isinstance(branch, dict)
+                    and isinstance(branch.get("value"), dict)
+                    and self._is_supported_native_input_spec(branch["value"])
+                    and self._is_supported_native_condition_spec(branch.get("condition"))
+                    for branch in branches
+                )
+                and isinstance(otherwise, dict)
+                and self._is_supported_native_input_spec(otherwise)
+            )
+        return False
+
+    def _is_supported_native_condition_spec(self, condition: object) -> bool:
+        if not isinstance(condition, dict):
+            return False
+        kind = str(condition.get("kind", ""))
+        if kind == "boolean":
+            return isinstance(condition.get("value"), bool)
+        if kind == "compare":
+            return (
+                str(condition.get("op", "")) in {"<", "<=", ">", ">=", "==", "!="}
+                and isinstance(condition.get("lhs"), dict)
+                and self._is_supported_native_input_spec(condition["lhs"])
+                and isinstance(condition.get("rhs"), dict)
+                and self._is_supported_native_input_spec(condition["rhs"])
+            )
+        if kind in {"and", "or"}:
+            terms = condition.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                self._is_supported_native_condition_spec(term) for term in terms
+            )
+        if kind == "not":
+            return self._is_supported_native_condition_spec(condition.get("input"))
+        return False
+
+    def _build_native_input_source(
+        self,
+        input_name: str,
+        spec: dict[str, object],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        kind = str(spec.get("kind", ""))
+        if kind == "constant":
+            return self._native_constant_source(
+                input_name,
+                float(spec.get("value", 0.0)),
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "time":
+            block_id = self.add_block(
+                self._next_id("input_time"),
+                "Clock",
+                name=display_name,
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "step":
+            bias = float(spec.get("bias", 0.0))
+            amplitude = float(spec.get("amplitude", 1.0))
+            block_id = self.add_block(
+                self._next_id("input_step"),
+                "Step",
+                name=display_name,
+                params={
+                    "Time": _float_string(float(spec.get("start_time", 0.0))),
+                    "Before": _float_string(bias),
+                    "After": _float_string(bias + amplitude),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "square":
+            sine_ref = self._build_native_input_source(
+                input_name,
+                {
+                    "kind": "sine",
+                    "amplitude": 1.0,
+                    "frequency": float(spec.get("frequency", 1.0)),
+                    "phase": float(spec.get("phase", 0.0)),
+                    "bias": 0.0,
+                },
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_src",
+                metadata=metadata,
+            )
+            sign_ref = self._apply_native_unary_block(
+                input_name,
+                "Sign",
+                sine_ref,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_sign",
+                metadata=metadata,
+                prefix="input_sign",
+            )
+            scaled_ref = self._apply_native_gain_to_source(
+                input_name,
+                sign_ref,
+                gain=float(spec.get("amplitude", 1.0)),
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_gain",
+                metadata=metadata,
+                prefix="input_square_gain",
+            )
+            return self._apply_native_bias(
+                input_name,
+                scaled_ref,
+                bias=float(spec.get("bias", 0.0)),
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind in {"sawtooth", "triangle"}:
+            base_ref = self._build_repeating_sequence_source(
+                input_name,
+                spec,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+            return self._wrap_periodic_phase_delay(
+                input_name,
+                base_ref,
+                frequency=float(spec.get("frequency", 1.0)),
+                phase=float(spec.get("phase", 0.0)),
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "ramp":
+            block_id = self.add_block(
+                self._next_id("input_ramp"),
+                "Ramp",
+                name=display_name,
+                params={
+                    "slope": _float_string(float(spec.get("slope", 1.0))),
+                    "start": _float_string(float(spec.get("start_time", 0.0))),
+                    "InitialOutput": _float_string(float(spec.get("initial_output", 0.0))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind in {"impulse", "pulse"}:
+            amplitude = float(spec.get("amplitude", 1.0))
+            width = float(spec.get("width", 1.0))
+            if width <= 0.0:
+                raise DeterministicCompileError(f"Native {kind} width for input {input_name!r} must be positive.")
+            period = float(spec.get("period", max(width * 2.0, 1.0)))
+            if period <= 0.0:
+                raise DeterministicCompileError(f"Native {kind} period for input {input_name!r} must be positive.")
+            pulse_amplitude = amplitude / width if kind == "impulse" else amplitude
+            bias = float(spec.get("bias", 0.0))
+            pulse_id = self.add_block(
+                self._next_id(f"input_{kind}"),
+                "PulseGenerator",
+                name=display_name if abs(bias) <= 1e-12 else f"{display_name}_{kind}",
+                params={
+                    "PulseType": "Time based",
+                    "Amplitude": _float_string(pulse_amplitude),
+                    "Period": _float_string(period),
+                    "PulseWidth": _float_string(100.0 * width / period),
+                    "PhaseDelay": _float_string(float(spec.get("start_time", 0.0))),
+                },
+                metadata=metadata,
+            )
+            pulse_ref = (pulse_id, "1")
+            if abs(bias) <= 1e-12:
+                return pulse_ref
+            bias_ref = self._build_native_input_source(
+                input_name,
+                {"kind": "constant", "value": bias},
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_bias",
+                metadata=metadata,
+            )
+            return self._combine_native_sources(
+                input_name,
+                "sum",
+                [bias_ref, pulse_ref],
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "sine":
+            block_id = self.add_block(
+                self._next_id("input_sine"),
+                "SineWave",
+                name=display_name,
+                params={
+                    "Amplitude": _float_string(float(spec.get("amplitude", 1.0))),
+                    "Frequency": _float_string(float(spec.get("frequency", 1.0))),
+                    "Phase": _float_string(float(spec.get("phase", 0.0))),
+                    "Bias": _float_string(float(spec.get("bias", 0.0))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind in {"sum", "product"}:
+            terms = spec.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(
+                    f"Native {kind} input spec for {input_name!r} requires a non-empty terms list."
+                )
+            sources = [
+                self._build_native_input_source(
+                    input_name,
+                    term,
+                    layer_hint=layer_hint,
+                    display_name=f"{display_name}_term_{index + 1}",
+                    metadata=metadata,
+                )
+                for index, term in enumerate(terms)
+            ]
+            return self._combine_native_sources(
+                input_name,
+                kind,
+                sources,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "trig_function":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native trig_function input spec for {input_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_arg",
+                metadata=metadata,
+            )
+            return self._apply_native_unary_block(
+                input_name,
+                "TrigonometricFunction",
+                inner_ref,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix=f"input_trig_{str(spec.get('operator', 'trig')).lower()}",
+                params={"Operator": str(spec.get("operator", "")).lower()},
+            )
+        if kind == "binary_trig_function":
+            lhs = spec.get("lhs")
+            rhs = spec.get("rhs")
+            if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+                raise DeterministicCompileError(
+                    f"Native binary_trig_function input spec for {input_name!r} requires 'lhs' and 'rhs' sources."
+                )
+            lhs_ref = self._build_native_input_source(
+                input_name,
+                lhs,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_lhs",
+                metadata=metadata,
+            )
+            rhs_ref = self._build_native_input_source(
+                input_name,
+                rhs,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_rhs",
+                metadata=metadata,
+            )
+            operator = str(spec.get("operator", "")).lower()
+            block_id = self.add_block(
+                self._next_id(f"input_trig_{operator}"),
+                "TrigonometricFunction",
+                name=display_name,
+                params={"Operator": operator},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            self.add_connection(lhs_ref, block_id, 1, label=display_name)
+            self.add_connection(rhs_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind == "reciprocal_trig_function":
+            inner = spec.get("input")
+            operator = str(spec.get("operator", "")).lower()
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native reciprocal_trig_function input spec for {input_name!r} requires an 'input' source."
+                )
+            if operator not in RECIPROCAL_FUNCTION_BASES:
+                raise DeterministicCompileError(
+                    f"Unsupported reciprocal trig operator {operator!r} for {input_name!r}."
+                )
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_arg",
+                metadata=metadata,
+            )
+            trig_ref = self._apply_native_unary_block(
+                input_name,
+                "TrigonometricFunction",
+                inner_ref,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_{RECIPROCAL_FUNCTION_BASES[operator]}",
+                metadata=metadata,
+                prefix=f"input_trig_{RECIPROCAL_FUNCTION_BASES[operator]}",
+                params={"Operator": RECIPROCAL_FUNCTION_BASES[operator]},
+            )
+            one_ref = self._native_constant_source(
+                input_name,
+                1.0,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_one",
+                metadata=metadata,
+            )
+            block_id = self.add_block(
+                self._next_id(f"input_recip_{operator}"),
+                "Divide",
+                name=display_name,
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            self.add_connection(one_ref, block_id, 1, label="1")
+            self.add_connection(trig_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind == "math_function":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native math_function input spec for {input_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_arg",
+                metadata=metadata,
+            )
+            return self._apply_native_unary_block(
+                input_name,
+                "MathFunction",
+                inner_ref,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix=f"input_math_{str(spec.get('operator', 'math')).lower()}",
+                params={"Operator": str(spec.get("operator", "")).lower()},
+            )
+        if kind == "minmax":
+            terms = spec.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(
+                    f"Native minmax input spec for {input_name!r} requires a non-empty terms list."
+                )
+            term_refs = [
+                self._build_native_input_source(
+                    input_name,
+                    term,
+                    layer_hint=layer_hint,
+                    display_name=f"{display_name}_{index + 1}",
+                    metadata=metadata,
+                )
+                for index, term in enumerate(terms)
+            ]
+            operator = str(spec.get("operator", "")).lower()
+            block_id = self.add_block(
+                self._next_id(f"input_minmax_{operator}"),
+                "MinMax",
+                name=display_name,
+                params={"Function": operator, "Inputs": str(len(term_refs))},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            for index, term_ref in enumerate(term_refs, start=1):
+                self.add_connection(term_ref, block_id, index, label=display_name)
+            return (block_id, "1")
+        if kind == "power":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(f"Native power input spec for {input_name!r} requires an 'input' source.")
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_src",
+                metadata=metadata,
+            )
+            return self._build_power_native_source(
+                input_name,
+                inner_ref,
+                exponent=float(spec.get("exponent", 1.0)),
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "exp":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native exponential input spec for {input_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_src",
+                metadata=metadata,
+            )
+            return self._apply_native_unary_block(
+                input_name,
+                "MathFunction",
+                inner_ref,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix="input_exp",
+                params={"Operator": "exp"},
+            )
+        if kind == "delay":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(f"Native delay input spec for {input_name!r} requires an 'input' source.")
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_src",
+                metadata=metadata,
+            )
+            return self._apply_native_delay(
+                input_name,
+                inner_ref,
+                delay_time=float(spec.get("delay_time", 0.0)),
+                initial_output=float(spec.get("initial_output", 0.0)),
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix="input_delay",
+            )
+        if kind in {"saturation", "dead_zone", "abs", "sign", "relay"}:
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native {kind} input spec for {input_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                input_name,
+                inner,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_src",
+                metadata=metadata,
+            )
+            if kind == "saturation":
+                block_type = "Saturation"
+                prefix = "input_sat"
+                params = {
+                    "LowerLimit": _float_string(float(spec.get("lower_limit", -1.0))),
+                    "UpperLimit": _float_string(float(spec.get("upper_limit", 1.0))),
+                }
+            elif kind == "dead_zone":
+                block_type = "DeadZone"
+                prefix = "input_deadzone"
+                params = {
+                    "LowerValue": _float_string(float(spec.get("lower_limit", -1.0))),
+                    "UpperValue": _float_string(float(spec.get("upper_limit", 1.0))),
+                }
+            elif kind == "abs":
+                block_type = "Abs"
+                prefix = "input_abs"
+                params = {}
+            elif kind == "sign":
+                block_type = "Sign"
+                prefix = "input_sign"
+                params = {}
+            else:
+                block_type = "Relay"
+                prefix = "input_relay"
+                params = {
+                    "OnSwitchValue": _float_string(float(spec.get("on_switch_value", 0.0))),
+                    "OffSwitchValue": _float_string(float(spec.get("off_switch_value", 0.0))),
+                    "OnOutputValue": _float_string(float(spec.get("on_output_value", 1.0))),
+                    "OffOutputValue": _float_string(float(spec.get("off_output_value", -1.0))),
+                }
+            return self._apply_native_unary_block(
+                input_name,
+                block_type,
+                inner_ref,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix=prefix,
+                params=params,
+            )
+        if kind == "piecewise":
+            return self._build_native_piecewise_source(
+                input_name,
+                spec,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "random_number":
+            block_id = self.add_block(
+                self._next_id("input_uniform_random"),
+                "UniformRandomNumber",
+                name=display_name,
+                params={
+                    "Minimum": _float_string(float(spec.get("minimum", 0.0))),
+                    "Maximum": _float_string(float(spec.get("maximum", 1.0))),
+                    "Seed": _float_string(float(spec.get("seed", 0.0))),
+                    "SampleTime": _float_string(float(spec.get("sample_time", 0.01))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "white_noise":
+            block_id = self.add_block(
+                self._next_id("input_random"),
+                "RandomNumber",
+                name=display_name,
+                params={
+                    "Mean": _float_string(float(spec.get("mean", 0.0))),
+                    "Variance": _float_string(float(spec.get("variance", 1.0))),
+                    "Seed": _float_string(float(spec.get("seed", 0.0))),
+                    "SampleTime": _float_string(float(spec.get("sample_time", 0.01))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "expression":
+            return self._build_expression_function_source(
+                input_name,
+                spec,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        raise DeterministicCompileError(f"Unsupported native input spec kind {kind!r} for input {input_name!r}.")
+
+    def _build_expression_function_source(
+        self,
+        input_name: str,
+        spec: dict[str, object],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        expression_text = str(spec.get("expression", "")).strip()
+        if not expression_text:
+            raise DeterministicCompileError(f"Expression input spec for {input_name!r} requires a non-empty expression.")
+        time_variable = str(spec.get("time_variable", "t")).strip() or "t"
+        time_ref = self._build_native_input_source(
+            input_name,
+            {"kind": "time"},
+            layer_hint=layer_hint,
+            display_name=time_variable,
+            metadata=metadata,
+        )
+        block_id = self.add_block(
+            self._next_id("input_matlab_function"),
+            "MATLABFunction",
+            name=display_name,
+            metadata={
+                "layout_role": "source",
+                "layer_hint": layer_hint,
+                "trace_expression": input_name,
+                **metadata,
+                "matlab_function_script": self._matlab_function_script_from_expression(expression_text, time_variable=time_variable),
+            },
+        )
+        self.add_connection(time_ref, block_id, 1, label=time_variable)
+        return (block_id, "1")
+
+    def _matlab_function_script_from_expression(self, expression_text: str, *, time_variable: str) -> str:
+        return "\n".join(
+            [
+                f"function y = fcn({time_variable})",
+                f"y = {expression_text};",
+            ]
+        )
+
+    def _native_constant_source(
+        self,
+        input_name: str,
+        value: float,
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        block_id = self.add_block(
+            self._next_id("input_const"),
+            "Constant",
+            name=display_name,
+            params={"Value": _float_string(value)},
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        return (block_id, "1")
+
+    def _combine_native_sources(
+        self,
+        input_name: str,
+        kind: str,
+        sources: list[tuple[str, str]],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        if len(sources) == 1:
+            return sources[0]
+        block_type = "Sum" if kind == "sum" else "Product"
+        block_id = self.add_block(
+            self._next_id(f"input_{kind}"),
+            block_type,
+            name=display_name,
+            params={"Inputs": ("+" if kind == "sum" else "*") * len(sources)},
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        for index, source in enumerate(sources, start=1):
+            self.add_connection(source, block_id, index, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_unary_block(
+        self,
+        input_name: str,
+        block_type: str,
+        source: tuple[str, str],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+        prefix: str,
+        params: dict[str, object] | None = None,
+    ) -> tuple[str, str]:
+        block_id = self.add_block(
+            self._next_id(prefix),
+            block_type,
+            name=display_name,
+            params=params,
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        self.add_connection(source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_gain_to_source(
+        self,
+        input_name: str,
+        source: tuple[str, str],
+        *,
+        gain: float,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+        prefix: str,
+    ) -> tuple[str, str]:
+        if abs(gain - 1.0) <= 1e-12:
+            return source
+        block_id = self.add_block(
+            self._next_id(prefix),
+            "Gain",
+            name=display_name,
+            params={"Gain": _float_string(gain)},
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        self.add_connection(source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_bias(
+        self,
+        input_name: str,
+        source: tuple[str, str],
+        *,
+        bias: float,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        if abs(bias) <= 1e-12:
+            return source
+        bias_ref = self._native_constant_source(
+            input_name,
+            bias,
+            layer_hint=layer_hint,
+            display_name=f"{display_name}_bias",
+            metadata=metadata,
+        )
+        return self._combine_native_sources(
+            input_name,
+            "sum",
+            [source, bias_ref],
+            layer_hint=layer_hint,
+            display_name=display_name,
+            metadata=metadata,
+        )
+
+    def _apply_native_delay(
+        self,
+        input_name: str,
+        source: tuple[str, str],
+        *,
+        delay_time: float,
+        initial_output: float,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+        prefix: str,
+    ) -> tuple[str, str]:
+        if abs(delay_time) <= 1e-12:
+            return source
+        block_id = self.add_block(
+            self._next_id(prefix),
+            "TransportDelay",
+            name=display_name,
+            params={"DelayTime": _float_string(delay_time), "InitialOutput": _float_string(initial_output)},
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        self.add_connection(source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _build_power_native_source(
+        self,
+        input_name: str,
+        source: tuple[str, str],
+        *,
+        exponent: float,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        if abs(exponent) <= 1e-12:
+            return self._native_constant_source(input_name, 1.0, layer_hint=layer_hint, display_name=display_name, metadata=metadata)
+        if abs(exponent - 1.0) <= 1e-12:
+            return source
+        rounded = int(round(exponent))
+        if abs(exponent - rounded) <= 1e-12 and rounded > 1:
+            return self._combine_native_sources(
+                input_name,
+                "product",
+                [source for _ in range(rounded)],
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if abs(exponent - 0.5) <= 1e-12:
+            return self._apply_native_unary_block(
+                input_name,
+                "MathFunction",
+                source,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+                prefix="input_sqrt",
+                params={"Operator": "sqrt"},
+            )
+        log_ref = self._apply_native_unary_block(
+            input_name,
+            "MathFunction",
+            source,
+            layer_hint=layer_hint,
+            display_name=f"{display_name}_log",
+            metadata=metadata,
+            prefix="input_log",
+            params={"Operator": "log"},
+        )
+        scaled_ref = self._apply_native_gain_to_source(
+            input_name,
+            log_ref,
+            gain=exponent,
+            layer_hint=layer_hint,
+            display_name=f"{display_name}_gain",
+            metadata=metadata,
+            prefix="input_pow_gain",
+        )
+        return self._apply_native_unary_block(
+            input_name,
+            "MathFunction",
+            scaled_ref,
+            layer_hint=layer_hint,
+            display_name=display_name,
+            metadata=metadata,
+            prefix="input_exp",
+            params={"Operator": "exp"},
+        )
+
+    def _build_repeating_sequence_source(
+        self,
+        input_name: str,
+        spec: dict[str, object],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        period = self._period_from_frequency(float(spec.get("frequency", 1.0)))
+        width = float(spec.get("width", 0.5 if str(spec.get("kind", "")) == "triangle" else 1.0))
+        amplitude = float(spec.get("amplitude", 1.0))
+        bias = float(spec.get("bias", 0.0))
+        times, values = self._repeating_sequence_points(period=period, amplitude=amplitude, bias=bias, width=width)
+        block_id = self.add_block(
+            self._next_id("input_repeat"),
+            "RepeatingSequence",
+            name=display_name,
+            params={
+                "rep_seq_t": "[" + " ".join(_float_string(value) for value in times) + "]",
+                "rep_seq_y": "[" + " ".join(_float_string(value) for value in values) + "]",
+            },
+            metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+        )
+        return (block_id, "1")
+
+    def _repeating_sequence_points(
+        self,
+        *,
+        period: float,
+        amplitude: float,
+        bias: float,
+        width: float,
+    ) -> tuple[list[float], list[float]]:
+        normalized_width = min(max(width, 1e-6), 1.0)
+        if normalized_width >= 1.0 - 1e-12:
+            epsilon = max(period * 1e-6, 1e-6)
+            return [0.0, max(period - epsilon, 0.0), period], [bias - amplitude, bias + amplitude, bias - amplitude]
+        rise_time = normalized_width * period
+        return [0.0, rise_time, period], [bias - amplitude, bias + amplitude, bias - amplitude]
+
+    def _wrap_periodic_phase_delay(
+        self,
+        input_name: str,
+        source: tuple[str, str],
+        *,
+        frequency: float,
+        phase: float,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        if abs(phase) <= 1e-12:
+            return source
+        period = self._period_from_frequency(frequency)
+        delay_time = math.fmod((-phase / frequency), period)
+        if delay_time < 0.0:
+            delay_time += period
+        return self._apply_native_delay(
+            input_name,
+            source,
+            delay_time=delay_time,
+            initial_output=0.0,
+            layer_hint=layer_hint,
+            display_name=display_name,
+            metadata=metadata,
+            prefix="input_phase_delay",
+        )
+
+    def _period_from_frequency(self, frequency: float) -> float:
+        if abs(frequency) <= 1e-12:
+            raise DeterministicCompileError("Native periodic input frequency must be non-zero.")
+        return abs((2.0 * math.pi) / frequency)
+
+    def _build_native_piecewise_source(
+        self,
+        input_name: str,
+        spec: dict[str, object],
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        branches = spec.get("branches")
+        otherwise = spec.get("otherwise")
+        if not isinstance(branches, list) or not branches or not isinstance(otherwise, dict):
+            raise DeterministicCompileError(f"Native piecewise input spec for {input_name!r} is incomplete.")
+        current_ref = self._build_native_input_source(
+            input_name,
+            otherwise,
+            layer_hint=layer_hint,
+            display_name=f"{display_name}_otherwise",
+            metadata=metadata,
+        )
+        total = len(branches)
+        for index, branch in enumerate(reversed(branches), start=1):
+            condition_ref = self._build_native_condition_source(
+                input_name,
+                branch.get("condition"),
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_cond_{index}",
+                metadata=metadata,
+            )
+            value_spec = branch.get("value")
+            if not isinstance(value_spec, dict):
+                raise DeterministicCompileError(f"Native piecewise branch for {input_name!r} requires a 'value' source.")
+            true_ref = self._build_native_input_source(
+                input_name,
+                value_spec,
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_branch_{index}",
+                metadata=metadata,
+            )
+            switch_id = self.add_block(
+                self._next_id("input_switch"),
+                "Switch",
+                name=display_name if index == total else f"{display_name}_switch_{index}",
+                params={"Criteria": "u2 >= Threshold", "Threshold": "0.5"},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            self.add_connection(true_ref, switch_id, 1, label=display_name)
+            self.add_connection(condition_ref, switch_id, 2, label=display_name)
+            self.add_connection(current_ref, switch_id, 3, label=display_name)
+            current_ref = (switch_id, "1")
+        return current_ref
+
+    def _build_native_condition_source(
+        self,
+        input_name: str,
+        condition: object,
+        *,
+        layer_hint: int,
+        display_name: str,
+        metadata: dict[str, object],
+    ) -> tuple[str, str]:
+        if not isinstance(condition, dict):
+            raise DeterministicCompileError(f"Native condition for {input_name!r} must be an object.")
+        kind = str(condition.get("kind", ""))
+        if kind == "boolean":
+            return self._native_constant_source(
+                input_name,
+                1.0 if bool(condition.get("value", False)) else 0.0,
+                layer_hint=layer_hint,
+                display_name=display_name,
+                metadata=metadata,
+            )
+        if kind == "compare":
+            lhs = condition.get("lhs")
+            rhs = condition.get("rhs")
+            if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+                raise DeterministicCompileError(f"Native compare condition for {input_name!r} requires 'lhs' and 'rhs'.")
+            lhs_ref = self._build_native_input_source(input_name, lhs, layer_hint=layer_hint, display_name=f"{display_name}_lhs", metadata=metadata)
+            rhs_ref = self._build_native_input_source(input_name, rhs, layer_hint=layer_hint, display_name=f"{display_name}_rhs", metadata=metadata)
+            operator = str(condition.get("op", ""))
+            block_id = self.add_block(
+                self._next_id("input_relop"),
+                "RelationalOperator",
+                name=display_name,
+                params={"Operator": "~=" if operator == "!=" else operator},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            self.add_connection(lhs_ref, block_id, 1, label=display_name)
+            self.add_connection(rhs_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind in {"and", "or"}:
+            terms = condition.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(f"Native {kind} condition for {input_name!r} requires terms.")
+            term_refs = [
+                self._build_native_condition_source(
+                    input_name,
+                    term,
+                    layer_hint=layer_hint,
+                    display_name=f"{display_name}_{index + 1}",
+                    metadata=metadata,
+                )
+                for index, term in enumerate(terms)
+            ]
+            block_id = self.add_block(
+                self._next_id("input_logic"),
+                "LogicOperator",
+                name=display_name,
+                params={"Operator": kind.upper(), "Inputs": str(len(term_refs))},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            for index, term_ref in enumerate(term_refs, start=1):
+                self.add_connection(term_ref, block_id, index, label=display_name)
+            return (block_id, "1")
+        if kind == "not":
+            inner_ref = self._build_native_condition_source(
+                input_name,
+                condition.get("input"),
+                layer_hint=layer_hint,
+                display_name=f"{display_name}_inner",
+                metadata=metadata,
+            )
+            block_id = self.add_block(
+                self._next_id("input_logic_not"),
+                "LogicOperator",
+                name=display_name,
+                params={"Operator": "NOT"},
+                metadata={"layout_role": "source", "layer_hint": layer_hint, "trace_expression": input_name, **metadata},
+            )
+            self.add_connection(inner_ref, block_id, 1, label=display_name)
+            return (block_id, "1")
+        raise DeterministicCompileError(f"Unsupported native condition kind {kind!r} for {input_name!r}.")
+
     def _apply_gain(self, source: tuple[str, str], coefficient: sympy.Expr, *, trace: str, layer_hint: int) -> tuple[str, str]:
         simplified = sympy.simplify(coefficient)
         if simplified == 1:
@@ -274,18 +1350,17 @@ class DescriptorToSimulinkLowerer:
     def _materialize_inputs(self) -> None:
         for input_name in self.inputs:
             metadata = {"layout_role": "source", "layer_hint": 0, "trace_expression": input_name}
+            native_source = self._native_input_source(input_name, layer_hint=0)
+            if native_source is not None:
+                self.sources[input_name] = native_source
+                continue
             if input_name in self.input_signals:
                 series = self.input_signals[input_name]
-                workspace_name = f"{self.model_name}_{_sanitize(input_name)}_input"
-                self.workspace_variables[workspace_name] = [
-                    [float(time), float(value)]
-                    for time, value in zip(series["time"], series["values"])
-                ]
                 block_id = self.add_block(
                     f"input_{_sanitize(input_name)}",
                     "FromWorkspace",
                     name=input_name,
-                    params={"VariableName": workspace_name},
+                    params={"VariableName": _matrix_signal_literal(list(series["time"]), list(series["values"]))},
                     metadata=metadata,
                 )
             elif input_name in self.input_values:
@@ -421,7 +1496,7 @@ class DescriptorToSimulinkLowerer:
                 },
             }
         )
-        return validate_simulink_model_dict(apply_deterministic_layout(model))
+        return validate_simulink_model_dict(model)
 
 
 def descriptor_to_simulink_model(
@@ -430,11 +1505,15 @@ def descriptor_to_simulink_model(
     name: str,
     parameter_values: dict[str, float] | None = None,
     input_values: dict[str, float] | None = None,
+    input_specs: dict[str, dict[str, object]] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     differential_initial_conditions: dict[str, float] | None = None,
     algebraic_initial_conditions: dict[str, float] | None = None,
     output_names: list[str] | None = None,
     model_params: dict[str, object] | None = None,
+    layout_mode: LayoutMode = "deterministic",
+    visual_repair_config: VisualRepairConfig | None = None,
+    openai_client=None,
 ) -> BackendSimulinkModelDict:
     """Lower a linear descriptor system into a Simulink-ready model dictionary."""
     lowerer = DescriptorToSimulinkLowerer(
@@ -442,8 +1521,15 @@ def descriptor_to_simulink_model(
         model_name=name,
         parameter_values=dict(parameter_values or {}),
         input_values=dict(input_values or {}),
+        input_specs=normalize_input_specs(input_specs=input_specs or {}),
         input_signals=dict(input_signals or {}),
         differential_initial_conditions=dict(differential_initial_conditions or {}),
         algebraic_initial_conditions=dict(algebraic_initial_conditions or {}),
     )
-    return lowerer.lower(output_names=output_names, model_params=model_params)
+    model = lowerer.lower(output_names=output_names, model_params=model_params)
+    return apply_layout_workflow(
+        model,
+        layout_mode=layout_mode,
+        visual_repair_config=visual_repair_config,
+        openai_client=openai_client,
+    )

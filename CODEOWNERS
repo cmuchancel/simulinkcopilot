@@ -1,0 +1,14 @@
+# Default ownership
+* @cmuchancel
+
+# Core implementation
+/backend/ @cmuchancel
+/pipeline/ @cmuchancel
+/eqn2sim_gui/ @cmuchancel
+/simulate/ @cmuchancel
+/states/ @cmuchancel
+
+# Tooling and docs
+/.github/ @cmuchancel
+/docs/ @cmuchancel
+/scripts/ @cmuchancel

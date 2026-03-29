@@ -37,6 +37,7 @@ MIN_BLOCK_CLEARANCE_TARGET = 24
 MIN_LABEL_BLOCK_CLEARANCE_TARGET = 6
 MIN_LABEL_LABEL_CLEARANCE_TARGET = 12
 MAX_LAYOUT_REPAIR_ITERATIONS = 6
+DEFAULT_REFINEMENT_PASSES = 4
 
 
 Rect = tuple[int, int, int, int]
@@ -68,6 +69,7 @@ class LayoutProfile:
     trace_wrap_width: int = TRACE_WRAP_WIDTH
     horizontal_scale: float = 1.0
     vertical_scale: float = 1.0
+    refinement_passes: int = DEFAULT_REFINEMENT_PASSES
 
     def scaled_column_gap(self, suggested_gap: int) -> int:
         return max(
@@ -280,6 +282,10 @@ def _stack_column(
 
 def _position(x: int, y: int, width: int = DEFAULT_BLOCK_WIDTH, height: int = DEFAULT_BLOCK_HEIGHT) -> list[int]:
     return [x, y, x + width, y + height]
+
+
+def _center_y(position: list[int]) -> float:
+    return (int(position[1]) + int(position[3])) / 2.0
 
 
 def _sort_blocks(block_ids: list[str], blocks: dict[str, dict[str, object]]) -> list[str]:
@@ -496,6 +502,105 @@ def _assign_subsystem_layout(model: BackendSimulinkModelDict, subsystem_id: str,
     )
 
 
+def _column_groups(
+    model: BackendSimulinkModelDict,
+    *,
+    system: str,
+) -> list[tuple[int, list[str]]]:
+    grouped: dict[int, list[str]] = {}
+    for block_id, spec in model["blocks"].items():
+        if spec["system"] != system:
+            continue
+        position = spec.get("position")
+        if position is None:
+            continue
+        grouped.setdefault(int(position[0]), []).append(block_id)
+    return [
+        (x, sorted(block_ids, key=lambda block_id: (int(model["blocks"][block_id]["position"][1]), block_id)))
+        for x, block_ids in sorted(grouped.items())
+    ]
+
+
+def _skip_refinement_for_column(
+    blocks: dict[str, dict[str, object]],
+    block_ids: list[str],
+) -> bool:
+    return any(blocks[block_id]["type"] in {"Inport", "Outport", "Integrator"} for block_id in block_ids)
+
+
+def _refinement_target_y(
+    model: BackendSimulinkModelDict,
+    *,
+    system: str,
+    block_id: str,
+) -> float:
+    blocks = model["blocks"]
+    position = blocks[block_id].get("position")
+    if position is None:
+        return 0.0
+    current_y = _center_y(position)
+    contributions: list[float] = []
+    for connection in model["connections"]:
+        if connection["system"] != system:
+            continue
+        neighbor_id: str | None = None
+        if connection["src_block"] == block_id:
+            neighbor_id = str(connection["dst_block"])
+        elif connection["dst_block"] == block_id:
+            neighbor_id = str(connection["src_block"])
+        if neighbor_id is None:
+            continue
+        neighbor_position = blocks[neighbor_id].get("position")
+        if neighbor_position is None:
+            continue
+        weight = 2 if abs(int(neighbor_position[0]) - int(position[0])) <= 2 * LAYER_X_SPACING else 1
+        contributions.extend([_center_y(neighbor_position)] * weight)
+    if not contributions:
+        return current_y
+    return sum(contributions) / len(contributions)
+
+
+def _refine_system_layout(
+    model: BackendSimulinkModelDict,
+    *,
+    system: str,
+    profile: LayoutProfile,
+) -> None:
+    blocks = model["blocks"]
+    if profile.refinement_passes <= 0:
+        return
+    for _ in range(profile.refinement_passes):
+        columns = _column_groups(model, system=system)
+        updated = False
+        for x, block_ids in columns:
+            if len(block_ids) <= 1 or _skip_refinement_for_column(blocks, block_ids):
+                continue
+            current_order = list(block_ids)
+            refined_order = sorted(
+                current_order,
+                key=lambda block_id: (
+                    _refinement_target_y(model, system=system, block_id=block_id),
+                    _center_y(blocks[block_id]["position"]),
+                    str(blocks[block_id].get("name", block_id)),
+                    block_id,
+                ),
+            )
+            if refined_order == current_order:
+                continue
+            _stack_column(
+                model,
+                blocks,
+                profile=profile,
+                system=system,
+                block_ids=refined_order,
+                x=x,
+                base_y=int(min(blocks[block_id]["position"][1] for block_id in current_order)),
+            )
+            updated = True
+        if not updated:
+            return
+
+
 def _rect_from_position(position: list[int]) -> Rect:
     return (int(position[0]), int(position[1]), int(position[2]), int(position[3]))
 
@@ -626,7 +731,12 @@ def _repair_profile(profile: LayoutProfile, report: LayoutQualityReport) -> Layo
     )
 
 
-def _apply_layout_with_profile(model: BackendSimulinkModelDict, profile: LayoutProfile) -> BackendSimulinkModelDict:
+def _apply_layout_with_profile(
+    model: BackendSimulinkModelDict,
+    profile: LayoutProfile,
+    *,
+    refine_columns: bool,
+) -> BackendSimulinkModelDict:
     laid_out = deepcopy(model)
     _assign_root_layout(laid_out, profile)
     subsystem_ids = [
@@ -636,7 +746,50 @@ def _apply_layout_with_profile(model: BackendSimulinkModelDict, profile: LayoutP
     ]
     for subsystem_id in sorted(subsystem_ids, key=lambda block_id: str(laid_out["blocks"][block_id]["name"])):
         _assign_subsystem_layout(laid_out, subsystem_id, profile)
+    if refine_columns:
+        _refine_system_layout(laid_out, system=ROOT_SYSTEM, profile=profile)
+        for subsystem_id in sorted(subsystem_ids):
+            _refine_system_layout(laid_out, system=subsystem_id, profile=profile)
     return laid_out
+
+
+def apply_legacy_layout(
+    model: BackendSimulinkModelDict,
+    *,
+    profile: LayoutProfile | None = None,
+    max_iterations: int = MAX_LAYOUT_REPAIR_ITERATIONS,
+) -> BackendSimulinkModelDict:
+    """Apply the original readable-backend placement strategy without refinement sweeps."""
+    active_profile = profile or LayoutProfile(refinement_passes=0)
+    best_model: BackendSimulinkModelDict | None = None
+    best_report: LayoutQualityReport | None = None
+
+    for iteration in range(1, max_iterations + 1):
+        laid_out = _apply_layout_with_profile(model, active_profile, refine_columns=False)
+        report = audit_layout(laid_out, profile=active_profile, iterations=iteration)
+        laid_out.setdefault("metadata", {})
+        laid_out["metadata"]["layout_quality"] = report.to_metadata()
+        laid_out["metadata"]["layout_strategy"] = "legacy"
+        if best_report is None or report.score > best_report.score:
+            best_model = laid_out
+            best_report = report
+        if report.passes:
+            return laid_out
+        next_profile = _repair_profile(active_profile, report)
+        if next_profile == active_profile:
+            break
+        active_profile = next_profile
+
+    if best_model is None:
+        best_model = _apply_layout_with_profile(model, active_profile, refine_columns=False)
+        best_model.setdefault("metadata", {})
+        best_model["metadata"]["layout_quality"] = audit_layout(
+            best_model,
+            profile=active_profile,
+            iterations=0,
+        ).to_metadata()
+        best_model["metadata"]["layout_strategy"] = "legacy"
+    return best_model
 
 
 def apply_deterministic_layout(
@@ -651,10 +804,11 @@ def apply_deterministic_layout(
     best_report: LayoutQualityReport | None = None
 
     for iteration in range(1, max_iterations + 1):
-        laid_out = _apply_layout_with_profile(model, active_profile)
+        laid_out = _apply_layout_with_profile(model, active_profile, refine_columns=True)
         report = audit_layout(laid_out, profile=active_profile, iterations=iteration)
         laid_out.setdefault("metadata", {})
         laid_out["metadata"]["layout_quality"] = report.to_metadata()
+        laid_out["metadata"]["layout_strategy"] = "deterministic"
         if best_report is None or report.score > best_report.score:
             best_model = laid_out
             best_report = report
@@ -666,13 +820,14 @@ def apply_deterministic_layout(
         active_profile = next_profile
 
     if best_model is None:
-        best_model = _apply_layout_with_profile(model, active_profile)
+        best_model = _apply_layout_with_profile(model, active_profile, refine_columns=True)
         best_model.setdefault("metadata", {})
         best_model["metadata"]["layout_quality"] = audit_layout(
             best_model,
             profile=active_profile,
             iterations=0,
         ).to_metadata()
+        best_model["metadata"]["layout_strategy"] = "deterministic"
     return best_model
 
 

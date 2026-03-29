@@ -54,8 +54,11 @@ request.options = localBridgeOptions(opts);
 end
 
 function equations = localSerializeEquations(raw)
+if isa(raw, "symfun")
+    raw = formula(raw);
+end
 if isa(raw, "sym")
-    equations = arrayfun(@char, raw(:), "UniformOutput", false);
+    equations = cellstr(string(raw(:)));
     return;
 end
 if ischar(raw)

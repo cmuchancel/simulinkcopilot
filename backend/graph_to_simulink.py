@@ -6,9 +6,11 @@ import math
 from dataclasses import dataclass, field
 
 from backend.block_library import BLOCK_LIBRARY
-from backend.graph_numeric import GraphNumericEvaluator, safe_reciprocal as _safe_reciprocal
+from backend.graph_numeric import GraphNumericEvaluator, safe_reciprocal
 from backend.graph_partition import build_graph_subsystem_plan
-from backend.layout import annotate_integrator_orders, apply_deterministic_layout
+from backend.layout import annotate_integrator_orders
+from backend.layout_visual_corrector import VisualRepairConfig
+from backend.layout_workflow import LayoutMode, apply_layout_workflow
 from backend.simulink_dict import ROOT_SYSTEM, SUBSYSTEM_BLOCK, BackendSimulinkModelDict, validate_simulink_model_dict
 from backend.traceability import build_node_expressions, state_base_name, state_order
 from ir.graph_validate import validate_graph_dict
@@ -21,7 +23,10 @@ from latex_frontend.symbols import (
     DIRECT_SIMULINK_TRIG_FUNCTIONS,
     RECIPROCAL_FUNCTION_BASES,
 )
+from simulate.input_specs import normalize_input_specs
 from simulink.utils import sanitize_block_name
+
+_safe_reciprocal = safe_reciprocal
 
 
 def _numeric_string(value: float | int) -> str:
@@ -38,11 +43,20 @@ def _group_key_for_state(state: str) -> str:
     return state_base_name(state)
 
 
+def _matrix_signal_literal(time_values: list[float], sample_values: list[float]) -> str:
+    rows = [
+        f"{repr(float(time_value))} {repr(float(sample_value))}"
+        for time_value, sample_value in zip(time_values, sample_values)
+    ]
+    return "[" + "; ".join(rows) + "]"
+
+
 @dataclass
 class GraphToSimulinkLowerer:
     graph: dict[str, object]
     model_name: str
     symbol_values: dict[str, float] = field(default_factory=dict)
+    input_specs: dict[str, dict[str, object]] = field(default_factory=dict)
     input_signals: dict[str, dict[str, list[float]]] = field(default_factory=dict)
     initial_conditions: dict[str, float] = field(default_factory=dict)
     algebraic_initial_conditions: dict[str, float] = field(default_factory=dict)
@@ -55,7 +69,10 @@ class GraphToSimulinkLowerer:
     workspace_variables: dict[str, object] = field(default_factory=dict)
     inport_counters: dict[str, int] = field(default_factory=dict)
     outport_counters: dict[str, int] = field(default_factory=dict)
+    symbol_dependency_cache: dict[str, bool] = field(default_factory=dict)
+    native_input_counter: int = 0
     numeric_evaluator: GraphNumericEvaluator = field(init=False)
+    use_state_subsystems: bool = field(init=False, default=True)
 
     def __post_init__(self) -> None:
         self.graph = validate_graph_dict(self.graph)
@@ -78,27 +95,32 @@ class GraphToSimulinkLowerer:
         )
         self.state_groups = list(plan.state_groups)
         self.node_groups = plan.node_groups
-        self.node_owners = plan.node_owners
+        self.use_state_subsystems = len(plan.state_groups) > 1
+        if self.use_state_subsystems:
+            self.node_owners = plan.node_owners
+        else:
+            self.node_owners = {node_id: ROOT_SYSTEM for node_id in self.node_map}
         self.node_layers = plan.node_layers
         self.numeric_evaluator = GraphNumericEvaluator(
             node_map=self.node_map,
             symbol_values=self.symbol_values,
         )
-        for group in self.state_groups:
-            subsystem_id = self._subsystem_block_id(group)
-            self.add_block(
-                subsystem_id,
-                "Subsystem",
-                system=ROOT_SYSTEM,
-                name=f"{group}_dynamics",
-                lib_path=SUBSYSTEM_BLOCK,
-                metadata={
-                    "layout_role": "subsystem",
-                    "group": group,
-                    "inport_count": 0,
-                    "outport_count": 0,
-                },
-            )
+        if self.use_state_subsystems:
+            for group in self.state_groups:
+                subsystem_id = self._subsystem_block_id(group)
+                self.add_block(
+                    subsystem_id,
+                    "Subsystem",
+                    system=ROOT_SYSTEM,
+                    name=f"{group}_dynamics",
+                    lib_path=SUBSYSTEM_BLOCK,
+                    metadata={
+                        "layout_role": "subsystem",
+                        "group": group,
+                        "inport_count": 0,
+                        "outport_count": 0,
+                    },
+                )
 
     def _subsystem_block_id(self, group: str) -> str:
         return f"subsystem_{_sanitize_for_id(group)}"
@@ -106,6 +128,134 @@ class GraphToSimulinkLowerer:
     def numeric_value(self, node_id: str) -> float | None:
         """Return a numeric value if the node subtree is compile-time evaluable."""
         return self.numeric_evaluator.value(node_id)
+
+    def _is_symbol_input_node(self, node_id: str) -> bool:
+        return str(self.node_map[node_id]["op"]) == "symbol_input"
+
+    def _is_literal_constant_node(self, node_id: str, expected_value: float | None = None) -> bool:
+        node = self.node_map[node_id]
+        if str(node["op"]) != "constant":
+            return False
+        if expected_value is None:
+            return True
+        return math.isclose(float(node["value"]), float(expected_value), rel_tol=0.0, abs_tol=1e-12)
+
+    def _depends_on_symbol_input(self, node_id: str) -> bool:
+        cached = self.symbol_dependency_cache.get(node_id)
+        if cached is not None:
+            return cached
+        node = self.node_map[node_id]
+        if str(node["op"]) == "symbol_input":
+            self.symbol_dependency_cache[node_id] = True
+            return True
+        depends = any(self._depends_on_symbol_input(str(child_id)) for child_id in node.get("inputs", []))
+        self.symbol_dependency_cache[node_id] = depends
+        return depends
+
+    def _native_input_spec(self, symbol_name: str) -> dict[str, object] | None:
+        spec = self.input_specs.get(symbol_name)
+        if spec is None:
+            return None
+        if self._is_supported_native_input_spec(spec):
+            return spec
+        return None
+
+    def _is_supported_native_input_spec(self, spec: dict[str, object]) -> bool:
+        kind = str(spec.get("kind", ""))
+        if kind in {
+            "constant",
+            "time",
+            "step",
+            "impulse",
+            "pulse",
+            "sine",
+            "square",
+            "sawtooth",
+            "triangle",
+            "ramp",
+            "random_number",
+            "white_noise",
+            "expression",
+        }:
+            return True
+        if kind in {"sum", "product"}:
+            terms = spec.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                isinstance(term, dict) and self._is_supported_native_input_spec(term) for term in terms
+            )
+        if kind in {
+            "power",
+            "exp",
+            "delay",
+            "trig_function",
+            "reciprocal_trig_function",
+            "math_function",
+            "saturation",
+            "dead_zone",
+            "abs",
+            "sign",
+            "relay",
+        }:
+            inner = spec.get("input")
+            return isinstance(inner, dict) and self._is_supported_native_input_spec(inner)
+        if kind == "binary_trig_function":
+            lhs = spec.get("lhs")
+            rhs = spec.get("rhs")
+            return (
+                isinstance(lhs, dict)
+                and self._is_supported_native_input_spec(lhs)
+                and isinstance(rhs, dict)
+                and self._is_supported_native_input_spec(rhs)
+            )
+        if kind == "minmax":
+            terms = spec.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                isinstance(term, dict) and self._is_supported_native_input_spec(term) for term in terms
+            )
+        if kind == "piecewise":
+            branches = spec.get("branches")
+            otherwise = spec.get("otherwise")
+            return (
+                isinstance(branches, list)
+                and bool(branches)
+                and all(
+                    isinstance(branch, dict)
+                    and isinstance(branch.get("value"), dict)
+                    and self._is_supported_native_input_spec(branch["value"])
+                    and self._is_supported_native_condition_spec(branch.get("condition"))
+                    for branch in branches
+                )
+                and isinstance(otherwise, dict)
+                and self._is_supported_native_input_spec(otherwise)
+            )
+        return False
+
+    def _is_supported_native_condition_spec(self, condition: object) -> bool:
+        if not isinstance(condition, dict):
+            return False
+        kind = str(condition.get("kind", ""))
+        if kind == "boolean":
+            return isinstance(condition.get("value"), bool)
+        if kind == "compare":
+            return (
+                str(condition.get("op", "")) in {"<", "<=", ">", ">=", "==", "!="}
+                and isinstance(condition.get("lhs"), dict)
+                and self._is_supported_native_input_spec(condition["lhs"])
+                and isinstance(condition.get("rhs"), dict)
+                and self._is_supported_native_input_spec(condition["rhs"])
+            )
+        if kind in {"and", "or"}:
+            terms = condition.get("terms")
+            return isinstance(terms, list) and bool(terms) and all(
+                self._is_supported_native_condition_spec(term) for term in terms
+            )
+        if kind == "not":
+            return self._is_supported_native_condition_spec(condition.get("input"))
+        return False
+
+    def _next_native_input_id(self, symbol_name: str, prefix: str) -> str:
+        self.native_input_counter += 1
+        return f"input_{_sanitize_for_id(symbol_name)}_{prefix}_{self.native_input_counter:04d}"
 
     def add_block(
         self,
@@ -302,8 +452,13 @@ class GraphToSimulinkLowerer:
                 params={"Port": port},
                 metadata=metadata,
             )
+        elif self._native_input_spec(symbol_name) is not None:
+            block_id = self._materialize_native_input_source_block(
+                symbol_name,
+                self._native_input_spec(symbol_name),
+                metadata=metadata,
+            )
         elif symbol_name in self.input_signals:
-            workspace_name = f"{self.model_name}_{_sanitize_for_id(symbol_name)}_input"
             series = self.input_signals[symbol_name]
             times = list(series["time"])
             values = list(series["values"])
@@ -311,16 +466,12 @@ class GraphToSimulinkLowerer:
                 raise DeterministicCompileError(
                     f"Input signal {symbol_name!r} has mismatched time/value lengths."
                 )
-            self.workspace_variables[workspace_name] = [
-                [float(time), float(value)]
-                for time, value in zip(times, values)
-            ]
             block_id = self.add_block(
                 f"input_{_sanitize_for_id(symbol_name)}",
                 "FromWorkspace",
                 system=ROOT_SYSTEM,
                 name=symbol_name,
-                params={"VariableName": workspace_name},
+                params={"VariableName": _matrix_signal_literal(times, values)},
                 metadata=metadata,
             )
         else:
@@ -328,6 +479,935 @@ class GraphToSimulinkLowerer:
                 f"No numeric value or input signal provided for symbol input {symbol_name!r}."
             )
         return self._remember_source(node_id, (block_id, "1"))
+
+    def _materialize_native_input_source_block(
+        self,
+        symbol_name: str,
+        spec: dict[str, object] | None,
+        *,
+        metadata: dict[str, object],
+    ) -> str:
+        if spec is None:
+            raise DeterministicCompileError(f"Missing native input spec for {symbol_name!r}.")
+        block_id, _ = self._build_native_input_source(symbol_name, spec, metadata=metadata, display_name=symbol_name)
+        return block_id
+
+    def _build_native_input_source(
+        self,
+        symbol_name: str,
+        spec: dict[str, object],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        kind = str(spec["kind"])
+        if kind == "constant":
+            return self._native_constant_source(
+                symbol_name,
+                float(spec.get("value", 0.0)),
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "time":
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "time"),
+                "Clock",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "step":
+            bias = float(spec.get("bias", 0.0))
+            amplitude = float(spec.get("amplitude", 1.0))
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "step"),
+                "Step",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={
+                    "Time": _numeric_string(float(spec.get("start_time", 0.0))),
+                    "Before": _numeric_string(bias),
+                    "After": _numeric_string(bias + amplitude),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "square":
+            sine_ref = self._build_native_input_source(
+                symbol_name,
+                {
+                    "kind": "sine",
+                    "amplitude": 1.0,
+                    "frequency": float(spec.get("frequency", 1.0)),
+                    "phase": float(spec.get("phase", 0.0)),
+                    "bias": 0.0,
+                },
+                metadata=metadata,
+                display_name=f"{display_name}_src",
+            )
+            sign_ref = self._apply_native_unary_block(
+                symbol_name,
+                "Sign",
+                sine_ref,
+                metadata=metadata,
+                display_name=f"{display_name}_sign",
+                prefix="sign",
+            )
+            scaled_ref = self._apply_native_gain(
+                symbol_name,
+                sign_ref,
+                gain=float(spec.get("amplitude", 1.0)),
+                metadata=metadata,
+                display_name=f"{display_name}_gain",
+                prefix="square_gain",
+            )
+            return self._apply_native_bias(
+                symbol_name,
+                scaled_ref,
+                bias=float(spec.get("bias", 0.0)),
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind in {"sawtooth", "triangle"}:
+            base_ref = self._build_repeating_sequence_source(
+                symbol_name,
+                spec,
+                metadata=metadata,
+                display_name=display_name,
+            )
+            return self._wrap_periodic_phase_delay(
+                symbol_name,
+                base_ref,
+                frequency=float(spec.get("frequency", 1.0)),
+                phase=float(spec.get("phase", 0.0)),
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "ramp":
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "ramp"),
+                "Ramp",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={
+                    "slope": _numeric_string(float(spec.get("slope", 1.0))),
+                    "start": _numeric_string(float(spec.get("start_time", 0.0))),
+                    "InitialOutput": _numeric_string(float(spec.get("initial_output", 0.0))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind in {"impulse", "pulse"}:
+            amplitude = float(spec.get("amplitude", 1.0))
+            width = float(spec.get("width", 1.0))
+            if width <= 0.0:
+                raise DeterministicCompileError(f"Native {kind} width for {symbol_name!r} must be positive.")
+            bias = float(spec.get("bias", 0.0))
+            if kind == "impulse":
+                pulse_amplitude = amplitude / width
+            else:
+                pulse_amplitude = amplitude
+            source_id = self.add_block(
+                self._next_native_input_id(symbol_name, kind),
+                "PulseGenerator",
+                system=ROOT_SYSTEM,
+                name=display_name if abs(bias) <= 1e-12 else f"{display_name}_{kind}",
+                params={
+                    "PulseType": "Time based",
+                    "Amplitude": _numeric_string(pulse_amplitude),
+                    "Period": _numeric_string(float(spec.get("period", max(width * 2.0, 1.0)))),
+                    "PulseWidth": _numeric_string(100.0 * width / float(spec.get("period", max(width * 2.0, 1.0)))),
+                    "PhaseDelay": _numeric_string(float(spec.get("start_time", 0.0))),
+                },
+                metadata=metadata,
+            )
+            source_ref = (source_id, "1")
+            if abs(bias) <= 1e-12:
+                return source_ref
+            bias_ref = self._build_native_input_source(
+                symbol_name,
+                {"kind": "constant", "value": bias},
+                metadata=metadata,
+                display_name=f"{display_name}_bias",
+            )
+            return self._combine_native_sources(
+                symbol_name,
+                "sum",
+                [bias_ref, source_ref],
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "sine":
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "sine"),
+                "SineWave",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={
+                    "Amplitude": _numeric_string(float(spec.get("amplitude", 1.0))),
+                    "Frequency": _numeric_string(float(spec.get("frequency", 1.0))),
+                    "Phase": _numeric_string(float(spec.get("phase", 0.0))),
+                    "Bias": _numeric_string(float(spec.get("bias", 0.0))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind in {"sum", "product"}:
+            terms = spec.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(
+                    f"Native {kind} input spec for {symbol_name!r} requires a non-empty terms list."
+                )
+            term_refs = [
+                self._build_native_input_source(
+                    symbol_name,
+                    term,
+                    metadata=metadata,
+                    display_name=f"{display_name}_term_{index + 1}",
+                )
+                for index, term in enumerate(terms)
+            ]
+            return self._combine_native_sources(
+                symbol_name,
+                kind,
+                term_refs,
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "trig_function":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native trig_function input spec for {symbol_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_arg",
+            )
+            return self._apply_native_unary_block(
+                symbol_name,
+                "TrigonometricFunction",
+                inner_ref,
+                metadata=metadata,
+                display_name=display_name,
+                prefix=f"trig_{str(spec.get('operator', 'trig')).lower()}",
+                params={"Operator": str(spec.get("operator", "")).lower()},
+            )
+        if kind == "binary_trig_function":
+            lhs = spec.get("lhs")
+            rhs = spec.get("rhs")
+            if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+                raise DeterministicCompileError(
+                    f"Native binary_trig_function input spec for {symbol_name!r} requires 'lhs' and 'rhs' sources."
+                )
+            lhs_ref = self._build_native_input_source(
+                symbol_name,
+                lhs,
+                metadata=metadata,
+                display_name=f"{display_name}_lhs",
+            )
+            rhs_ref = self._build_native_input_source(
+                symbol_name,
+                rhs,
+                metadata=metadata,
+                display_name=f"{display_name}_rhs",
+            )
+            operator = str(spec.get("operator", "")).lower()
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, f"trig_{operator}"),
+                "TrigonometricFunction",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={"Operator": operator},
+                metadata=metadata,
+            )
+            self.add_connection(ROOT_SYSTEM, lhs_ref, block_id, 1, label=display_name)
+            self.add_connection(ROOT_SYSTEM, rhs_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind == "reciprocal_trig_function":
+            inner = spec.get("input")
+            operator = str(spec.get("operator", "")).lower()
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native reciprocal_trig_function input spec for {symbol_name!r} requires an 'input' source."
+                )
+            if operator not in RECIPROCAL_FUNCTION_BASES:
+                raise DeterministicCompileError(
+                    f"Unsupported reciprocal trig operator {operator!r} for {symbol_name!r}."
+                )
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_arg",
+            )
+            trig_ref = self._apply_native_unary_block(
+                symbol_name,
+                "TrigonometricFunction",
+                inner_ref,
+                metadata=metadata,
+                display_name=f"{display_name}_{RECIPROCAL_FUNCTION_BASES[operator]}",
+                prefix=f"trig_{RECIPROCAL_FUNCTION_BASES[operator]}",
+                params={"Operator": RECIPROCAL_FUNCTION_BASES[operator]},
+            )
+            one_ref = self._native_constant_source(
+                symbol_name,
+                1.0,
+                metadata=metadata,
+                display_name=f"{display_name}_one",
+            )
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, f"recip_{operator}"),
+                "Divide",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                metadata=metadata,
+            )
+            self.add_connection(ROOT_SYSTEM, one_ref, block_id, 1, label="1")
+            self.add_connection(ROOT_SYSTEM, trig_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind == "math_function":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native math_function input spec for {symbol_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_arg",
+            )
+            return self._apply_native_unary_block(
+                symbol_name,
+                "MathFunction",
+                inner_ref,
+                metadata=metadata,
+                display_name=display_name,
+                prefix=f"math_{str(spec.get('operator', 'math')).lower()}",
+                params={"Operator": str(spec.get("operator", "")).lower()},
+            )
+        if kind == "minmax":
+            terms = spec.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(
+                    f"Native minmax input spec for {symbol_name!r} requires a non-empty terms list."
+                )
+            term_refs = [
+                self._build_native_input_source(
+                    symbol_name,
+                    term,
+                    metadata=metadata,
+                    display_name=f"{display_name}_{index + 1}",
+                )
+                for index, term in enumerate(terms)
+            ]
+            operator = str(spec.get("operator", "")).lower()
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, f"minmax_{operator}"),
+                "MinMax",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={"Function": operator, "Inputs": str(len(term_refs))},
+                metadata=metadata,
+            )
+            for index, term_ref in enumerate(term_refs, start=1):
+                self.add_connection(ROOT_SYSTEM, term_ref, block_id, index, label=display_name)
+            return (block_id, "1")
+        if kind == "power":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(f"Native power input spec for {symbol_name!r} requires an 'input' source.")
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_src",
+            )
+            return self._build_power_native_source(
+                symbol_name,
+                inner_ref,
+                exponent=float(spec.get("exponent", 1.0)),
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "exp":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native exponential input spec for {symbol_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_src",
+            )
+            return self._apply_native_unary_block(
+                symbol_name,
+                "MathFunction",
+                inner_ref,
+                metadata=metadata,
+                display_name=display_name,
+                prefix="exp",
+                params={"Operator": "exp"},
+            )
+        if kind == "delay":
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(f"Native delay input spec for {symbol_name!r} requires an 'input' source.")
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_src",
+            )
+            return self._apply_native_delay(
+                symbol_name,
+                inner_ref,
+                delay_time=float(spec.get("delay_time", 0.0)),
+                initial_output=float(spec.get("initial_output", 0.0)),
+                metadata=metadata,
+                display_name=display_name,
+                prefix="delay",
+            )
+        if kind in {"saturation", "dead_zone", "abs", "sign", "relay"}:
+            inner = spec.get("input")
+            if not isinstance(inner, dict):
+                raise DeterministicCompileError(
+                    f"Native {kind} input spec for {symbol_name!r} requires an 'input' source."
+                )
+            inner_ref = self._build_native_input_source(
+                symbol_name,
+                inner,
+                metadata=metadata,
+                display_name=f"{display_name}_src",
+            )
+            if kind == "saturation":
+                block_type = "Saturation"
+                prefix = "sat"
+                params = {
+                    "LowerLimit": _numeric_string(float(spec.get("lower_limit", -1.0))),
+                    "UpperLimit": _numeric_string(float(spec.get("upper_limit", 1.0))),
+                }
+            elif kind == "dead_zone":
+                block_type = "DeadZone"
+                prefix = "deadzone"
+                params = {
+                    "LowerValue": _numeric_string(float(spec.get("lower_limit", -1.0))),
+                    "UpperValue": _numeric_string(float(spec.get("upper_limit", 1.0))),
+                }
+            elif kind == "abs":
+                block_type = "Abs"
+                prefix = "abs"
+                params = {}
+            elif kind == "sign":
+                block_type = "Sign"
+                prefix = "sign"
+                params = {}
+            else:
+                block_type = "Relay"
+                prefix = "relay"
+                params = {
+                    "OnSwitchValue": _numeric_string(float(spec.get("on_switch_value", 0.0))),
+                    "OffSwitchValue": _numeric_string(float(spec.get("off_switch_value", 0.0))),
+                    "OnOutputValue": _numeric_string(float(spec.get("on_output_value", 1.0))),
+                    "OffOutputValue": _numeric_string(float(spec.get("off_output_value", -1.0))),
+                }
+            return self._apply_native_unary_block(
+                symbol_name,
+                block_type,
+                inner_ref,
+                metadata=metadata,
+                display_name=display_name,
+                prefix=prefix,
+                params=params,
+            )
+        if kind == "piecewise":
+            return self._build_native_piecewise_source(
+                symbol_name,
+                spec,
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "random_number":
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "uniform_random"),
+                "UniformRandomNumber",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={
+                    "Minimum": _numeric_string(float(spec.get("minimum", 0.0))),
+                    "Maximum": _numeric_string(float(spec.get("maximum", 1.0))),
+                    "Seed": _numeric_string(float(spec.get("seed", 0.0))),
+                    "SampleTime": _numeric_string(float(spec.get("sample_time", 0.01))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "white_noise":
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "random"),
+                "RandomNumber",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={
+                    "Mean": _numeric_string(float(spec.get("mean", 0.0))),
+                    "Variance": _numeric_string(float(spec.get("variance", 1.0))),
+                    "Seed": _numeric_string(float(spec.get("seed", 0.0))),
+                    "SampleTime": _numeric_string(float(spec.get("sample_time", 0.01))),
+                },
+                metadata=metadata,
+            )
+            return (block_id, "1")
+        if kind == "expression":
+            return self._build_expression_function_source(
+                symbol_name,
+                spec,
+                metadata=metadata,
+                display_name=display_name,
+            )
+        raise DeterministicCompileError(f"Unsupported native input spec kind {kind!r} for {symbol_name!r}.")
+
+    def _build_expression_function_source(
+        self,
+        symbol_name: str,
+        spec: dict[str, object],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        expression_text = str(spec.get("expression", "")).strip()
+        if not expression_text:
+            raise DeterministicCompileError(f"Expression input spec for {symbol_name!r} requires a non-empty expression.")
+        time_variable = str(spec.get("time_variable", "t")).strip() or "t"
+        time_ref = self._build_native_input_source(
+            symbol_name,
+            {"kind": "time"},
+            metadata=metadata,
+            display_name=time_variable,
+        )
+        script = self._matlab_function_script_from_expression(expression_text, time_variable=time_variable)
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, "matlab_fcn"),
+            "MATLABFunction",
+            system=ROOT_SYSTEM,
+            name=display_name,
+            metadata={**metadata, "matlab_function_script": script},
+        )
+        self.add_connection(ROOT_SYSTEM, time_ref, block_id, 1, label=time_variable)
+        return (block_id, "1")
+
+    def _matlab_function_script_from_expression(self, expression_text: str, *, time_variable: str) -> str:
+        return "\n".join(
+            [
+                f"function y = fcn({time_variable})",
+                f"y = {expression_text};",
+            ]
+        )
+
+    def _native_constant_source(
+        self,
+        symbol_name: str,
+        value: float,
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, "const"),
+            "Constant",
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params={"Value": _numeric_string(value)},
+            metadata=metadata,
+        )
+        return (block_id, "1")
+
+    def _combine_native_sources(
+        self,
+        symbol_name: str,
+        kind: str,
+        sources: list[tuple[str, str]],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        if len(sources) == 1:
+            return sources[0]
+        block_type = "Sum" if kind == "sum" else "Product"
+        inputs_param = ("+" if kind == "sum" else "*") * len(sources)
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, kind),
+            block_type,
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params={"Inputs": inputs_param},
+            metadata=metadata,
+        )
+        for index, source in enumerate(sources, start=1):
+            self.add_connection(ROOT_SYSTEM, source, block_id, index, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_unary_block(
+        self,
+        symbol_name: str,
+        block_type: str,
+        source: tuple[str, str],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+        prefix: str,
+        params: dict[str, object] | None = None,
+    ) -> tuple[str, str]:
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, prefix),
+            block_type,
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params=params,
+            metadata=metadata,
+        )
+        self.add_connection(ROOT_SYSTEM, source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_gain(
+        self,
+        symbol_name: str,
+        source: tuple[str, str],
+        *,
+        gain: float,
+        metadata: dict[str, object],
+        display_name: str,
+        prefix: str,
+    ) -> tuple[str, str]:
+        if math.isclose(gain, 1.0, rel_tol=0.0, abs_tol=1e-12):
+            return source
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, prefix),
+            "Gain",
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params={"Gain": _numeric_string(gain)},
+            metadata=metadata,
+        )
+        self.add_connection(ROOT_SYSTEM, source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _apply_native_bias(
+        self,
+        symbol_name: str,
+        source: tuple[str, str],
+        *,
+        bias: float,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        if math.isclose(bias, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            return source
+        bias_ref = self._native_constant_source(
+            symbol_name,
+            bias,
+            metadata=metadata,
+            display_name=f"{display_name}_bias",
+        )
+        return self._combine_native_sources(
+            symbol_name,
+            "sum",
+            [source, bias_ref],
+            metadata=metadata,
+            display_name=display_name,
+        )
+
+    def _apply_native_delay(
+        self,
+        symbol_name: str,
+        source: tuple[str, str],
+        *,
+        delay_time: float,
+        initial_output: float,
+        metadata: dict[str, object],
+        display_name: str,
+        prefix: str,
+    ) -> tuple[str, str]:
+        if math.isclose(delay_time, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            return source
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, prefix),
+            "TransportDelay",
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params={
+                "DelayTime": _numeric_string(delay_time),
+                "InitialOutput": _numeric_string(initial_output),
+            },
+            metadata=metadata,
+        )
+        self.add_connection(ROOT_SYSTEM, source, block_id, 1, label=display_name)
+        return (block_id, "1")
+
+    def _build_power_native_source(
+        self,
+        symbol_name: str,
+        source: tuple[str, str],
+        *,
+        exponent: float,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        if math.isclose(exponent, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            return self._native_constant_source(symbol_name, 1.0, metadata=metadata, display_name=display_name)
+        if math.isclose(exponent, 1.0, rel_tol=0.0, abs_tol=1e-12):
+            return source
+        rounded = int(round(exponent))
+        if math.isclose(exponent, rounded, rel_tol=0.0, abs_tol=1e-12) and rounded > 1:
+            return self._combine_native_sources(
+                symbol_name,
+                "product",
+                [source for _ in range(rounded)],
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if math.isclose(exponent, 0.5, rel_tol=0.0, abs_tol=1e-12):
+            return self._apply_native_unary_block(
+                symbol_name,
+                "MathFunction",
+                source,
+                metadata=metadata,
+                display_name=display_name,
+                prefix="sqrt",
+                params={"Operator": "sqrt"},
+            )
+        log_ref = self._apply_native_unary_block(
+            symbol_name,
+            "MathFunction",
+            source,
+            metadata=metadata,
+            display_name=f"{display_name}_log",
+            prefix="log",
+            params={"Operator": "log"},
+        )
+        scaled_ref = self._apply_native_gain(
+            symbol_name,
+            log_ref,
+            gain=exponent,
+            metadata=metadata,
+            display_name=f"{display_name}_gain",
+            prefix="pow_gain",
+        )
+        return self._apply_native_unary_block(
+            symbol_name,
+            "MathFunction",
+            scaled_ref,
+            metadata=metadata,
+            display_name=display_name,
+            prefix="exp",
+            params={"Operator": "exp"},
+        )
+
+    def _build_repeating_sequence_source(
+        self,
+        symbol_name: str,
+        spec: dict[str, object],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        period = self._period_from_frequency(float(spec.get("frequency", 1.0)))
+        width = float(spec.get("width", 0.5 if str(spec.get("kind", "")) == "triangle" else 1.0))
+        amplitude = float(spec.get("amplitude", 1.0))
+        bias = float(spec.get("bias", 0.0))
+        times, values = self._repeating_sequence_points(period=period, amplitude=amplitude, bias=bias, width=width)
+        block_id = self.add_block(
+            self._next_native_input_id(symbol_name, "repeat"),
+            "RepeatingSequence",
+            system=ROOT_SYSTEM,
+            name=display_name,
+            params={
+                "rep_seq_t": "[" + " ".join(_numeric_string(value) for value in times) + "]",
+                "rep_seq_y": "[" + " ".join(_numeric_string(value) for value in values) + "]",
+            },
+            metadata=metadata,
+        )
+        return (block_id, "1")
+
+    def _repeating_sequence_points(
+        self,
+        *,
+        period: float,
+        amplitude: float,
+        bias: float,
+        width: float,
+    ) -> tuple[list[float], list[float]]:
+        normalized_width = min(max(width, 1e-6), 1.0)
+        if normalized_width >= 1.0 - 1e-12:
+            epsilon = max(period * 1e-6, 1e-6)
+            return [0.0, max(period - epsilon, 0.0), period], [bias - amplitude, bias + amplitude, bias - amplitude]
+        rise_time = normalized_width * period
+        return [0.0, rise_time, period], [bias - amplitude, bias + amplitude, bias - amplitude]
+
+    def _wrap_periodic_phase_delay(
+        self,
+        symbol_name: str,
+        source: tuple[str, str],
+        *,
+        frequency: float,
+        phase: float,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        if math.isclose(phase, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            return source
+        period = self._period_from_frequency(frequency)
+        delay_time = math.fmod((-phase / frequency), period)
+        if delay_time < 0.0:
+            delay_time += period
+        return self._apply_native_delay(
+            symbol_name,
+            source,
+            delay_time=delay_time,
+            initial_output=0.0,
+            metadata=metadata,
+            display_name=display_name,
+            prefix="phase_delay",
+        )
+
+    def _period_from_frequency(self, frequency: float) -> float:
+        if math.isclose(frequency, 0.0, rel_tol=0.0, abs_tol=1e-12):
+            raise DeterministicCompileError("Native periodic input frequency must be non-zero.")
+        return abs((2.0 * math.pi) / frequency)
+
+    def _build_native_piecewise_source(
+        self,
+        symbol_name: str,
+        spec: dict[str, object],
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        branches = spec.get("branches")
+        otherwise = spec.get("otherwise")
+        if not isinstance(branches, list) or not branches or not isinstance(otherwise, dict):
+            raise DeterministicCompileError(f"Native piecewise input spec for {symbol_name!r} is incomplete.")
+        current_ref = self._build_native_input_source(
+            symbol_name,
+            otherwise,
+            metadata=metadata,
+            display_name=f"{display_name}_otherwise",
+        )
+        total = len(branches)
+        for index, branch in enumerate(reversed(branches), start=1):
+            condition_ref = self._build_native_condition_source(
+                symbol_name,
+                branch.get("condition"),
+                metadata=metadata,
+                display_name=f"{display_name}_cond_{index}",
+            )
+            value_spec = branch.get("value")
+            if not isinstance(value_spec, dict):
+                raise DeterministicCompileError(f"Native piecewise branch for {symbol_name!r} requires a 'value' source.")
+            true_ref = self._build_native_input_source(
+                symbol_name,
+                value_spec,
+                metadata=metadata,
+                display_name=f"{display_name}_branch_{index}",
+            )
+            switch_id = self.add_block(
+                self._next_native_input_id(symbol_name, "switch"),
+                "Switch",
+                system=ROOT_SYSTEM,
+                name=display_name if index == total else f"{display_name}_switch_{index}",
+                params={"Criteria": "u2 >= Threshold", "Threshold": "0.5"},
+                metadata=metadata,
+            )
+            self.add_connection(ROOT_SYSTEM, true_ref, switch_id, 1, label=display_name)
+            self.add_connection(ROOT_SYSTEM, condition_ref, switch_id, 2, label=display_name)
+            self.add_connection(ROOT_SYSTEM, current_ref, switch_id, 3, label=display_name)
+            current_ref = (switch_id, "1")
+        return current_ref
+
+    def _build_native_condition_source(
+        self,
+        symbol_name: str,
+        condition: object,
+        *,
+        metadata: dict[str, object],
+        display_name: str,
+    ) -> tuple[str, str]:
+        if not isinstance(condition, dict):
+            raise DeterministicCompileError(f"Native condition for {symbol_name!r} must be an object.")
+        kind = str(condition.get("kind", ""))
+        if kind == "boolean":
+            return self._native_constant_source(
+                symbol_name,
+                1.0 if bool(condition.get("value", False)) else 0.0,
+                metadata=metadata,
+                display_name=display_name,
+            )
+        if kind == "compare":
+            lhs = condition.get("lhs")
+            rhs = condition.get("rhs")
+            if not isinstance(lhs, dict) or not isinstance(rhs, dict):
+                raise DeterministicCompileError(f"Native compare condition for {symbol_name!r} requires 'lhs' and 'rhs'.")
+            lhs_ref = self._build_native_input_source(symbol_name, lhs, metadata=metadata, display_name=f"{display_name}_lhs")
+            rhs_ref = self._build_native_input_source(symbol_name, rhs, metadata=metadata, display_name=f"{display_name}_rhs")
+            operator = str(condition.get("op", ""))
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "relop"),
+                "RelationalOperator",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={"Operator": "~=" if operator == "!=" else operator},
+                metadata=metadata,
+            )
+            self.add_connection(ROOT_SYSTEM, lhs_ref, block_id, 1, label=display_name)
+            self.add_connection(ROOT_SYSTEM, rhs_ref, block_id, 2, label=display_name)
+            return (block_id, "1")
+        if kind in {"and", "or"}:
+            terms = condition.get("terms")
+            if not isinstance(terms, list) or not terms:
+                raise DeterministicCompileError(f"Native {kind} condition for {symbol_name!r} requires terms.")
+            term_refs = [
+                self._build_native_condition_source(
+                    symbol_name,
+                    term,
+                    metadata=metadata,
+                    display_name=f"{display_name}_{index + 1}",
+                )
+                for index, term in enumerate(terms)
+            ]
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, f"logic_{kind}"),
+                "LogicOperator",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={"Operator": kind.upper(), "Inputs": str(len(term_refs))},
+                metadata=metadata,
+            )
+            for index, term_ref in enumerate(term_refs, start=1):
+                self.add_connection(ROOT_SYSTEM, term_ref, block_id, index, label=display_name)
+            return (block_id, "1")
+        if kind == "not":
+            inner_ref = self._build_native_condition_source(
+                symbol_name,
+                condition.get("input"),
+                metadata=metadata,
+                display_name=f"{display_name}_inner",
+            )
+            block_id = self.add_block(
+                self._next_native_input_id(symbol_name, "logic_not"),
+                "LogicOperator",
+                system=ROOT_SYSTEM,
+                name=display_name,
+                params={"Operator": "NOT"},
+                metadata=metadata,
+            )
+            self.add_connection(ROOT_SYSTEM, inner_ref, block_id, 1, label=display_name)
+            return (block_id, "1")
+        raise DeterministicCompileError(f"Unsupported native condition kind {kind!r} for {symbol_name!r}.")
 
     def _materialize_folded_constant_node(
         self,
@@ -409,9 +1489,22 @@ class GraphToSimulinkLowerer:
     def _materialize_product_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
         node = self.node_map[node_id]
         layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
-        child_values = [self.numeric_value(child_id) for child_id in node["inputs"]]
-        dynamic_children = [child_id for child_id, value in zip(node["inputs"], child_values) if value is None]
-        if len(node["inputs"]) == 2 and len(dynamic_children) == 1:
+        input_ids = list(node["inputs"])
+        negative_literal_count = sum(1 for child_id in input_ids if self._is_literal_constant_node(child_id, -1.0))
+        sign_flip = negative_literal_count % 2 == 1
+        if negative_literal_count and len(input_ids) > 1:
+            input_ids = [child_id for child_id in input_ids if not self._is_literal_constant_node(child_id, -1.0)]
+        if not input_ids:
+            return self._materialize_folded_constant_node(node_id, owner=owner, numeric_value=-1.0 if sign_flip else 1.0)
+
+        child_values = [self.numeric_value(child_id) for child_id in input_ids]
+        dynamic_children = [child_id for child_id, value in zip(input_ids, child_values) if value is None]
+        numeric_symbol_children = [
+            child_id
+            for child_id, value in zip(input_ids, child_values)
+            if value is not None and self._depends_on_symbol_input(child_id)
+        ]
+        if len(input_ids) == 2 and len(dynamic_children) == 1 and not numeric_symbol_children:
             gain_value = next(value for value in child_values if value is not None)
             block_id = self.add_block(
                 f"gain_{node_id}",
@@ -434,22 +1527,29 @@ class GraphToSimulinkLowerer:
                 1,
                 label=self.node_expressions[child_id],
             )
-            return source
+            return self._materialize_negation_gain(
+                node_id,
+                owner=owner,
+                upstream=source,
+                sign_flip=sign_flip,
+                layer_hint=layer_hint,
+                layout_role=layout_role,
+            )
 
         block_id = self.add_block(
             f"prod_{node_id}",
             "Product",
             system=owner,
             name=f"prod_{_sanitize_for_id(node_id)}",
-            params={"Inputs": "*" * len(node["inputs"])},
+            params={"Inputs": "*" * len(input_ids)},
             metadata={
                 "layout_role": layout_role,
                 "layer_hint": layer_hint,
                 "trace_expression": self.node_expressions[node_id],
             },
         )
-        source = self._remember_source(node_id, (block_id, "1"))
-        for index, child_id in enumerate(node["inputs"], start=1):
+        raw_source = (block_id, "1")
+        for index, child_id in enumerate(input_ids, start=1):
             self.add_connection(
                 owner,
                 self.resolve_for_system(child_id, owner),
@@ -457,14 +1557,22 @@ class GraphToSimulinkLowerer:
                 index,
                 label=self.node_expressions[child_id],
             )
-        return source
+        return self._materialize_negation_gain(
+            node_id,
+            owner=owner,
+            upstream=raw_source,
+            sign_flip=sign_flip,
+            layer_hint=layer_hint,
+            layout_role=layout_role,
+        )
 
     def _materialize_division_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
         node = self.node_map[node_id]
         layer_hint, layout_role = self._operator_metadata(node_id, owner=owner)
         numerator_id, denominator_id = node["inputs"]
         denominator_value = self.numeric_value(denominator_id)
-        if denominator_value is not None and self.numeric_value(numerator_id) is None:
+        preserve_denominator_symbol = denominator_value is not None and self._depends_on_symbol_input(denominator_id)
+        if denominator_value is not None and self.numeric_value(numerator_id) is None and not preserve_denominator_symbol:
             block_id = self.add_block(
                 f"gain_{node_id}",
                 "Gain",
@@ -502,6 +1610,34 @@ class GraphToSimulinkLowerer:
         self.add_connection(owner, self.resolve_for_system(numerator_id, owner), block_id, 1, label=self.node_expressions[numerator_id])
         self.add_connection(owner, self.resolve_for_system(denominator_id, owner), block_id, 2, label=self.node_expressions[denominator_id])
         return source
+
+    def _materialize_negation_gain(
+        self,
+        node_id: str,
+        *,
+        owner: str,
+        upstream: tuple[str, str],
+        sign_flip: bool,
+        layer_hint: int,
+        layout_role: str,
+    ) -> tuple[str, str]:
+        if not sign_flip:
+            return self._remember_source(node_id, upstream)
+
+        block_id = self.add_block(
+            f"neg_{node_id}",
+            "Gain",
+            system=owner,
+            name=f"neg_{_sanitize_for_id(node_id)}",
+            params={"Gain": "-1"},
+            metadata={
+                "layout_role": layout_role,
+                "layer_hint": layer_hint,
+                "trace_expression": self.node_expressions[node_id],
+            },
+        )
+        self.add_connection(owner, upstream, block_id, 1, label="-1")
+        return self._remember_source(node_id, (block_id, "1"))
 
     def _materialize_negate_node(self, node_id: str, *, owner: str) -> tuple[str, str]:
         node = self.node_map[node_id]
@@ -950,7 +2086,7 @@ class GraphToSimulinkLowerer:
         if op == "symbol_input":
             return self._materialize_symbol_input_node(node_id)
 
-        if op != "integrator" and numeric_value is not None:
+        if op != "integrator" and numeric_value is not None and not self._depends_on_symbol_input(node_id):
             return self._materialize_folded_constant_node(node_id, owner=owner, numeric_value=numeric_value)
 
         if op == "integrator":
@@ -1054,7 +2190,7 @@ class GraphToSimulinkLowerer:
             }
         )
         annotate_integrator_orders(model)
-        return validate_simulink_model_dict(apply_deterministic_layout(model))
+        return validate_simulink_model_dict(model)
 
 
 def graph_to_simulink_model(
@@ -1064,11 +2200,15 @@ def graph_to_simulink_model(
     state_names: list[str] | None = None,
     parameter_values: dict[str, float] | None = None,
     input_values: dict[str, float] | None = None,
+    input_specs: dict[str, dict[str, object]] | None = None,
     input_signals: dict[str, dict[str, list[float]]] | None = None,
     initial_conditions: dict[str, float] | None = None,
     algebraic_initial_conditions: dict[str, float] | None = None,
     model_params: dict[str, object] | None = None,
     input_mode: str = "constant",
+    layout_mode: LayoutMode = "deterministic",
+    visual_repair_config: VisualRepairConfig | None = None,
+    openai_client=None,
 ) -> BackendSimulinkModelDict:
     """Lower a validated graph dictionary into a hierarchical Simulink-ready model dictionary."""
     symbol_values = dict(parameter_values or {})
@@ -1077,9 +2217,16 @@ def graph_to_simulink_model(
         graph=graph,
         model_name=name or f"{graph['name']}_simulink",
         symbol_values=symbol_values,
+        input_specs=normalize_input_specs(input_specs=input_specs or {}),
         input_signals=dict(input_signals or {}),
         initial_conditions=dict(initial_conditions or {}),
         algebraic_initial_conditions=dict(algebraic_initial_conditions or {}),
         input_mode=input_mode,
     )
-    return lowerer.lower(state_names=state_names, model_params=model_params)
+    model = lowerer.lower(state_names=state_names, model_params=model_params)
+    return apply_layout_workflow(
+        model,
+        layout_mode=layout_mode,
+        visual_repair_config=visual_repair_config,
+        openai_client=openai_client,
+    )

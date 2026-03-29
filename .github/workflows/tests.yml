@@ -5,6 +5,20 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Sync development dependencies
+        run: uv sync --extra dev
+      - name: Run lint
+        run: uv run python -m scripts.run_lint
   unit:
     runs-on: ubuntu-latest
     steps:
@@ -12,13 +26,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Sync development dependencies
+        run: uv sync --extra dev
       - name: Run fast test suite
-        run: python -m scripts.run_tests
+        run: uv run python -m scripts.run_tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

@@ -14,7 +14,7 @@ def run_matlab_bridge_request(
     request: Mapping[str, object],
 ) -> dict[str, object]:
     """Run a MATLAB bridge request through the shared backend pipeline."""
-    from pipeline.run_pipeline import DEFAULT_TOLERANCE, run_pipeline_payload, summarize_pipeline_results
+    from pipeline.run_pipeline import DEFAULT_TOLERANCE, run_pipeline_payload
 
     if not isinstance(request, Mapping):
         raise DeterministicCompileError("MATLAB bridge request must be a JSON object.")
@@ -40,6 +40,11 @@ def run_matlab_bridge_request(
     symbol_config = options_dict.get("symbol_config")
     runtime_override = _optional_mapping_option(options_dict, "runtime_override")
     simulink_output_dir = _optional_string_option(options_dict, "simulink_output_dir")
+
+    if build and not run_sim:
+        raise DeterministicCompileError(
+            "MATLAB bridge requests that build Simulink models must also enable run_sim; generated diagrams are always validated."
+        )
 
     results = run_pipeline_payload(
         payload,

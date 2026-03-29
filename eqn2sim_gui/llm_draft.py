@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, Field
 
-from eqn2sim_gui.model_metadata import extract_symbol_inventory
 from latex_frontend.symbols import DeterministicCompileError
 
 

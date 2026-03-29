@@ -113,7 +113,270 @@ class DescriptorToSimulinkTests(unittest.TestCase):
 
         block_types = {spec["type"] for spec in model["blocks"].values()}
         self.assertIn("FromWorkspace", block_types)
-        self.assertTrue(model["workspace_variables"])
+        self.assertEqual(model["workspace_variables"], {})
+        from_workspace_blocks = [spec for spec in model["blocks"].values() if spec["type"] == "FromWorkspace"]
+        self.assertTrue(from_workspace_blocks[0]["params"]["VariableName"].startswith("["))
+
+    def test_descriptor_model_uses_native_step_source_when_input_spec_is_available(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_step",
+            input_specs={"u": {"kind": "step", "amplitude": 2.0, "start_time": 1.5, "bias": -0.5}},
+            input_signals={"u": {"time": [0.0, 1.0], "values": [0.0, 1.0]}},
+        )
+
+        step_blocks = [spec for spec in model["blocks"].values() if spec["type"] == "Step"]
+        self.assertTrue(step_blocks)
+        self.assertEqual(step_blocks[0]["name"], "u")
+        self.assertEqual(step_blocks[0]["params"], {"Time": "1.5", "Before": "-0.5", "After": "1.5"})
+
+    def test_descriptor_model_uses_native_ramp_source_when_input_spec_is_available(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_ramp",
+            input_specs={"u": {"kind": "ramp", "slope": 2.0, "start_time": 1.5, "initial_output": -1.0}},
+        )
+
+        ramp_blocks = [spec for spec in model["blocks"].values() if spec["type"] == "Ramp"]
+        self.assertTrue(ramp_blocks)
+        self.assertEqual(ramp_blocks[0]["params"], {"slope": "2", "start": "1.5", "InitialOutput": "-1"})
+
+    def test_descriptor_model_uses_native_impulse_source_when_input_spec_is_available(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_impulse",
+            input_specs={"u": {"kind": "impulse", "amplitude": 3.0, "start_time": 1.0, "width": 0.2, "period": 5.0}},
+        )
+
+        pulse_blocks = [spec for spec in model["blocks"].values() if spec["type"] == "PulseGenerator"]
+        self.assertTrue(pulse_blocks)
+        self.assertEqual(
+            pulse_blocks[0]["params"],
+            {"PulseType": "Time based", "Amplitude": "15", "Period": "5", "PulseWidth": "4", "PhaseDelay": "1"},
+        )
+
+    def test_descriptor_model_uses_native_saturation_source_chain_when_input_spec_is_available(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_sat",
+            input_specs={
+                "u": {
+                    "kind": "saturation",
+                    "input": {"kind": "sine", "amplitude": 2.0, "frequency": 0.5, "phase": 0.25, "bias": 0.0},
+                    "lower_limit": -0.5,
+                    "upper_limit": 0.75,
+                }
+            },
+        )
+
+        block_types = {spec["type"] for spec in model["blocks"].values()}
+        self.assertIn("SineWave", block_types)
+        self.assertIn("Saturation", block_types)
+
+    def test_descriptor_model_uses_native_sum_source_chain_when_input_spec_is_available(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_sum",
+            input_specs={
+                "u": {
+                    "kind": "sum",
+                    "terms": [
+                        {"kind": "constant", "value": -1.0},
+                        {"kind": "step", "amplitude": 2.0, "start_time": 1.0, "bias": 0.0},
+                        {"kind": "step", "amplitude": 3.0, "start_time": 2.0, "bias": 0.0},
+                    ],
+                }
+            },
+        )
+
+        block_types = [spec["type"] for spec in model["blocks"].values()]
+        self.assertEqual(block_types.count("Step"), 2)
+        self.assertIn("Constant", block_types)
+        self.assertIn("Sum", block_types)
+
+    def test_descriptor_model_uses_square_and_repeating_sequence_sources(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        square_model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_square",
+            input_specs={"u": {"kind": "square", "amplitude": 2.0, "frequency": 3.0, "phase": 0.2, "bias": -1.0}},
+        )
+        square_types = [spec["type"] for spec in square_model["blocks"].values()]
+        self.assertIn("SineWave", square_types)
+        self.assertIn("Sign", square_types)
+
+        saw_model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_saw",
+            input_specs={"u": {"kind": "triangle", "amplitude": 1.0, "frequency": 2.0, "phase": 0.3, "bias": 0.0}},
+        )
+        saw_types = [spec["type"] for spec in saw_model["blocks"].values()]
+        self.assertIn("RepeatingSequence", saw_types)
+        self.assertIn("TransportDelay", saw_types)
+
+    def test_descriptor_model_uses_piecewise_dead_zone_random_and_composite_sources(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        piecewise_model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_piecewise",
+            input_specs={
+                "u": {
+                    "kind": "piecewise",
+                    "branches": [
+                        {
+                            "condition": {"kind": "compare", "lhs": {"kind": "time"}, "rhs": {"kind": "constant", "value": 1.0}, "op": "<"},
+                            "value": {"kind": "constant", "value": 0.0},
+                        },
+                        {
+                            "condition": {"kind": "compare", "lhs": {"kind": "time"}, "rhs": {"kind": "constant", "value": 2.0}, "op": "<"},
+                            "value": {"kind": "constant", "value": 2.0},
+                        },
+                    ],
+                    "otherwise": {"kind": "constant", "value": 3.0},
+                }
+            },
+        )
+        piecewise_types = [spec["type"] for spec in piecewise_model["blocks"].values()]
+        self.assertIn("Switch", piecewise_types)
+        self.assertIn("RelationalOperator", piecewise_types)
+        self.assertIn("Clock", piecewise_types)
+
+        ops_model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_ops",
+            input_specs={
+                "u": {
+                    "kind": "sum",
+                    "terms": [
+                        {"kind": "dead_zone", "input": {"kind": "sine", "amplitude": 1.0, "frequency": 2.0, "phase": 0.0, "bias": 0.0}, "lower_limit": -0.5, "upper_limit": 0.5},
+                        {"kind": "random_number", "minimum": -1.0, "maximum": 1.0, "seed": 11, "sample_time": 0.1},
+                        {
+                            "kind": "product",
+                            "terms": [
+                                {"kind": "exp", "input": {"kind": "product", "terms": [{"kind": "constant", "value": -2.0}, {"kind": "time"}]}},
+                                {"kind": "sine", "amplitude": 1.0, "frequency": 1.0, "phase": 0.0, "bias": 0.0},
+                            ],
+                        },
+                    ],
+                }
+            },
+        )
+        ops_types = [spec["type"] for spec in ops_model["blocks"].values()]
+        self.assertIn("DeadZone", ops_types)
+        self.assertIn("UniformRandomNumber", ops_types)
+        self.assertIn("MathFunction", ops_types)
+        self.assertIn("Product", ops_types)
+
+    def test_descriptor_model_uses_native_function_blocks_before_expression_fallback(self) -> None:
+        equations = translate_latex(
+            "\n".join(
+                [
+                    r"\dot{x}+y=u",
+                    "x+y=1",
+                ]
+            )
+        )
+        analysis = analyze_state_extraction(equations, mode="configured", symbol_config={"u": "input"})
+        descriptor = build_descriptor_system_from_dae(analysis.dae_system, analysis.extraction)
+
+        model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_expression_native",
+            input_specs={"u": {"kind": "expression", "expression": "atan(t)", "time_variable": "t"}},
+        )
+
+        block_types = [spec["type"] for spec in model["blocks"].values()]
+        self.assertIn("TrigonometricFunction", block_types)
+        self.assertIn("Clock", block_types)
+        self.assertNotIn("FromWorkspace", block_types)
+        self.assertNotIn("MATLABFunction", block_types)
+
+        fallback_model = descriptor_to_simulink_model(
+            descriptor,
+            name="descriptor_expression_fallback",
+            input_specs={"u": {"kind": "expression", "expression": "erf(t)", "time_variable": "t"}},
+        )
+        fallback_types = [spec["type"] for spec in fallback_model["blocks"].values()]
+        self.assertIn("MATLABFunction", fallback_types)
+        self.assertIn("Clock", fallback_types)
+        self.assertNotIn("FromWorkspace", fallback_types)
+        function_blocks = [spec for spec in fallback_model["blocks"].values() if spec["type"] == "MATLABFunction"]
+        self.assertIn("erf(t)", function_blocks[0]["metadata"]["matlab_function_script"])
 
     def test_descriptor_lowerer_rejects_invalid_shapes_and_coefficients(self) -> None:
         with self.assertRaisesRegex(DeterministicCompileError, "requires a linear_descriptor system"):

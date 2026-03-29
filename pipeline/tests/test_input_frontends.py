@@ -237,6 +237,19 @@ def test_higher_order_preserved_dae_remains_rejected() -> None:
     assert _classification(problem) == "unsupported_dae"
 
 
+def test_matlab_symbolic_normalization_rewrites_function_of_time_symbols() -> None:
+    problem = normalize_problem(
+        {
+            "source_type": "matlab_symbolic",
+            "equations": ["m*diff(x(t), t, t) + c*diff(x(t), t) + k*x(t) == u(t)"],
+        }
+    )
+
+    signature = _problem_signature(problem)
+    assert signature["time_variable"] == "t"
+    assert signature["equations"] == ("D1_x*c + D2_x*m + k*x = u",)
+
+
 def test_opaque_matlab_ode_function_is_rejected_honestly() -> None:
     with pytest.raises(DeterministicCompileError, match="opaque function handles"):
         normalize_problem(

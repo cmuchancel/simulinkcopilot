@@ -45,6 +45,23 @@ def test_run_matlab_bridge_request_rejects_invalid_request_and_options_shapes() 
         )
 
 
+def test_run_matlab_bridge_request_rejects_build_without_validation() -> None:
+    with pytest.raises(Exception, match="always validated"):
+        matlab_bridge.run_matlab_bridge_request(
+            {
+                "source_type": "matlab_symbolic",
+                "equations": ["diff(x,t) == -x + u"],
+                "states": ["x"],
+                "inputs": ["u"],
+                "time_variable": "t",
+                "options": {
+                    "build": True,
+                    "run_sim": False,
+                },
+            }
+        )
+
+
 def test_run_matlab_bridge_request_returns_ok_response_for_explicit_ode() -> None:
     response = matlab_bridge.run_matlab_bridge_request(
         {

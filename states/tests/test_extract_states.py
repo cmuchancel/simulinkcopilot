@@ -7,7 +7,6 @@ from latex_frontend import symbols as frontend_symbols
 from latex_frontend.symbols import DeterministicCompileError
 from latex_frontend.translator import translate_latex
 from pipeline.normalized_problem import CanonicalEquation, NormalizedProblem
-from states import extract_states as extract_states_module
 from states.extract_states import analyze_normalized_problem, analyze_state_extraction, extract_states
 
 

@@ -5,7 +5,6 @@ from dataclasses import replace
 import sympy
 import pytest
 
-from canonicalize import dae_system as dae_system_module
 from canonicalize.descriptor_system import (
     build_descriptor_system_from_dae,
     build_descriptor_system_from_first_order,

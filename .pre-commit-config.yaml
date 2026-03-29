@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run python -m scripts.run_lint
+        language: system
+        pass_filenames: false
+      - id: pytest-fast
+        name: pytest fast
+        entry: uv run python -m scripts.run_tests --no-coverage
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

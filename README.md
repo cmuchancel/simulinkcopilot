@@ -14,10 +14,26 @@ This repo is a deterministic symbolic compiler backend for restricted equation i
   Cross-cutting integration and smoke tests.
 
 Repo conventions are documented in [CODING_STANDARDS.md](CODING_STANDARDS.md).
+Contributor workflow and repo-governance docs live in:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [docs/repo_best_practices_review.md](docs/repo_best_practices_review.md)
+- [docs/repo_target_architecture.md](docs/repo_target_architecture.md)
+- [docs/repo_governance_and_workflow.md](docs/repo_governance_and_workflow.md)
+
+`workspace/` is intentionally the home for generated outputs, reports, benchmarks, examples, and other non-code assets. New implementation code should not be added there.
 
 ## Installation
 
-For a clean local install from the repo root:
+Preferred contributor setup from the repo root:
+
+```bash
+uv sync --extra dev
+```
+
+That creates a managed virtual environment, installs the project plus dev tooling, and keeps local and CI dependency resolution aligned through `uv.lock`.
+
+For a pip-based install from the repo root:
 
 ```bash
 python3 -m scripts.bootstrap_distribution --install-runtime --editable
@@ -27,7 +43,7 @@ That installs runtime dependencies, installs the repo in editable mode, and chec
 
 See [docs/distribution.md](docs/distribution.md) for the full handoff/setup path for Python, the GUI, and MATLAB.
 
-For a manual install:
+For a manual pip install:
 
 ```bash
 python3 -m pip install -r requirements.txt
@@ -57,6 +73,35 @@ The current pipeline:
 15. compares Python and Simulink trajectories for the supported route that was selected
 
 See [docs/input_frontends.md](docs/input_frontends.md) for the front-door payloads, [docs/ir_schema.md](docs/ir_schema.md) for the shared normalized schema, and [docs/matlab_bridge.md](docs/matlab_bridge.md) for the first MATLAB-facing bridge layer.
+
+## Preferred MATLAB API
+
+The legacy MATLAB wrappers under [matlab/](matlab/) still work, but the preferred MATLAB-facing surface is now `matlabv1`.
+
+Bootstrap from the repo root:
+
+```matlab
+info = matlabv1_setup();
+```
+
+Then use the MATLAB-first package:
+
+```matlab
+syms x(t) m c k u(t)
+eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);
+
+m = 5;
+c = 10;
+k = 20;
+u(t) = heaviside(t);
+
+out = matlabv1.generate(eqn, ...
+    "State", "x", ...
+    "ModelName", "mass_spring_damper", ...
+    "OpenModel", true);
+```
+
+`matlabv1.generate(...)` infers the source type, reads numeric parameters and input definitions from the caller workspace, and routes into the same validated backend pipeline used by the existing wrappers. Use `matlabv1.analyze(...)` for analysis-only requests.
 
 ## Deterministic Guarantees
 
@@ -362,22 +407,34 @@ python3 -m pipeline.run_pipeline --input workspace/examples/mass_spring_damper.t
 
 ## Tests
 
-Install test dependencies:
+Sync contributor dependencies:
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
+uv sync --extra dev
+```
+
+Run lint:
+
+```bash
+uv run python -m scripts.run_lint
 ```
 
 Run the fast deterministic suite:
 
 ```bash
-python3 -m scripts.run_tests
+uv run python -m scripts.run_tests
 ```
 
 Run the full suite, including slow and MATLAB-backed tests:
 
 ```bash
-python3 -m scripts.run_tests --run-slow --run-matlab
+uv run python -m scripts.run_tests --run-slow --run-matlab
+```
+
+Install the local git hooks:
+
+```bash
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
 ## Bundled Examples

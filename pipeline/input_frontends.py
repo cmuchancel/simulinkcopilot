@@ -20,6 +20,8 @@ _SYMPY_PARSE_LOCALS = sympy_function_locals()
 _SYMPY_PARSE_LOCALS.update(
     {
         "Abs": sympy.Abs,
+        "heaviside": sympy.Heaviside,
+        "Heaviside": sympy.Heaviside,
         "Min": sympy.Min,
         "Max": sympy.Max,
     }
@@ -28,6 +30,13 @@ _IDENTIFIER_PATTERN = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*\b")
 _DIFF_PATTERN = re.compile(
     r"diff\(\s*(?P<base>[A-Za-z][A-Za-z0-9_]*)\s*,\s*(?P<time>[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(?P<order>\d+)\s*)?\)"
 )
+_TIME_DEPENDENT_DIFF_PATTERN = re.compile(
+    r"diff\(\s*(?P<base>[A-Za-z][A-Za-z0-9_]*)\(\s*(?P<func_time>[A-Za-z][A-Za-z0-9_]*)\s*\)\s*,\s*(?P<args>[^)]*?)\)"
+)
+_TIME_DEPENDENT_SYMBOL_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<base>[A-Za-z][A-Za-z0-9_]*)\(\s*(?P<time>[A-Za-z][A-Za-z0-9_]*)\s*\)"
+)
+_KNOWN_FUNCTION_NAMES = set(_SYMPY_PARSE_LOCALS)
 
 
 def normalize_problem(input_payload: Mapping[str, object] | NormalizedProblem) -> NormalizedProblem:
@@ -393,7 +402,12 @@ def _rewrite_symbolic_diff_equations(
     inferred_times: set[str] = set()
     rewritten: list[str] = []
     for equation_text in equations:
-        rewritten_text = equation_text
+        rewritten_text = _rewrite_time_dependent_diff_calls(
+            equation_text,
+            declared_time,
+            inferred_times,
+            source_type=source_type,
+        )
         while True:
             match = _DIFF_PATTERN.search(rewritten_text)
             if match is None:
@@ -418,7 +432,69 @@ def _rewrite_symbolic_diff_equations(
             f"{source_type} parse failed: diff() uses multiple time variables {sorted(inferred_times)}."
         )
     inferred_time = next(iter(inferred_times)) if inferred_times else None
-    return rewritten, declared_time or inferred_time
+    resolved_time = declared_time or inferred_time
+    if resolved_time is not None:
+        rewritten = [
+            _rewrite_time_dependent_symbol_calls(equation_text, resolved_time)
+            for equation_text in rewritten
+        ]
+    return rewritten, resolved_time
+
+
+def _rewrite_time_dependent_symbol_calls(equation_text: str, time_variable: str) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        base = match.group("base")
+        time_name = match.group("time")
+        if time_name != time_variable or base in _KNOWN_FUNCTION_NAMES:
+            return match.group(0)
+        return base
+
+    return _TIME_DEPENDENT_SYMBOL_PATTERN.sub(_replace, equation_text)
+
+
+def _rewrite_time_dependent_diff_calls(
+    equation_text: str,
+    declared_time: str | None,
+    inferred_times: set[str],
+    *,
+    source_type: str,
+) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        base = match.group("base")
+        func_time = match.group("func_time")
+        args = [entry.strip() for entry in match.group("args").split(",") if entry.strip()]
+        if not args:
+            raise DeterministicCompileError(
+                f"{source_type} parse failed: diff() on {base!r} is missing a time variable."
+            )
+
+        if declared_time is not None and func_time != declared_time:
+            raise DeterministicCompileError(
+                f"{source_type} parse failed: symbolic function {base}({func_time}) uses time variable {func_time!r}, "
+                f"but payload declares {declared_time!r}."
+            )
+
+        derivative_time = args[0]
+        if derivative_time != func_time:
+            raise DeterministicCompileError(
+                f"{source_type} parse failed: diff() on {base}({func_time}) differentiates with respect to {derivative_time!r}."
+            )
+
+        if len(args) == 1:
+            order = 1
+        elif len(args) == 2 and args[1].isdigit():
+            order = int(args[1])
+        else:
+            if any(entry != func_time for entry in args[1:]):
+                raise DeterministicCompileError(
+                    f"{source_type} parse failed: unsupported diff() signature {match.group(0)!r}."
+                )
+            order = len(args)
+
+        inferred_times.add(func_time)
+        return derivative_symbol_name(base, order)
+
+    return _TIME_DEPENDENT_DIFF_PATTERN.sub(_replace, equation_text)
 
 
 def _split_equation(text: str, *, source_type: str) -> tuple[str, str]:

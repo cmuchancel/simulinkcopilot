@@ -26,6 +26,13 @@ Public entrypoints:
 - [generateSimulinkFromSymbolicMatlab.m](../matlab/generateSimulinkFromSymbolicMatlab.m)
 - [generateSimulinkFromODEFunction.m](../matlab/generateSimulinkFromODEFunction.m)
 
+Preferred MATLAB-first package:
+
+- [matlabv1_setup.m](../matlabv1_setup.m)
+- [matlab/+matlabv1/generate.m](../matlab/+matlabv1/generate.m)
+- [matlab/+matlabv1/analyze.m](../matlab/+matlabv1/analyze.m)
+- [matlab/+matlabv1/setup.m](../matlab/+matlabv1/setup.m)
+
 Internal helpers:
 
 - [backendDefaults.m](../matlab/+simucopilot/+internal/backendDefaults.m)
@@ -54,14 +61,14 @@ The bridge broadens product access, not math support. DAE support boundaries rem
 Recommended:
 
 ```matlab
-repoRoot = pwd;
-run(fullfile(repoRoot, "matlab", "setupEqn2Sim.m"))
+info = matlabv1_setup();
 ```
 
-If you are already inside the repo:
+Equivalent legacy bootstrap:
 
 ```matlab
-run(fullfile(pwd, "matlab", "setupEqn2Sim.m"))
+repoRoot = pwd;
+run(fullfile(repoRoot, "matlab", "setupEqn2Sim.m"))
 ```
 
 Manual fallback:
@@ -143,6 +150,32 @@ Error responses stay deterministic:
 
 ## Examples
 
+Preferred MATLAB-first symbolic flow:
+
+```matlab
+info = matlabv1_setup();
+
+syms x(t) m c k u(t)
+eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);
+
+m = 5;
+c = 10;
+k = 20;
+u(t) = heaviside(t);
+
+out = matlabv1.generate( ...
+    eqn, ...
+    "State", "x", ...
+    "ModelName", "mass_spring_damper", ...
+    "OpenModel", true);
+```
+
+Analysis-only with source-type inference:
+
+```matlab
+report = matlabv1.analyze("xdot = -x + u", "State", "x", "Inputs", {"u"});
+```
+
 Analysis-only from LaTeX:
 
 ```matlab
@@ -177,12 +210,13 @@ out = generateSimulinkFromEquationText( ...
 Build from symbolic-style MATLAB equations:
 
 ```matlab
-syms x t u
-eqn = diff(x,t) == -x + u;
+eqn = "m*diff(x,t,2) + c*diff(x,t) + k*x == u";
 out = generateSimulinkFromSymbolicMatlab( ...
     eqn, ...
     "States",["x"], ...
     "Inputs",["u"], ...
+    "Parameters",["m","c","k"], ...
+    "ParameterValues",struct("m",1.0,"c",0.4,"k",2.0), ...
     "ModelName","sym_demo");
 ```
 
@@ -210,6 +244,7 @@ Shared wrapper options include:
 - `Algebraics`
 - `Inputs`
 - `Parameters`
+- `ParameterValues`
 - `TimeVariable`
 - `Build`
 - `RunSim`

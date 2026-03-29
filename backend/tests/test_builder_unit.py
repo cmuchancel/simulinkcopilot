@@ -47,8 +47,14 @@ class FakeEngine:
 
 
 def _load_backend_builder(monkeypatch):
-    fake_matlab = types.SimpleNamespace(double=lambda value: ("matlab.double", value))
+    fake_matlab = types.ModuleType("matlab")
+    fake_matlab.double = lambda value: ("matlab.double", value)
+    fake_matlab_engine = types.ModuleType("matlab.engine")
+    fake_matlab.engine = fake_matlab_engine
     monkeypatch.setitem(sys.modules, "matlab", fake_matlab)
+    monkeypatch.setitem(sys.modules, "matlab.engine", fake_matlab_engine)
+    simulink_engine = importlib.import_module("simulink.engine")
+    monkeypatch.setattr(simulink_engine, "_MATLAB_MODULE", fake_matlab, raising=False)
     sys.modules.pop("backend.builder", None)
     return importlib.import_module("backend.builder")
 
@@ -180,3 +186,42 @@ def test_build_simulink_model_skips_optional_open(monkeypatch, tmp_path) -> None
     )
 
     assert not any(call[0] == "open_system" for call in engine.calls)
+
+
+def test_build_simulink_model_configures_matlab_function_block(monkeypatch, tmp_path) -> None:
+    builder = _load_backend_builder(monkeypatch)
+    engine = FakeEngine()
+    model_dict = {
+        "name": "Function Block Model",
+        "blocks": {
+            "mf": {
+                "type": "MATLABFunction",
+                "lib_path": "simulink/User-Defined Functions/MATLAB Function",
+                "system": "root",
+                "name": "u",
+                "metadata": {
+                    "matlab_function_script": "function y = fcn(t)\ny = atan(t);\n",
+                },
+            },
+            "out": {
+                "type": "Outport",
+                "lib_path": "simulink/Ports & Subsystems/Out1",
+                "system": "root",
+                "name": "out_u",
+                "params": {"Port": 1},
+            },
+        },
+        "connections": [
+            {"system": "root", "src_block": "mf", "src_port": 1, "dst_block": "out", "dst_port": 1, "label": "u"}
+        ],
+        "outputs": [{"name": "u", "block": "out", "port": "1"}],
+    }
+
+    builder.build_simulink_model(engine, model_dict, output_dir=tmp_path, open_after_build=False)
+
+    assert engine.workspace["simucopilot_block_path_tmp"] == "Function_Block_Model/u"
+    assert "atan(t)" in engine.workspace["simucopilot_block_script_tmp"]
+    assert any(
+        call[0] == "eval" and "Stateflow.EMChart" in str(call[1])
+        for call in engine.calls
+    )
