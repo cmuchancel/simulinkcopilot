@@ -4,14 +4,16 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-4 explicit-ODE reference-oracle checkpoint**:
+`matlabv2native` currently exists as a **phase-5 runtime/parity split checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
 - it can build eligible MATLAB symbolic explicit ODEs natively in Simulink
 - it simulates those native models in MATLAB
 - it computes a MATLAB ODE reference solve for current native explicit-ODE anchor cases
-- it compares native Simulink, Python Simulink, and MATLAB reference trajectories
+- it validates current native explicit-ODE anchor cases against the MATLAB numerical reference in the default runtime path
+- it keeps Python parity available explicitly for those same anchor cases
+- it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
 - it still delegates non-eligible cases to the existing Python backend
 
 This is intentional. The goal is to build the native path safely while keeping the Python backend as the oracle.
@@ -51,10 +53,19 @@ These behaviors are implemented on the MATLAB side today:
 - native Simulink lowering for the current explicit-ODE anchor cases
 - native simulation of those generated explicit-ODE models
 - native MATLAB ODE reference solving for the current explicit-ODE anchor cases
+- default runtime-mode generation and validation for those current anchor cases without requiring a Python build/sim
+- explicit Python parity mode for those current anchor cases through `ParityMode="python"`
 - native input-source lowering for the currently supported native families:
   - constant
   - step / delayed step
   - unsupported symbolic input expression lowered to a MATLAB Function source block
+- runtime/performance timing capture for:
+  - preview analysis
+  - native model build
+  - native Simulink simulation
+  - MATLAB numerical reference solve
+  - optional Python parity
+  - total wall time
 - parity comparison against the Python backend for:
   - states
   - algebraics
@@ -76,12 +87,12 @@ These behaviors still use the existing Python backend, either as the primary exe
 - authoritative handling for non-symbolic front doors
 - non-explicit or ambiguous systems
 - broader normalization beyond the current explicit-ODE native preview boundary
-- the Python oracle model used as a secondary parity surface beside the MATLAB numerical reference
+- the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
 - input families not yet lowered natively in MATLAB
 - input families not yet evaluated natively in the MATLAB numerical oracle
 - broader lowering/validation coverage beyond the current anchor matrix
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real native explicit-ODE lowering path, but it is not yet a full native compiler with broad parity coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 
@@ -117,7 +128,7 @@ Current parity checks compare these preview-level fields for native and delegate
 - route for native explicit-ODE previews
 - first-order state order for native explicit-ODE previews
 
-For native-generated explicit-ODE models, the current generate path now also compares:
+For native-generated explicit-ODE models in explicit Python parity mode, the current generate path also compares:
 
 - source block families
 - native vs MATLAB-reference simulation traces
@@ -133,12 +144,13 @@ Fields not yet compared automatically across the full API surface:
 - non-explicit systems
 - build/simulate parity through `compareWithPython(...)`, which is still preview-oriented
 
-Those will be added as the native backend matures beyond the current anchor-level reference-oracle checkpoint.
+Those will be added as the native backend matures beyond the current runtime/parity split checkpoint.
 
 ## Immediate Next Steps
 
 1. widen native explicit-ODE input lowering beyond constant/step/fallback anchor coverage
 2. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
-3. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-4. compare native vs Python first-order RHS semantics
-5. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
+3. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+4. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
+5. compare native vs Python first-order RHS semantics
+6. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green

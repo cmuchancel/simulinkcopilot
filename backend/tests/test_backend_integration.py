@@ -212,7 +212,7 @@ class BackendIntegrationTests(unittest.TestCase):
         self.eng.eval("eqn = m*diff(x,t,2) + c*diff(x,t) + k*x == u(t);", nargout=0)
         self.eng.eval("m = 5; c = 10; k = 20; u(t) = heaviside(t);", nargout=0)
         self.eng.eval(
-            "out = matlabv2native.generate(eqn, 'State', 'x', 'ModelName', 'matlabv2native_symbolic_integration', 'OpenModel', false);",
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'ParityMode', 'python', 'ModelName', 'matlabv2native_symbolic_integration', 'OpenModel', false);",
             nargout=0,
         )
         self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
@@ -236,7 +236,7 @@ class BackendIntegrationTests(unittest.TestCase):
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
-        self.assertEqual(backend_kind, "native_explicit_ode")
+        self.assertEqual(backend_kind, "native_with_python_parity")
         self.assertEqual(route, "explicit_ode")
         self.assertTrue(generated_model_path.endswith(".slx"))
         self.assertTrue(parity_passes)
@@ -263,35 +263,39 @@ class BackendIntegrationTests(unittest.TestCase):
         self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
         self.eng.eval("u(t) = heaviside(t);", nargout=0)
         self.eng.eval(
-            "out = matlabv2native.generate(eqn, 'State', 'x', 'ModelName', 'matlabv2native_first_order_native', 'OpenModel', false);",
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_first_order_native', 'OpenModel', false);",
             nargout=0,
         )
         self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
 
         backend_kind = self.eng.eval("out.BackendKind", nargout=1)
         route = self.eng.eval("out.Route", nargout=1)
+        parity_kind = self.eng.eval("out.ParityReport.Kind", nargout=1)
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
-        source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
-        simulation_trace_match = self.eng.eval("out.ParityReport.Matches.simulation_traces", nargout=1)
         native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
-        python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
-        native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
         validation_status_match = self.eng.eval("out.ParityReport.Matches.validation_status", nargout=1)
         reference_kind = self.eng.eval("out.Validation.reference_kind", nargout=1)
         validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        native_build_sec = self.eng.eval("out.Timing.native_build_sec", nargout=1)
+        native_simulation_sec = self.eng.eval("out.Timing.native_simulation_sec", nargout=1)
+        matlab_reference_sec = self.eng.eval("out.Timing.matlab_reference_sec", nargout=1)
+        python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+        total_wall_time_sec = self.eng.eval("out.Timing.total_wall_time_sec", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
-        self.assertEqual(backend_kind, "native_explicit_ode")
+        self.assertEqual(backend_kind, "native_runtime_only")
         self.assertEqual(route, "explicit_ode")
+        self.assertEqual(parity_kind, "runtime_phase5_native_only")
         self.assertEqual(block_type, "Step")
-        self.assertTrue(source_family_match)
-        self.assertTrue(simulation_trace_match)
         self.assertTrue(native_vs_matlab_match)
-        self.assertTrue(python_vs_matlab_match)
-        self.assertTrue(native_vs_python_match)
         self.assertTrue(validation_status_match)
         self.assertEqual(reference_kind, "matlab_ode")
         self.assertTrue(validation_passes)
+        self.assertGreater(native_build_sec, 0.0)
+        self.assertGreater(native_simulation_sec, 0.0)
+        self.assertGreater(matlab_reference_sec, 0.0)
+        self.assertEqual(python_parity_sec, 0.0)
+        self.assertGreater(total_wall_time_sec, 0.0)
 
     def test_matlabv2native_generate_uses_matlab_function_source_for_unsupported_input_expression(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
@@ -302,7 +306,7 @@ class BackendIntegrationTests(unittest.TestCase):
         self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
         self.eng.eval("u(t) = erf(t);", nargout=0)
         self.eng.eval(
-            "out = matlabv2native.generate(eqn, 'State', 'x', 'ModelName', 'matlabv2native_fallback_native', 'OpenModel', false);",
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_fallback_native', 'OpenModel', false);",
             nargout=0,
         )
         self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
@@ -310,18 +314,18 @@ class BackendIntegrationTests(unittest.TestCase):
         backend_kind = self.eng.eval("out.BackendKind", nargout=1)
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         sf_block_type = self.eng.eval("get_param([out.ModelName '/u'], 'SFBlockType')", nargout=1)
-        source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+        has_source_family_match = self.eng.eval("isfield(out.ParityReport.Matches, 'source_block_family')", nargout=1)
         native_vs_matlab_passes = self.eng.eval("out.Validation.native_vs_matlab_reference.passes", nargout=1)
-        python_vs_matlab_passes = self.eng.eval("out.Validation.python_vs_matlab_reference.passes", nargout=1)
+        has_python_vs_matlab = self.eng.eval("isfield(out.Validation, 'python_vs_matlab_reference')", nargout=1)
         validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
-        self.assertEqual(backend_kind, "native_explicit_ode")
+        self.assertEqual(backend_kind, "native_runtime_only")
         self.assertEqual(block_type, "SubSystem")
         self.assertEqual(sf_block_type, "MATLAB Function")
-        self.assertTrue(source_family_match)
+        self.assertFalse(has_source_family_match)
         self.assertTrue(native_vs_matlab_passes)
-        self.assertTrue(python_vs_matlab_passes)
+        self.assertFalse(has_python_vs_matlab)
         self.assertTrue(validation_passes)
 
     def _run_input_validation_case(
