@@ -86,6 +86,8 @@ def test_run_matlab_bridge_request_returns_ok_response_for_explicit_ode() -> Non
 
     assert response["status"] == "ok"
     assert response["route"] == "explicit_ode"
+    assert response["first_order"]["states"] == ["x"]
+    assert response["first_order"]["state_equations"][0]["state"] == "x"
     assert response["generated_model_path"] is None
     assert response["normalized_problem"]["source_type"] == "matlab_symbolic"
     assert response["artifacts"]["summary"]["source_type"] == "matlab_symbolic"
@@ -144,6 +146,7 @@ def test_build_matlab_bridge_response_includes_generated_model_metadata(monkeypa
             "comparison": None,
             "consistent_initialization": SimpleNamespace(to_dict=lambda: {"ok": True}),
             "normalized_problem": SimpleNamespace(to_dict=lambda: {"source_type": "matlab_symbolic"}),
+            "first_order": {"states": ["x"], "state_equations": [{"state": "x", "rhs": {"op": "number", "value": 0}}]},
             "source_type": "matlab_symbolic",
         }
     )
@@ -151,6 +154,7 @@ def test_build_matlab_bridge_response_includes_generated_model_metadata(monkeypa
     assert response["generated_model_path"] == "/tmp/demo.slx"
     assert response["model_name"] == "demo"
     assert response["route"] == "linear_descriptor_dae"
+    assert response["first_order"]["states"] == ["x"]
 
 
 def test_process_matlab_bridge_request_file_writes_error_response_for_opaque_ode_function(

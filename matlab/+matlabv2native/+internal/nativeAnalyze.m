@@ -1,5 +1,5 @@
 function preview = nativeAnalyze(sourceType, primaryInput, opts, callerWorkspace)
-% nativeAnalyze Phase-1 MATLAB-native metadata inference before delegation.
+% nativeAnalyze MATLAB-native metadata plus explicit-ODE preview before delegation.
 
 equations = matlabv2native.internal.equationTexts(primaryInput);
 preview = struct();
@@ -10,7 +10,10 @@ preview.Algebraics = opts.Algebraics;
 preview.Inputs = opts.Inputs;
 preview.Parameters = opts.Parameters;
 preview.TimeVariable = opts.TimeVariable;
-preview.InferenceStatus = "phase1_native_preview";
+preview.Route = "";
+preview.RouteStatus = "delegated";
+preview.FirstOrderPreview = localEmptyFirstOrderPreview();
+preview.InferenceStatus = "phase2_native_preview";
 preview.Notes = {};
 preview.DelegatedFields = {};
 
@@ -60,8 +63,34 @@ preview.States = localUniqueCell(preview.States);
 preview.Algebraics = localUniqueCell(preview.Algebraics);
 preview.Inputs = localUniqueCell(preview.Inputs);
 preview.Parameters = localUniqueCell(preview.Parameters);
+
+[routePreview, routeNotes] = matlabv2native.internal.nativeExplicitOdePreview( ...
+    primaryInput, ...
+    sourceType, ...
+    preview.States, ...
+    preview.Inputs, ...
+    preview.Parameters, ...
+    preview.TimeVariable);
+preview.Route = routePreview.Route;
+preview.RouteStatus = routePreview.Status;
+preview.FirstOrderPreview = routePreview.FirstOrderPreview;
+preview.Notes = [preview.Notes, routeNotes];
+
 preview.DelegatedFields = localUniqueCell(preview.DelegatedFields);
 preview.Notes = localUniqueCell(preview.Notes);
+end
+
+function preview = localEmptyFirstOrderPreview
+preview = struct( ...
+    "Available", false, ...
+    "Method", "", ...
+    "States", {{}}, ...
+    "Inputs", {{}}, ...
+    "Parameters", {{}}, ...
+    "IndependentVariable", "", ...
+    "OriginalStateBasis", {{}}, ...
+    "StateEquations", struct("state", {}, "rhs", {}) ...
+);
 end
 
 function timeVariable = localInferTimeVariable(equations)

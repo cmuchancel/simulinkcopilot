@@ -74,6 +74,7 @@ def build_matlab_bridge_response(
     dae_validation = results["dae_validation"]  # type: ignore[index]
     simulink_validation = results["simulink_validation"]  # type: ignore[index]
     comparison = results["comparison"]  # type: ignore[index]
+    first_order = results.get("first_order")
 
     generated_model_path = None
     model_name = None
@@ -94,6 +95,7 @@ def build_matlab_bridge_response(
             "consistent_initialization": results["consistent_initialization"].to_dict(),  # type: ignore[index, union-attr]
         },
         "normalized_problem": results["normalized_problem"].to_dict(),  # type: ignore[index, union-attr]
+        "first_order": first_order,
         "generated_model_path": generated_model_path,
         "model_name": model_name,
         "artifacts": {
@@ -122,6 +124,7 @@ def build_matlab_bridge_error_response(
         "source_type": None if request is None else request.get("source_type"),
         "validation": None,
         "normalized_problem": None,
+        "first_order": None,
         "generated_model_path": None,
         "model_name": None,
         "artifacts": None,

@@ -4,12 +4,12 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-1 scaffold**:
+`matlabv2native` currently exists as a **phase-2 explicit-ODE scaffold**:
 
 - it provides a native MATLAB public API
-- it performs MATLAB-side source-type and symbol-metadata preview
+- it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
 - it delegates route analysis, build, simulation, and validation to the existing Python backend
-- it returns a parity report comparing MATLAB-side preview metadata against the Python-normalized problem
+- it returns a parity report comparing MATLAB-side preview data against the Python backend
 
 This is intentional. The goal is to build the native path safely while keeping the Python backend as the oracle.
 
@@ -30,7 +30,7 @@ Recommended bootstrap:
 info = matlabv2native_setup();
 ```
 
-## Phase-1 Behavior
+## Current Behavior
 
 ### Native in MATLAB
 
@@ -42,13 +42,22 @@ These behaviors are implemented on the MATLAB side today:
 - basic time-variable inference
 - basic derivative/state inference
 - basic input vs parameter inference from caller-workspace values
-- parity comparison against the Python backend's normalized problem
+- explicit-ODE route preview for MATLAB symbolic equations when `odeToVectorField` succeeds
+- native first-order state preview for those explicit ODEs
+- parity comparison against the Python backend for:
+  - states
+  - algebraics
+  - inputs
+  - parameters
+  - time variable
+  - route
+  - first-order state order
 
 ### Still Delegated to Python
 
 These behaviors still use the existing Python backend:
 
-- route classification
+- authoritative route classification
 - full normalization
 - Simulink lowering
 - model build
@@ -79,28 +88,30 @@ Important internal helpers:
 
 During the native migration, the Python backend remains the reference oracle.
 
-Phase-1 parity checks compare:
+Current parity checks compare:
 
 - states
 - algebraics
 - inputs
 - parameters
 - time variable
+- route for native explicit-ODE previews
+- first-order state order for native explicit-ODE previews
 
 Fields not yet compared natively:
 
-- route
+- source block families
 - generated block structure
 - simulation traces
 - validation metrics
+- first-order RHS semantics
 
 Those will be added as the native backend matures beyond the scaffold.
 
 ## Immediate Next Steps
 
-1. expand native symbol classification beyond the current metadata preview
-2. add native explicit-ODE first-order conversion
-3. add native Simulink lowering for explicit ODEs
-4. expand parity checks to block families and simulation traces
+1. add native Simulink lowering for explicit ODEs
+2. expand parity checks to input block families and simulation traces
+3. compare native vs Python first-order RHS semantics
+4. widen native coverage beyond symbolic explicit ODEs
 5. keep the Python backend and `matlabv1` green throughout
-

@@ -1,10 +1,10 @@
 function out = analyze(primaryInput, varargin)
 % matlabv2native.analyze Analyze equations through the native MATLAB scaffold and compare with Python.
 %
-% Phase 1 behavior:
-%   - performs native MATLAB intake and symbol preview
+% Phase 2 behavior:
+%   - performs native MATLAB intake, symbol preview, and explicit-ODE preview
 %   - delegates route analysis to the existing Python backend
-%   - returns a parity report between native preview metadata and Python normalization
+%   - returns a parity report between native preview data and the Python oracle
 
 [sourceType, opts, invocation] = matlabv2native.internal.prepareInvocation( ...
     struct("Build", false, "OpenModel", false), ...
@@ -29,7 +29,7 @@ delegateOpts = matlabv2native.internal.applyNativePreview(opts, nativePreview);
 delegateOpts = simucopilot.internal.enrichProblemMetadata(sourceType, primaryInput, delegateOpts, callerWorkspace);
 request = simucopilot.internal.makeRequestStruct(sourceType, primaryInput, delegateOpts);
 backendOut = simucopilot.internal.callBackend(request, delegateOpts);
-parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, backendOut.NormalizedProblem);
+parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, backendOut);
 
 out = backendOut;
 out.Api = "matlabv2native";

@@ -146,7 +146,7 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(route, "explicit_ode")
         self.assertEqual(states, ("x",))
 
-    def test_matlabv2native_compare_with_python_reports_metadata_parity(self) -> None:
+    def test_matlabv2native_compare_with_python_reports_route_and_first_order_parity_for_mass_spring(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
         self.eng.eval(f"cd('{repo_root}')", nargout=0)
         self.eng.eval("clear cmp eqn x u m c k", nargout=0)
@@ -160,14 +160,48 @@ class BackendIntegrationTests(unittest.TestCase):
         source_type = self.eng.eval("cmp.SourceType", nargout=1)
         route = self.eng.eval("cmp.PythonRoute", nargout=1)
         parity_passes = self.eng.eval("cmp.ParityReport.AllComparedFieldsMatch", nargout=1)
+        route_match = self.eng.eval("cmp.ParityReport.Matches.route", nargout=1)
+        first_order_state_match = self.eng.eval("cmp.ParityReport.Matches.first_order_states", nargout=1)
+        first_order_equation_state_match = self.eng.eval("cmp.ParityReport.Matches.first_order_equation_state_order", nargout=1)
         native_parameters = tuple(self.eng.eval("cmp.NativePreview.Parameters", nargout=1))
         python_parameters = tuple(self.eng.eval("cmp.PythonNormalizedProblem.parameters", nargout=1))
+        native_first_order_states = tuple(self.eng.eval("cmp.NativePreview.FirstOrderPreview.States", nargout=1))
+        python_first_order_states = tuple(self.eng.eval("cmp.PythonFirstOrder.states", nargout=1))
 
         self.assertEqual(backend_kind, "python_delegate")
         self.assertEqual(source_type, "matlab_symbolic")
         self.assertEqual(route, "explicit_ode")
         self.assertTrue(parity_passes)
+        self.assertTrue(route_match)
+        self.assertTrue(first_order_state_match)
+        self.assertTrue(first_order_equation_state_match)
         self.assertEqual(native_parameters, python_parameters)
+        self.assertEqual(native_first_order_states, ("x", "x_dot"))
+        self.assertEqual(native_first_order_states, python_first_order_states)
+
+    def test_matlabv2native_compare_with_python_reports_route_and_first_order_parity_for_first_order_symbolic_ode(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear cmp eqn x u", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) u(t)", nargout=0)
+        self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
+        self.eng.eval("u(t) = heaviside(t);", nargout=0)
+        self.eng.eval("cmp = matlabv2native.compareWithPython(eqn, 'State', 'x');", nargout=0)
+
+        route = self.eng.eval("cmp.PythonRoute", nargout=1)
+        parity_passes = self.eng.eval("cmp.ParityReport.AllComparedFieldsMatch", nargout=1)
+        route_match = self.eng.eval("cmp.ParityReport.Matches.route", nargout=1)
+        first_order_state_match = self.eng.eval("cmp.ParityReport.Matches.first_order_states", nargout=1)
+        native_first_order_states = tuple(self.eng.eval("cmp.NativePreview.FirstOrderPreview.States", nargout=1))
+        python_first_order_states = tuple(self.eng.eval("cmp.PythonFirstOrder.states", nargout=1))
+
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(parity_passes)
+        self.assertTrue(route_match)
+        self.assertTrue(first_order_state_match)
+        self.assertEqual(native_first_order_states, ("x",))
+        self.assertEqual(native_first_order_states, python_first_order_states)
 
     def test_matlabv2native_generate_builds_and_returns_parity_report(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
@@ -187,6 +221,8 @@ class BackendIntegrationTests(unittest.TestCase):
         route = self.eng.eval("out.Route", nargout=1)
         generated_model_path = self.eng.eval("out.GeneratedModelPath", nargout=1)
         parity_passes = self.eng.eval("out.ParityReport.AllComparedFieldsMatch", nargout=1)
+        route_match = self.eng.eval("out.ParityReport.Matches.route", nargout=1)
+        first_order_state_match = self.eng.eval("out.ParityReport.Matches.first_order_states", nargout=1)
         block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
@@ -194,6 +230,8 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(route, "explicit_ode")
         self.assertTrue(generated_model_path.endswith(".slx"))
         self.assertTrue(parity_passes)
+        self.assertTrue(route_match)
+        self.assertTrue(first_order_state_match)
         self.assertEqual(block_type, "Step")
 
     def _run_input_validation_case(

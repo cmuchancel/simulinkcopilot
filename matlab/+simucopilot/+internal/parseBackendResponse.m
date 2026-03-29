@@ -20,6 +20,7 @@ out.Message = localField(rawResponse, "message", "");
 out.Diagnostics = localField(rawResponse, "diagnostics", {});
 out.Validation = localField(rawResponse, "validation", struct());
 out.NormalizedProblem = localField(rawResponse, "normalized_problem", struct());
+out.FirstOrder = localField(rawResponse, "first_order", struct());
 out.GeneratedModelPath = localField(rawResponse, "generated_model_path", "");
 out.ModelName = localField(rawResponse, "model_name", "");
 out.Artifacts = localField(rawResponse, "artifacts", struct());
