@@ -781,6 +781,74 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(source_block_type, "SubSystem")
                 self.assertFalse(has_source_matlab_function)
 
+    def test_matlabv2native_runtime_native_supports_symbolic_math_expressions(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "atan_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = atan(t);",
+                "TrigonometricFunction",
+            ),
+            (
+                "atan2_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = atan2(t, t + 1);",
+                "TrigonometricFunction",
+            ),
+            (
+                "exp_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = exp(-0.5*t);",
+                "MathFunction",
+            ),
+            (
+                "log_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = log(t + 2);",
+                "MathFunction",
+            ),
+            (
+                "sqrt_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = sqrt(t + 1);",
+                "MathFunction",
+            ),
+        ]
+
+        for case_name, symbolic_setup, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval(symbolic_setup, nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
+                    nargout=0,
+                )
+                self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                source_block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
+                has_source_matlab_function = self.eng.eval(
+                    "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/u']))",
+                    nargout=1,
+                )
+                self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+                self.assertNotEqual(source_block_type, "SubSystem")
+                self.assertFalse(has_source_matlab_function)
+
     def _run_input_validation_case(
         self,
         *,

@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-9 symbolic-nonlinear-runtime checkpoint**:
+`matlabv2native` currently exists as a **phase-11 symbolic-math-runtime checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -29,6 +29,15 @@ This document describes the additive native MATLAB backend effort that sits besi
 - it now recognizes and lowers direct MATLAB symbolic nonlinear input expressions for:
   - saturation
   - dead zone
+  - sign
+  - abs
+  - min/max
+- it now recognizes and lowers direct MATLAB symbolic math input expressions for:
+  - atan
+  - atan2
+  - exp
+  - log
+  - sqrt
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -88,6 +97,11 @@ These behaviors are implemented on the MATLAB side today:
   - sign
   - abs
   - min/max
+  - atan
+  - atan2
+  - exp
+  - log
+  - sqrt
   - unsupported symbolic input expression lowered to a MATLAB Function source block
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
@@ -103,6 +117,11 @@ These behaviors are implemented on the MATLAB side today:
   - sign
   - abs
   - min/max
+  - atan
+  - atan2
+  - exp
+  - log
+  - sqrt
 - runtime/performance timing capture for:
   - preview analysis
   - native model build
@@ -138,11 +157,12 @@ These behaviors still use the existing Python backend, either as the primary exe
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
 - Python parity for `sawtooth` / `triangle` expression-input paths, which is still pending because the current Python oracle model fails during model initialization for those cases
 - Python parity for `saturation` / `dead_zone`, which is not yet claimed in this checkpoint even though the MATLAB-symbolic runtime path is native and MATLAB-reference validated
-- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/sawtooth/triangle/saturation/dead-zone/fallback set
-- input families not yet evaluated natively in the MATLAB numerical oracle beyond that same set
+- Python parity for `sign`, `abs`, `min/max`, `atan`, `atan2`, `exp`, `log`, and `sqrt`, which is not yet claimed in this checkpoint even though the MATLAB-symbolic runtime path is native and MATLAB-reference validated
+- direct symbolic-native support for `cosine` and impulse-style inputs
+- robust direct symbolic-native support for `sawtooth` / `triangle`, which still depends on expression/input-spec forms because MATLAB does not preserve raw symbolic `sawtooth(...)` forms cleanly enough
 - broader lowering/validation coverage beyond the current anchor matrix
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the current widened waveform family set. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the current widened waveform, nonlinear, and math-family set. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 
@@ -199,11 +219,9 @@ Those will be added as the native backend matures beyond the current runtime/par
 
 ## Immediate Next Steps
 
-1. finish Python-parity support for runtime-native repeating-sequence families such as `sawtooth` and `triangle`
-2. widen native explicit-ODE input lowering into nonlinear families such as `saturation`, `dead_zone`, `sign`, `abs`, and `min/max`
-3. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
-4. keep improving direct symbolic-expression recognition so fewer families rely on struct-style input specs
-5. keep Python parity as an explicit comparison/debug flow rather than a default dependency
-6. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-7. compare native vs Python first-order RHS semantics
-8. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
+1. harden or explicitly bound direct symbolic-native support for `sawtooth` and `triangle`
+2. add native symbolic coverage for `cosine` and impulse-style inputs
+3. keep reducing `MATLAB Function` fallback where native block composition exists
+4. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+5. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
+6. compare native vs Python first-order RHS semantics where that still matters for debugging

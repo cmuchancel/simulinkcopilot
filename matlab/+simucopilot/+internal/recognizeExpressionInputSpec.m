@@ -91,6 +91,31 @@ if ~isempty(spec)
     return;
 end
 
+spec = localRecognizeUnaryNative(expr, timeValue, "atan", "atan");
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeUnaryNative(expr, timeValue, "exp", "exp");
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeUnaryNative(expr, timeValue, "log", "log");
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeUnaryNative(expr, timeValue, "sqrt", "sqrt");
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeSqrtPower(expr, timeValue);
+if ~isempty(spec)
+    return;
+end
+
 spec = localRecognizeSaturation(expr, timeValue, numberToken);
 if ~isempty(spec)
     return;
@@ -102,6 +127,11 @@ if ~isempty(spec)
 end
 
 spec = localRecognizeMinMax(expr, timeValue);
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeAtan2(expr, timeValue);
 end
 
 function spec = localRecognizeTime(expr, timeValue)
@@ -450,6 +480,9 @@ if isempty(args) || numel(args) ~= 1
 end
 innerSpec = simucopilot.internal.recognizeExpressionInputSpec(args{1}, timeValue);
 if isempty(innerSpec)
+    innerSpec = localRecognizeAffineTime(args{1}, timeValue);
+end
+if isempty(innerSpec)
     return;
 end
 spec = struct("kind", kindName, "input", innerSpec);
@@ -485,6 +518,130 @@ for index = 1:numel(functionNames)
         "input_b", inputBSpec);
     return;
 end
+end
+
+function spec = localRecognizeAtan2(expr, timeValue)
+spec = [];
+args = localParseFunctionArgs(expr, "atan2");
+if ~isempty(args) && numel(args) == 2
+    inputASpec = simucopilot.internal.recognizeExpressionInputSpec(args{1}, timeValue);
+    inputBSpec = simucopilot.internal.recognizeExpressionInputSpec(args{2}, timeValue);
+    if isempty(inputASpec)
+        inputASpec = localRecognizeAffineTime(args{1}, timeValue);
+    end
+    if isempty(inputBSpec)
+        inputBSpec = localRecognizeAffineTime(args{2}, timeValue);
+    end
+    if ~isempty(inputASpec) && ~isempty(inputBSpec)
+        spec = struct( ...
+            "kind", "atan2", ...
+            "input_a", inputASpec, ...
+            "input_b", inputBSpec);
+        return;
+    end
+end
+
+spec = localRecognizeAngleAtan2(expr, timeValue);
+end
+
+function spec = localRecognizeAffineTime(expr, timeValue)
+spec = [];
+timeExpr = localStripOuterParens(timeValue);
+expr = localStripOuterParens(expr);
+if isempty(timeExpr) || strcmp(expr, timeExpr)
+    return;
+end
+try
+    tSym = sym(timeExpr);
+    exprSym = str2sym(expr);
+    if any(~strcmp(string(symvar(exprSym)), string(tSym)))
+        return;
+    end
+    gainExpr = simplify(diff(exprSym, tSym));
+    if ~isempty(symvar(gainExpr))
+        return;
+    end
+    gainValue = double(gainExpr);
+    biasExpr = simplify(subs(exprSym, tSym, 0));
+    if ~isempty(symvar(biasExpr))
+        return;
+    end
+    biasValue = double(biasExpr);
+    residual = simplify(exprSym - (sym(gainValue) * tSym + sym(biasValue)));
+    if ~isempty(symvar(residual)) || abs(double(residual)) > 1e-12
+        return;
+    end
+catch
+    return;
+end
+
+if abs(gainValue - 1.0) <= 1e-12 && abs(biasValue) <= 1e-12
+    return;
+end
+
+spec = struct( ...
+    "kind", "affine", ...
+    "input", struct("kind", "time"), ...
+    "gain", gainValue, ...
+    "bias", biasValue);
+end
+
+function spec = localRecognizeSqrtPower(expr, timeValue)
+spec = [];
+
+match = regexp(localStripOuterParens(expr), '^(?<inner>.+)\^\((?<exp>1/2|0\.5)\)$', "names");
+if isempty(match)
+    return;
+end
+
+innerSpec = simucopilot.internal.recognizeExpressionInputSpec(match.inner, timeValue);
+if isempty(innerSpec)
+    innerSpec = localRecognizeAffineTime(match.inner, timeValue);
+end
+if isempty(innerSpec)
+    return;
+end
+
+spec = struct("kind", "sqrt", "input", innerSpec);
+end
+
+function spec = localRecognizeAngleAtan2(expr, timeValue)
+spec = [];
+args = localParseFunctionArgs(expr, "angle");
+if isempty(args) || numel(args) ~= 1
+    return;
+end
+
+try
+    assumedRealTime = sym(timeValue, "real");
+    rawTime = sym(timeValue);
+    complexSym = subs(str2sym(args{1}), rawTime, assumedRealTime);
+    realExpr = char(formula(simplify(real(complexSym))));
+    imagExpr = char(formula(simplify(imag(complexSym))));
+catch
+    return;
+end
+
+if isempty(strtrim(realExpr)) || isempty(strtrim(imagExpr))
+    return;
+end
+
+inputASpec = simucopilot.internal.recognizeExpressionInputSpec(imagExpr, timeValue);
+inputBSpec = simucopilot.internal.recognizeExpressionInputSpec(realExpr, timeValue);
+if isempty(inputASpec)
+    inputASpec = localRecognizeAffineTime(imagExpr, timeValue);
+end
+if isempty(inputBSpec)
+    inputBSpec = localRecognizeAffineTime(realExpr, timeValue);
+end
+if isempty(inputASpec) || isempty(inputBSpec)
+    return;
+end
+
+spec = struct( ...
+    "kind", "atan2", ...
+    "input_a", inputASpec, ...
+    "input_b", inputBSpec);
 end
 
 function tf = localLooksLikeSymbolicVectorMinMax(args)

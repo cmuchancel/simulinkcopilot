@@ -12,7 +12,7 @@ The goal is to keep claims explicit:
 ## Current Checkpoint
 
 - branch: `matlab-native-backend-campaign`
-- latest parity-expansion phase after runtime split: symbolic nonlinear runtime widening for saturation and dead zone
+- latest parity-expansion phase after runtime split: symbolic math runtime widening for `atan`, `atan2`, `exp`, `log`, and `sqrt`
 
 ## Front Doors
 
@@ -54,19 +54,21 @@ The goal is to keep claims explicit:
 | abs | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `abs(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | min/max | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic two-input `min(...)` / `max(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | impulse approximation | No | No | Python only | No | No | Yes | Pending native promotion |
-| `atan` | No | No | Python only | No | No | Yes | Pending native promotion |
-| `atan2` | No | No | Python only | No | No | Yes | Pending native promotion |
-| `exp` | No | No | Python only | No | No | Yes | Pending native promotion |
-| `log` | No | No | Python only | No | No | Yes | Pending native promotion |
-| `sqrt` | No | No | Python only | No | No | Yes | Pending native promotion |
+| `atan` | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `atan(...)` now lowers natively through a `Trigonometric Function` block and validates against the MATLAB reference; Python parity is not yet claimed |
+| `atan2` | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `atan2(...)` now lowers natively; MATLAB canonical `angle(...)` rewrites are normalized back into a native `atan2` input spec |
+| `exp` | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `exp(...)` now lowers natively through a `Math Function` block and validates against the MATLAB reference; Python parity is not yet claimed |
+| `log` | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `log(...)` now lowers natively through a `Math Function` block and validates against the MATLAB reference; Python parity is not yet claimed |
+| `sqrt` | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `sqrt(...)` now lowers natively; MATLAB canonical power rewrites such as `(t+1)^(1/2)` are normalized back into a native `sqrt` input spec |
 | unsupported symbolic expression via `MATLAB Function` fallback | Yes | Yes | Limited | Partial | Yes | No | Runtime-native fallback exists, but parity is not yet broad |
 
 ## Important Notes
 
 - `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `sign`, `abs`, and two-input `min/max` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
+- `atan`, `atan2`, `exp`, `log`, and `sqrt` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - For simple affine explicit-ODE RHS expressions, the native builder now uses `Sum` / `Gain` composition instead of dropping straight to a `MATLAB Function` block.
 - MATLAB symbolic canonical forms such as `max([1/5, sin(t)], [], 2, ...)` and `min([1/5, sin(t)], [], 2, ...)` are now normalized back into native `MinMax` input specs.
+- MATLAB symbolic canonical forms such as `angle(t*(1 + 1i) + 1)` and `(t + 1)^(1/2)` are now normalized back into native `atan2` and `sqrt` input specs.
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
 - `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not yet claimed as broad direct-symbolic families because MATLAB does not reliably preserve raw `sawtooth(sym)` forms as symbolic expressions.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.
@@ -76,9 +78,8 @@ The goal is to keep claims explicit:
 
 ## Next Gaps To Close
 
-1. Finish Python-parity support for runtime-native repeating-sequence families: `sawtooth`, `triangle`.
-2. Decide whether to claim Python parity for runtime-native nonlinear families: `saturation`, `dead_zone`.
-3. Promote the next nonlinear source families: `sign`, `abs`, `min/max`.
-4. Promote unary math families: `atan`, `atan2`, `exp`, `log`, `sqrt`.
-5. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
-6. Expand the heavy comparison API so parity beyond preview metadata is easier to run and inspect.
+1. Finish or explicitly bound direct symbolic-native support for repeating-sequence families: `sawtooth`, `triangle`.
+2. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
+3. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
+4. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks.
+5. Expand the heavy comparison API so parity beyond preview metadata is easier to run and inspect.
