@@ -16,6 +16,11 @@ if ~isempty(spec)
     return;
 end
 
+spec = localRecognizeNumericConstant(expr, numberToken);
+if ~isempty(spec)
+    return;
+end
+
 if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
     spec = struct("kind", "step", "step_time", 0, "bias", 0, "amplitude", 1);
     return;
@@ -76,18 +81,40 @@ if ~isempty(spec)
     return;
 end
 
+spec = localRecognizeUnaryNative(expr, timeValue, "sign", "sign");
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeUnaryNative(expr, timeValue, "abs", "abs");
+if ~isempty(spec)
+    return;
+end
+
 spec = localRecognizeSaturation(expr, timeValue, numberToken);
 if ~isempty(spec)
     return;
 end
 
 spec = localRecognizeDeadZone(expr, timeValue, numberToken);
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeMinMax(expr, timeValue);
 end
 
 function spec = localRecognizeTime(expr, timeValue)
 spec = [];
 if strcmp(localStripOuterParens(expr), timeValue)
     spec = struct("kind", "time");
+end
+end
+
+function spec = localRecognizeNumericConstant(expr, numberToken)
+spec = [];
+if ~isempty(regexp(expr, ['^' numberToken '$'], "once"))
+    spec = struct("kind", "constant", "value", localNumericTokenToDouble(expr));
 end
 end
 
@@ -413,6 +440,68 @@ spec = struct( ...
     "input", innerSpec, ...
     "lower_limit", lowerValue, ...
     "upper_limit", upperValue);
+end
+
+function spec = localRecognizeUnaryNative(expr, timeValue, functionName, kindName)
+spec = [];
+args = localParseFunctionArgs(expr, functionName);
+if isempty(args) || numel(args) ~= 1
+    return;
+end
+innerSpec = simucopilot.internal.recognizeExpressionInputSpec(args{1}, timeValue);
+if isempty(innerSpec)
+    return;
+end
+spec = struct("kind", kindName, "input", innerSpec);
+end
+
+function spec = localRecognizeMinMax(expr, timeValue)
+spec = [];
+functionNames = {"min", "max"};
+for index = 1:numel(functionNames)
+    functionName = functionNames{index};
+    args = localParseFunctionArgs(expr, functionName);
+    if isempty(args)
+        continue;
+    end
+    if numel(args) == 1 || localLooksLikeSymbolicVectorMinMax(args)
+        vectorExpr = strtrim(args{1});
+        if strlength(string(vectorExpr)) >= 2 && vectorExpr(1) == '[' && vectorExpr(end) == ']'
+            args = localSplitTopLevel(vectorExpr(2:end-1));
+        end
+    end
+    if numel(args) ~= 2
+        continue;
+    end
+    inputASpec = simucopilot.internal.recognizeExpressionInputSpec(args{1}, timeValue);
+    inputBSpec = simucopilot.internal.recognizeExpressionInputSpec(args{2}, timeValue);
+    if isempty(inputASpec) || isempty(inputBSpec)
+        continue;
+    end
+    spec = struct( ...
+        "kind", "minmax", ...
+        "function", functionName, ...
+        "input_a", inputASpec, ...
+        "input_b", inputBSpec);
+    return;
+end
+end
+
+function tf = localLooksLikeSymbolicVectorMinMax(args)
+tf = false;
+if numel(args) < 3
+    return;
+end
+vectorExpr = strtrim(args{1});
+secondArg = localStripOuterParens(args{2});
+thirdArg = localStripOuterParens(args{3});
+if ~(strlength(string(vectorExpr)) >= 2 && vectorExpr(1) == '[' && vectorExpr(end) == ']')
+    return;
+end
+if ~(strcmp(secondArg, "[]") || isempty(secondArg))
+    return;
+end
+tf = strcmp(thirdArg, "2");
 end
 
 function [innerExpr, lowerValue, upperValue] = localRecognizeDeadZoneTokens(expr, numberToken)

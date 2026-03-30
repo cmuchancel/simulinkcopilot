@@ -726,6 +726,30 @@ class BackendIntegrationTests(unittest.TestCase):
                 "u(t) = piecewise(abs(t) < 1/2, 0, 1/2 < t, t - 1/2, t + 1/2);",
                 "DeadZone",
             ),
+            (
+                "sign_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = sign(t);",
+                "Sign",
+            ),
+            (
+                "abs_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = abs(t);",
+                "Abs",
+            ),
+            (
+                "max_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = max(sin(t), 0.2);",
+                "MinMax",
+            ),
+            (
+                "min_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = min(sin(t), 0.2);",
+                "MinMax",
+            ),
         ]
 
         for case_name, symbolic_setup, input_setup, expected_family in cases:
@@ -738,15 +762,24 @@ class BackendIntegrationTests(unittest.TestCase):
                     f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
                     nargout=0,
                 )
+                self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
 
                 backend_kind = self.eng.eval("out.BackendKind", nargout=1)
                 validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
                 source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
                 python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                source_block_type = self.eng.eval("get_param([out.ModelName '/u'], 'BlockType')", nargout=1)
+                has_source_matlab_function = self.eng.eval(
+                    "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/u']))",
+                    nargout=1,
+                )
+                self.eng.eval("bdclose(out.ModelName);", nargout=0)
                 self.assertEqual(backend_kind, "native_runtime_only")
                 self.assertTrue(validation_passes)
                 self.assertEqual(source_family, expected_family)
                 self.assertEqual(python_parity_sec, 0.0)
+                self.assertNotEqual(source_block_type, "SubSystem")
+                self.assertFalse(has_source_matlab_function)
 
     def _run_input_validation_case(
         self,

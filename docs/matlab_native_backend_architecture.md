@@ -85,6 +85,9 @@ These behaviors are implemented on the MATLAB side today:
   - triangle via expression/input spec
   - saturation
   - dead zone
+  - sign
+  - abs
+  - min/max
   - unsupported symbolic input expression lowered to a MATLAB Function source block
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
@@ -97,6 +100,9 @@ These behaviors are implemented on the MATLAB side today:
   - square
   - saturation
   - dead zone
+  - sign
+  - abs
+  - min/max
 - runtime/performance timing capture for:
   - preview analysis
   - native model build

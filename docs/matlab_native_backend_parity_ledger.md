@@ -50,9 +50,9 @@ The goal is to keep claims explicit:
 | triangle | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; direct MATLAB symbolic `sawtooth(sym,0.5)` is not reliable and Python parity is still pending |
 | saturation | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `min(max(...))` clamp now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | dead zone | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic dead-zone piecewise form now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
-| sign | No | No | Python only | No | No | Yes | Pending native promotion |
-| abs | No | No | Python only | No | No | Yes | Pending native promotion |
-| min/max | No | No | Python only | No | No | Yes | Pending native promotion |
+| sign | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `sign(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
+| abs | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `abs(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
+| min/max | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic two-input `min(...)` / `max(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | impulse approximation | No | No | Python only | No | No | Yes | Pending native promotion |
 | `atan` | No | No | Python only | No | No | Yes | Pending native promotion |
 | `atan2` | No | No | Python only | No | No | Yes | Pending native promotion |
@@ -64,7 +64,9 @@ The goal is to keep claims explicit:
 ## Important Notes
 
 - `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
+- `sign`, `abs`, and two-input `min/max` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - For simple affine explicit-ODE RHS expressions, the native builder now uses `Sum` / `Gain` composition instead of dropping straight to a `MATLAB Function` block.
+- MATLAB symbolic canonical forms such as `max([1/5, sin(t)], [], 2, ...)` and `min([1/5, sin(t)], [], 2, ...)` are now normalized back into native `MinMax` input specs.
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
 - `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not yet claimed as broad direct-symbolic families because MATLAB does not reliably preserve raw `sawtooth(sym)` forms as symbolic expressions.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.

@@ -366,6 +366,24 @@ switch nativeKind
                 "LowerValue", localNumericString(payload.lower_limit), ...
                 "UpperValue", localNumericString(payload.upper_limit)), ...
             signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+    case "Sign"
+        [signalPort, family, clockBlockName, clockSignal] = localAddUnaryNativeInputSource( ...
+            modelName, inputName, position, payload, ...
+            "simulink/Math Operations/Sign", "Sign", ...
+            struct(), ...
+            signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+    case "Abs"
+        [signalPort, family, clockBlockName, clockSignal] = localAddUnaryNativeInputSource( ...
+            modelName, inputName, position, payload, ...
+            "simulink/Math Operations/Abs", "Abs", ...
+            struct(), ...
+            signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+    case "MinMax"
+        [signalPort, family, clockBlockName, clockSignal] = localAddBinaryNativeInputSource( ...
+            modelName, inputName, position, payload, ...
+            "simulink/Math Operations/MinMax", "MinMax", ...
+            struct("Function", lower(char(string(payload.function))), "Inputs", "2"), ...
+            signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
     otherwise
         [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
         add_block("simulink/User-Defined Functions/MATLAB Function", [modelName '/' inputName], ...
@@ -477,6 +495,22 @@ switch lower(specKind)
             "input_spec", localScalar(spec, "input", struct("kind", "time")), ...
             "lower_limit", double(localScalar(spec, "lower_limit", -1)), ...
             "upper_limit", double(localScalar(spec, "upper_limit", 1)) ...
+        );
+        return;
+    case "sign"
+        kind = "Sign";
+        payload = struct("input_spec", localScalar(spec, "input", struct("kind", "time")));
+        return;
+    case "abs"
+        kind = "Abs";
+        payload = struct("input_spec", localScalar(spec, "input", struct("kind", "time")));
+        return;
+    case "minmax"
+        kind = "MinMax";
+        payload = struct( ...
+            "function", char(string(localScalar(spec, "function", "max"))), ...
+            "input_a", localScalar(spec, "input_a", struct("kind", "constant", "value", 0)), ...
+            "input_b", localScalar(spec, "input_b", struct("kind", "constant", "value", 0)) ...
         );
         return;
     case "expression"
@@ -626,6 +660,35 @@ add_block(blockPath, [modelName '/' inputName], ...
     paramPairs{:}, ...
     "Position", position);
 add_line(modelName, innerPort, [inputName '/1'], "autorouting", "on");
+signalPort = [inputName '/1'];
+family = familyName;
+end
+
+function [signalPort, family, clockBlockName, clockSignal] = localAddBinaryNativeInputSource( ...
+    modelName, inputName, position, payload, blockPath, familyName, params, ...
+    signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal)
+
+inputAName = [inputName '_src1'];
+inputBName = [inputName '_src2'];
+inputSpecs = struct();
+inputSpecs.(inputAName) = payload.input_a;
+inputSpecs.(inputBName) = payload.input_b;
+
+positionA = position + [-160 -40 -160 -40];
+positionB = position + [-160 40 -160 40];
+[inputAPort, ~, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, inputAName, positionA, struct(), inputSpecs, signalSources, ...
+    parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+[inputBPort, ~, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, inputBName, positionB, struct(), inputSpecs, signalSources, ...
+    parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+
+paramPairs = localStructNameValuePairs(params);
+add_block(blockPath, [modelName '/' inputName], ...
+    paramPairs{:}, ...
+    "Position", position);
+add_line(modelName, inputAPort, [inputName '/1'], "autorouting", "on");
+add_line(modelName, inputBPort, [inputName '/2'], "autorouting", "on");
 signalPort = [inputName '/1'];
 family = familyName;
 end
@@ -1265,6 +1328,31 @@ switch kind
         upperLimit = double(localScalar(spec, "upper_limit", 1));
         expression = max(innerExpression - sym(upperLimit), sym(0)) + ...
             min(innerExpression - sym(lowerLimit), sym(0));
+    case "sign"
+        innerName = [inputName '_inner'];
+        innerSpecs = struct();
+        innerSpecs.(innerName) = localScalar(spec, "input", struct("kind", "time"));
+        innerExpression = localInputExpression(innerName, struct(), innerSpecs, timeSymbol);
+        expression = sign(innerExpression);
+    case "abs"
+        innerName = [inputName '_inner'];
+        innerSpecs = struct();
+        innerSpecs.(innerName) = localScalar(spec, "input", struct("kind", "time"));
+        innerExpression = localInputExpression(innerName, struct(), innerSpecs, timeSymbol);
+        expression = abs(innerExpression);
+    case "minmax"
+        inputAName = [inputName '_a'];
+        inputBName = [inputName '_b'];
+        innerSpecs = struct();
+        innerSpecs.(inputAName) = localScalar(spec, "input_a", struct("kind", "constant", "value", 0));
+        innerSpecs.(inputBName) = localScalar(spec, "input_b", struct("kind", "constant", "value", 0));
+        inputAExpression = localInputExpression(inputAName, struct(), innerSpecs, timeSymbol);
+        inputBExpression = localInputExpression(inputBName, struct(), innerSpecs, timeSymbol);
+        if strcmpi(char(string(localScalar(spec, "function", "max"))), "min")
+            expression = min(inputAExpression, inputBExpression);
+        else
+            expression = max(inputAExpression, inputBExpression);
+        end
     case "expression"
         expressionText = char(string(localScalar(spec, "expression", "0")));
         recognizedSpec = simucopilot.internal.recognizeExpressionInputSpec(expressionText, char(string(timeSymbol)));
