@@ -12,7 +12,9 @@ Start from the current repo state after the benchmark-stability checkpoint where
 
 - the cart-pendulum benchmark builds through `matlabv2native.generate(...)`
 - the planar quadrotor benchmark builds through `matlabv2native.generate(...)`
+- the acrobot benchmark builds through `matlabv2native.generate(...)`
 - the planar quadrotor biased step input `1 + heaviside(t)` lowers natively as a `Step` source
+- the acrobot biased step torque input `0.1 + 0.2*heaviside(t - 0.5)` lowers natively as a `Step` source even after MATLAB canonicalizes it to `heaviside(t - 1/2)/5 + 1/10`
 - user-provided symbolic state order is preserved instead of being alphabetized internally
 
 ## Scope Lock
@@ -38,6 +40,7 @@ The repo now has committed MATLAB-symbolic runtime coverage for at least:
 
 - a coupled cart-pendulum benchmark
 - a planar quadrotor benchmark with trigonometric coupling and biased step/constant thrust inputs
+- an acrobot benchmark with coupled trigonometric dynamics and biased step torque input
 
 Those are the new “don’t regress” anchors for complex MATLAB-symbolic systems.
 
@@ -56,7 +59,7 @@ Focus on:
 
 Use the new benchmark anchor style to close the next complex-system gaps in this order:
 
-1. add one more larger nonlinear benchmark beyond cart-pendulum and planar quadrotor
+1. add one more larger nonlinear benchmark beyond cart-pendulum, planar quadrotor, and acrobot
 2. harden mixed realistic input families used by larger systems:
    - biased/scaled steps
    - mixed constant + step thrust/force profiles

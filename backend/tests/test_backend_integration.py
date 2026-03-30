@@ -914,6 +914,49 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(source_block_u1, "Step")
         self.assertFalse(has_source_matlab_function)
 
+    def test_matlabv2native_generate_builds_native_acrobot_benchmark(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns theta1 theta2 omega1 omega2 tau m1 m2 l1 lc1 lc2 I1 I2 g d1 d2 phi1 phi2 denom", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms theta1(t) theta2(t) omega1(t) omega2(t) tau(t) m1 m2 l1 lc1 lc2 I1 I2 g d1 d2 phi1 phi2 denom", nargout=0)
+        self.eng.eval("d1 = m1*lc1^2 + m2*(l1^2 + lc2^2 + 2*l1*lc2*cos(theta2)) + I1 + I2;", nargout=0)
+        self.eng.eval("d2 = m2*(lc2^2 + l1*lc2*cos(theta2)) + I2;", nargout=0)
+        self.eng.eval("phi2 = m2*lc2*g*cos(theta1 + theta2 - pi/2);", nargout=0)
+        self.eng.eval("phi1 = -m2*l1*lc2*omega2^2*sin(theta2) - 2*m2*l1*lc2*omega2*omega1*sin(theta2) + (m1*lc1 + m2*l1)*g*cos(theta1 - pi/2) + phi2;", nargout=0)
+        self.eng.eval("denom = m2*lc2^2 + I2 - d2^2/d1;", nargout=0)
+        self.eng.eval(
+            "eqns = [diff(theta1,t) == omega1; diff(theta2,t) == omega2; diff(omega1,t) == -(d2*((tau(t) + d2/d1*phi1 - m2*l1*lc2*omega1^2*sin(theta2) - phi2)/denom) + phi1)/d1; diff(omega2,t) == (tau(t) + d2/d1*phi1 - m2*l1*lc2*omega1^2*sin(theta2) - phi2)/denom];",
+            nargout=0,
+        )
+        self.eng.eval("m1 = 1.0; m2 = 1.0; l1 = 1.0; lc1 = 0.5; lc2 = 0.5; I1 = 0.2; I2 = 0.2; g = 9.81;", nargout=0)
+        self.eng.eval("tau(t) = 0.1 + 0.2*heaviside(t - 0.5);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'theta1','theta2','omega1','omega2'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_acrobot_benchmark', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        source_family_tau = self.eng.eval("out.SourceBlockFamilies.tau", nargout=1)
+        source_block_tau = self.eng.eval("get_param([out.ModelName '/tau'], 'BlockType')", nargout=1)
+        has_source_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/tau']))",
+            nargout=1,
+        )
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(source_family_tau, "Step")
+        self.assertEqual(source_block_tau, "Step")
+        self.assertFalse(has_source_matlab_function)
+        self.assertEqual(first_order_states, ("theta1", "theta2", "omega1", "omega2"))
+
     def _run_input_validation_case(
         self,
         *,

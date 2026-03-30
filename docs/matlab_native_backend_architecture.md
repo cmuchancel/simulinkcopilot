@@ -41,6 +41,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 - it now has committed native-runtime benchmark coverage for larger MATLAB-symbolic nonlinear systems:
   - coupled cart-pendulum benchmark
   - planar quadrotor benchmark with biased step thrust input
+  - acrobot benchmark with biased step torque input
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -109,6 +110,7 @@ These behaviors are implemented on the MATLAB side today:
 - native runtime benchmark coverage for:
   - cart-pendulum equations with coupled second-order mechanics
   - planar quadrotor equations with trigonometric state coupling and biased step/constant thrust inputs
+  - acrobot equations with coupled trigonometric dynamics and biased step torque input
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
   - `x - 2*y`
@@ -128,7 +130,7 @@ These behaviors are implemented on the MATLAB side today:
   - exp
   - log
   - sqrt
-  - biased/scaled `heaviside(...)` step forms such as `1 + heaviside(t)`
+  - biased/scaled/fractional `heaviside(...)` step forms such as `1 + heaviside(t)` and `heaviside(t - 1/2)/5 + 1/10`
 - runtime/performance timing capture for:
   - preview analysis
   - native model build

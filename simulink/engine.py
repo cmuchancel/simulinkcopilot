@@ -159,6 +159,12 @@ def _bootstrap_engine_from_matlab_root(matlab_root: Path) -> None:
         sys.path.insert(0, dist_path)
 
 
+def _purge_matlab_modules() -> None:
+    """Drop partially imported MATLAB modules before retrying another bootstrap path."""
+    for module_name in ("matlab.engine", "matlab"):
+        sys.modules.pop(module_name, None)
+
+
 def import_matlab_engine(matlab_root: str | Path | None = None) -> ModuleType:
     """Import matlab.engine, installing or bootstrapping it if needed."""
     global _MATLAB_MODULE
@@ -166,6 +172,8 @@ def import_matlab_engine(matlab_root: str | Path | None = None) -> ModuleType:
     if _MATLAB_MODULE is not None:
         return _MATLAB_MODULE
 
+    initial_import_error: Exception | None = None
+    initial_import_missing = False
     try:
         import matlab  # type: ignore[import-not-found]
         import matlab.engine  # type: ignore[import-not-found]
@@ -173,18 +181,23 @@ def import_matlab_engine(matlab_root: str | Path | None = None) -> ModuleType:
         _MATLAB_MODULE = matlab
         return matlab
     except ModuleNotFoundError:
-        pass
+        initial_import_missing = True
+    except Exception as exc:
+        # A broken wheel in the venv should not block the bundled MATLAB dist fallback.
+        initial_import_error = exc
+        _purge_matlab_modules()
 
     _configure_logging()
     resolved_root = Path(matlab_root).expanduser().resolve() if matlab_root else detect_matlab_root()
     LOGGER.info("Using MATLAB root: %s", resolved_root)
 
     install_error: Exception | None = None
-    try:
-        _install_engine_package(resolved_root)
-    except Exception as exc:  # pragma: no cover - exercised only on broken installs
-        install_error = exc
-        LOGGER.warning("Bundled MATLAB engine installation failed: %s", exc)
+    if initial_import_missing:
+        try:
+            _install_engine_package(resolved_root)
+        except Exception as exc:  # pragma: no cover - exercised only on broken installs
+            install_error = exc
+            LOGGER.warning("Bundled MATLAB engine installation failed: %s", exc)
 
     try:
         import matlab  # type: ignore[import-not-found]
@@ -192,17 +205,20 @@ def import_matlab_engine(matlab_root: str | Path | None = None) -> ModuleType:
 
         _MATLAB_MODULE = matlab
         return matlab
-    except ModuleNotFoundError:
+    except Exception:
+        _purge_matlab_modules()
         _bootstrap_engine_from_matlab_root(resolved_root)
 
     try:
         matlab = importlib.import_module("matlab")
         importlib.import_module("matlab.engine")
-    except ModuleNotFoundError as exc:
+    except Exception as exc:
         message = (
             "Unable to import matlab.engine after attempting installation and source bootstrap. "
             f"MATLAB root: {resolved_root}."
         )
+        if initial_import_error is not None:
+            message += f" Initial import failure: {initial_import_error}"
         if install_error is not None:
             message += f" Install failure: {install_error}"
         raise RuntimeError(message) from exc
