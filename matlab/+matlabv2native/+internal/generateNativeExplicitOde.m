@@ -618,6 +618,29 @@ numberToken = localNumberPattern();
 pattern = ['^heaviside\(' timeToken '\-(?<start>' numberToken ')\)\*\((?<slope>' numberToken ')\*' timeToken '(?<offset>[+-]' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
 match = regexp(expr, pattern, "names");
 if isempty(match)
+    swappedPattern = ['^heaviside\(' timeToken '\-(?<start>' numberToken ')\)\*\(' timeToken '\*(?<slope>' numberToken ')(?<offset>[+-]' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
+    swappedMatch = regexp(expr, swappedPattern, "names");
+    if ~isempty(swappedMatch)
+        match = swappedMatch;
+    end
+end
+if isempty(match)
+    fractionalPattern = ['^heaviside\(' timeToken '\-(?<start>' numberToken ')\)\*\(\((?<num>' numberToken ')\*' timeToken '\)/(?<den>' numberToken ')(?<offset>[+-]' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
+    fractionalMatch = regexp(expr, fractionalPattern, "names");
+    if ~isempty(fractionalMatch)
+        match = fractionalMatch;
+        match.slope = num2str(localNumericTokenToDouble(fractionalMatch.num) / localNumericTokenToDouble(fractionalMatch.den), 17);
+    end
+end
+if isempty(match)
+    fractionalSwappedPattern = ['^heaviside\(' timeToken '\-(?<start>' numberToken ')\)\*\(\(' timeToken '\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<offset>[+-]' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
+    fractionalSwappedMatch = regexp(expr, fractionalSwappedPattern, "names");
+    if ~isempty(fractionalSwappedMatch)
+        match = fractionalSwappedMatch;
+        match.slope = num2str(localNumericTokenToDouble(fractionalSwappedMatch.num) / localNumericTokenToDouble(fractionalSwappedMatch.den), 17);
+    end
+end
+if isempty(match)
     isRamp = false;
     payload = struct("slope", 0, "start_time", 0, "initial_output", 0);
     return;
@@ -649,6 +672,29 @@ timeToken = regexptranslate("escape", char(string(timeVariable)));
 numberToken = localNumberPattern();
 pattern = ['^(?:(?<amp>' numberToken ')\*)?(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'];
 match = regexp(expr, pattern, "names");
+if isempty(match)
+    trailingPattern = ['^(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    trailingMatch = regexp(expr, trailingPattern, "names");
+    if ~isempty(trailingMatch)
+        match = trailingMatch;
+    end
+end
+if isempty(match)
+    fractionalPattern = ['^\((?<num>' numberToken ')\*(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    fractionalMatch = regexp(expr, fractionalPattern, "names");
+    if ~isempty(fractionalMatch)
+        match = fractionalMatch;
+        match.amp = num2str(localNumericTokenToDouble(fractionalMatch.num) / localNumericTokenToDouble(fractionalMatch.den), 17);
+    end
+end
+if isempty(match)
+    fractionalTrailingPattern = ['^\((?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    fractionalTrailingMatch = regexp(expr, fractionalTrailingPattern, "names");
+    if ~isempty(fractionalTrailingMatch)
+        match = fractionalTrailingMatch;
+        match.amp = num2str(localNumericTokenToDouble(fractionalTrailingMatch.num) / localNumericTokenToDouble(fractionalTrailingMatch.den), 17);
+    end
+end
 if isempty(match)
     isSine = false;
     payload = struct("amplitude", 0, "frequency", 0, "phase", 0, "bias", 0);
@@ -685,6 +731,29 @@ timeToken = regexptranslate("escape", char(string(timeVariable)));
 numberToken = localNumberPattern();
 pattern = ['^(?:(?<amp>' numberToken ')\*)?sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)(?<bias>[+-]' numberToken ')?$'];
 match = regexp(expr, pattern, "names");
+if isempty(match)
+    trailingPattern = ['^sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    trailingMatch = regexp(expr, trailingPattern, "names");
+    if ~isempty(trailingMatch)
+        match = trailingMatch;
+    end
+end
+if isempty(match)
+    fractionalPattern = ['^\((?<num>' numberToken ')\*sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    fractionalMatch = regexp(expr, fractionalPattern, "names");
+    if ~isempty(fractionalMatch)
+        match = fractionalMatch;
+        match.amp = num2str(localNumericTokenToDouble(fractionalMatch.num) / localNumericTokenToDouble(fractionalMatch.den), 17);
+    end
+end
+if isempty(match)
+    fractionalTrailingPattern = ['^\(sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'];
+    fractionalTrailingMatch = regexp(expr, fractionalTrailingPattern, "names");
+    if ~isempty(fractionalTrailingMatch)
+        match = fractionalTrailingMatch;
+        match.amp = num2str(localNumericTokenToDouble(fractionalTrailingMatch.num) / localNumericTokenToDouble(fractionalTrailingMatch.den), 17);
+    end
+end
 if isempty(match)
     isSquare = false;
     payload = struct("amplitude", 0, "frequency", 0, "phase", 0, "bias", 0);
@@ -956,7 +1025,55 @@ switch kind
         wave = localSawtoothSymbolicWave(timeSymbol, frequency, phase, width);
         expression = sym(bias) + sym(amplitude) * wave;
     case "expression"
-        expression = str2sym(char(string(localScalar(spec, "expression", "0"))));
+        expressionText = char(string(localScalar(spec, "expression", "0")));
+        [isStep, stepPayload] = localExpressionIsStep(expressionText, char(string(timeSymbol)));
+        if isStep
+            before = double(stepPayload.before);
+            after = double(stepPayload.after);
+            stepTime = double(stepPayload.step_time);
+            expression = sym(before) + sym(after - before) * heaviside(timeSymbol - sym(stepTime));
+            return;
+        end
+        [isPulse, pulsePayload] = localExpressionIsPulse(expressionText, char(string(timeSymbol)), [0, 1]);
+        if isPulse
+            amplitude = double(pulsePayload.amplitude);
+            startTime = double(pulsePayload.start_time);
+            width = double(pulsePayload.width);
+            expression = sym(amplitude) * ( ...
+                heaviside(timeSymbol - sym(startTime)) - heaviside(timeSymbol - sym(startTime + width)));
+            return;
+        end
+        [isRamp, rampPayload] = localExpressionIsRamp(expressionText, char(string(timeSymbol)));
+        if isRamp
+            slope = double(rampPayload.slope);
+            startTime = double(rampPayload.start_time);
+            initialOutput = double(rampPayload.initial_output);
+            expression = sym(initialOutput) + sym(slope) * (timeSymbol - sym(startTime)) * heaviside(timeSymbol - sym(startTime));
+            return;
+        end
+        [isSine, sinePayload] = localExpressionIsSineWave(expressionText, char(string(timeSymbol)));
+        if isSine
+            expression = sym(double(sinePayload.bias)) + sym(double(sinePayload.amplitude)) * ...
+                sin(sym(double(sinePayload.frequency)) * timeSymbol + sym(double(sinePayload.phase)));
+            return;
+        end
+        [isSquare, squarePayload] = localExpressionIsSquareWave(expressionText, char(string(timeSymbol)));
+        if isSquare
+            expression = sym(double(squarePayload.bias)) + sym(double(squarePayload.amplitude)) * ...
+                sign(sin(sym(double(squarePayload.frequency)) * timeSymbol + sym(double(squarePayload.phase))));
+            return;
+        end
+        [isRepeating, repeatingPayload] = localExpressionIsRepeatingSequenceWave(expressionText, char(string(timeSymbol)));
+        if isRepeating
+            wave = localSawtoothSymbolicWave( ...
+                timeSymbol, ...
+                double(repeatingPayload.frequency), ...
+                double(repeatingPayload.phase), ...
+                double(repeatingPayload.width));
+            expression = sym(double(repeatingPayload.bias)) + sym(double(repeatingPayload.amplitude)) * wave;
+            return;
+        end
+        expression = str2sym(expressionText);
     otherwise
         if isfield(spec, "expression")
             expression = str2sym(char(string(spec.expression)));
@@ -1574,8 +1691,31 @@ end
 tf = true;
 for index = 1:numel(nativeNames)
     name = nativeNames{index};
-    if ~strcmp(char(string(nativeFamilies.(name))), char(string(oracleFamilies.(name))))
+    if ~localFamiliesSemanticallyMatch(nativeFamilies.(name), oracleFamilies.(name))
         tf = false;
+        return;
+    end
+end
+end
+
+function tf = localFamiliesSemanticallyMatch(nativeFamily, oracleFamily)
+nativeText = char(string(nativeFamily));
+oracleText = char(string(oracleFamily));
+if strcmp(nativeText, oracleText)
+    tf = true;
+    return;
+end
+
+equivalentPairs = {
+    "SquareWave", "Sum"
+};
+tf = false;
+for index = 1:size(equivalentPairs, 1)
+    lhs = char(equivalentPairs{index, 1});
+    rhs = char(equivalentPairs{index, 2});
+    if (strcmp(nativeText, lhs) && strcmp(oracleText, rhs)) || ...
+            (strcmp(nativeText, rhs) && strcmp(oracleText, lhs))
+        tf = true;
         return;
     end
 end

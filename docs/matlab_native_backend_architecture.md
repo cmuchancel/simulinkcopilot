@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-6 parity-expansion checkpoint**:
+`matlabv2native` currently exists as a **phase-8 symbolic-recognition checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -13,7 +13,15 @@ This document describes the additive native MATLAB backend effort that sits besi
 - it computes a MATLAB ODE reference solve for current native explicit-ODE anchor cases
 - it validates current native explicit-ODE anchor cases against the MATLAB numerical reference in the default runtime path
 - it keeps Python parity available explicitly for those same anchor cases
-- it now covers the next runtime-native waveform set through the native input-spec path:
+- it now covers the widened runtime-native waveform set through the native symbolic/input-spec path:
+  - pulse
+  - ramp
+  - sine
+  - square
+- it now also covers runtime-native expression/input-spec waveform lowering for:
+  - sawtooth
+  - triangle
+- it now recognizes direct MATLAB symbolic waveform expressions for:
   - pulse
   - ramp
   - sine
@@ -70,7 +78,14 @@ These behaviors are implemented on the MATLAB side today:
   - ramp
   - sine
   - square
+  - sawtooth via expression/input spec
+  - triangle via expression/input spec
   - unsupported symbolic input expression lowered to a MATLAB Function source block
+- direct symbolic-expression recognition for:
+  - pulse
+  - ramp
+  - sine
+  - square
 - runtime/performance timing capture for:
   - preview analysis
   - native model build
@@ -92,6 +107,10 @@ These behaviors are implemented on the MATLAB side today:
   - native vs Python simulation traces
   - validation status with MATLAB reference as the primary oracle
 
+The current family comparison is semantic rather than purely literal in one important case:
+
+- native `SquareWave` lowering is treated as parity-equivalent to the Python backend's composed `Sum` implementation for the same symbolic square-wave input
+
 ### Still Delegated to Python
 
 These behaviors still use the existing Python backend, either as the primary execution path or as the oracle:
@@ -100,11 +119,12 @@ These behaviors still use the existing Python backend, either as the primary exe
 - non-explicit or ambiguous systems
 - broader normalization beyond the current explicit-ODE native preview boundary
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
-- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/fallback set
+- Python parity for `sawtooth` / `triangle` expression-input paths, which is still pending because the current Python oracle model fails during model initialization for those cases
+- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/sawtooth/triangle/fallback set
 - input families not yet evaluated natively in the MATLAB numerical oracle beyond that same set
 - broader lowering/validation coverage beyond the current anchor matrix
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the first widened waveform family set. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the current widened waveform family set. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 
@@ -125,6 +145,7 @@ Important internal helpers:
 - [isNativeExplicitOdeEligible.m](../matlab/+matlabv2native/+internal/isNativeExplicitOdeEligible.m)
 - [generateNativeExplicitOde.m](../matlab/+matlabv2native/+internal/generateNativeExplicitOde.m)
 - [comparePreviewToProblem.m](../matlab/+matlabv2native/+internal/comparePreviewToProblem.m)
+- [recognizeExpressionInputSpec.m](../matlab/+simucopilot/+internal/recognizeExpressionInputSpec.m)
 
 ## Parity Strategy
 
@@ -160,10 +181,11 @@ Those will be added as the native backend matures beyond the current runtime/par
 
 ## Immediate Next Steps
 
-1. widen native explicit-ODE input lowering to the next waveform families such as `sawtooth` and `triangle`, then into nonlinear families
-2. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
-3. improve symbolic-expression recognition for widened families, not just struct-style input specs
-4. keep Python parity as an explicit comparison/debug flow rather than a default dependency
-5. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-6. compare native vs Python first-order RHS semantics
-7. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
+1. finish Python-parity support for runtime-native repeating-sequence families such as `sawtooth` and `triangle`
+2. widen native explicit-ODE input lowering into nonlinear families such as `saturation`, `dead_zone`, `sign`, `abs`, and `min/max`
+3. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
+4. keep improving direct symbolic-expression recognition so fewer families rely on struct-style input specs
+5. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+6. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
+7. compare native vs Python first-order RHS semantics
+8. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green

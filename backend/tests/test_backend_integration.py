@@ -549,6 +549,156 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertEqual(source_family, expected_family)
                 self.assertGreater(python_parity_sec, 0.0)
 
+    def test_matlabv2native_runtime_native_supports_sawtooth_and_triangle_expression_specs(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "sawtooth",
+                "u = struct('kind','expression','expression','1.1*sawtooth(4*t)','time_variable','t');",
+                "RepeatingSequence",
+            ),
+            (
+                "triangle",
+                "u = struct('kind','expression','expression','0.8*sawtooth(3*t, 0.5)','time_variable','t');",
+                "RepeatingSequence",
+            ),
+        ]
+
+        for case_name, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval("syms x(t) u", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u;", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_expression_spec_runtime', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+
+    def test_matlabv2native_runtime_native_supports_symbolic_waveform_expressions(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "pulse_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 2*heaviside(t-1) - 2*heaviside(t-3/2);",
+                "PulseGenerator",
+            ),
+            (
+                "ramp_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = heaviside(t - 1) * (2*t - 2) + 3;",
+                "Ramp",
+            ),
+            (
+                "sine_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 1.5*sin(2*t + 0.1) - 0.2;",
+                "SineWave",
+            ),
+            (
+                "square_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 1.2*sign(sin(3*t + 0.2)) - 0.1;",
+                "SquareWave",
+            ),
+        ]
+
+        for case_name, symbolic_setup, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval(symbolic_setup, nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+
+    def test_matlabv2native_python_parity_mode_supports_symbolic_waveform_expressions(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "pulse_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 2*heaviside(t-1) - 2*heaviside(t-3/2);",
+                "PulseGenerator",
+            ),
+            (
+                "ramp_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = heaviside(t - 1) * (2*t - 2) + 3;",
+                "Ramp",
+            ),
+            (
+                "sine_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 1.5*sin(2*t + 0.1) - 0.2;",
+                "SineWave",
+            ),
+            (
+                "square_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = 1.2*sign(sin(3*t + 0.2)) - 0.1;",
+                "SquareWave",
+            ),
+        ]
+
+        for case_name, symbolic_setup, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval(symbolic_setup, nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'ParityMode', 'python', 'ModelName', 'matlabv2native_{case_name}_parity', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+                native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+                python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+                native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_with_python_parity")
+                self.assertTrue(source_family_match)
+                self.assertTrue(native_vs_matlab_match)
+                self.assertTrue(python_vs_matlab_match)
+                self.assertTrue(native_vs_python_match)
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertGreater(python_parity_sec, 0.0)
+
     def _run_input_validation_case(
         self,
         *,

@@ -167,6 +167,14 @@ if ~isfield(normalized, "kind")
         "Input spec for '%s' must include a 'kind' field.", inputName);
 end
 normalized.kind = localNormalizeInputKind(normalized.kind, inputName);
+if strcmp(normalized.kind, "expression")
+    if ~isfield(normalized, "expression")
+        error("simucopilot:MissingInputSpecExpression", ...
+            "Input spec for '%s' with kind 'expression' must include an 'expression' field.", ...
+            inputName);
+    end
+    normalized = localExpressionInputSpec(normalized.expression, timeVariable);
+end
 end
 
 function kind = localNormalizeInputKind(rawKind, inputName)
@@ -193,7 +201,13 @@ end
 end
 
 function spec = localExpressionInputSpec(expressionText, timeVariable)
-spec = struct("kind", "expression", "expression", char(string(expressionText)));
+expressionText = char(string(expressionText));
+recognized = simucopilot.internal.recognizeExpressionInputSpec(expressionText, timeVariable);
+if ~isempty(recognized)
+    spec = recognized;
+    return;
+end
+spec = struct("kind", "expression", "expression", expressionText);
 if ~isempty(strtrim(char(string(timeVariable))))
     spec.time_variable = char(string(timeVariable));
 end
