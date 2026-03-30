@@ -194,6 +194,7 @@ for index = 1:numel(inputNames)
         parameterNames, ...
         stateNames, ...
         timeVariable, ...
+        oracleConfig, ...
         clockBlockName, ...
         clockSignal);
     signalSources.(inputName) = signalPort;
@@ -268,7 +269,7 @@ build = struct( ...
 end
 
 function [signalPort, family, clockBlockName, clockSignal] = localAddInputSource( ...
-    modelName, inputName, position, inputValues, inputSpecs, signalSources, parameterNames, stateNames, timeVariable, clockBlockName, clockSignal)
+    modelName, inputName, position, inputValues, inputSpecs, signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal)
 
 if isfield(inputValues, inputName)
     add_block("simulink/Sources/Constant", [modelName '/' inputName], ...
@@ -283,7 +284,7 @@ spec = [];
 if isfield(inputSpecs, inputName)
     spec = inputSpecs.(inputName);
 end
-[nativeKind, payload] = localClassifyInputSpec(spec, inputName, timeVariable);
+[nativeKind, payload] = localClassifyInputSpec(spec, inputName, timeVariable, modelConfig);
 
 switch nativeKind
     case "Constant"
@@ -300,6 +301,34 @@ switch nativeKind
             "Position", position);
         signalPort = [inputName '/1'];
         family = "Step";
+    case "PulseGenerator"
+        add_block("simulink/Sources/Pulse Generator", [modelName '/' inputName], ...
+            "PulseType", "Time based", ...
+            "Amplitude", localNumericString(payload.amplitude), ...
+            "Period", localNumericString(payload.period), ...
+            "PulseWidth", localNumericString((payload.width / payload.period) * 100.0), ...
+            "PhaseDelay", localNumericString(payload.start_time), ...
+            "Position", position);
+        signalPort = [inputName '/1'];
+        family = "PulseGenerator";
+    case "Ramp"
+        add_block("simulink/Sources/Ramp", [modelName '/' inputName], ...
+            "slope", localNumericString(payload.slope), ...
+            "start", localNumericString(payload.start_time), ...
+            "InitialOutput", localNumericString(payload.initial_output), ...
+            "Position", position);
+        signalPort = [inputName '/1'];
+        family = "Ramp";
+    case "SineWave"
+        add_block("simulink/Sources/Sine Wave", [modelName '/' inputName], ...
+            "Amplitude", localNumericString(payload.amplitude), ...
+            "Frequency", localNumericString(payload.frequency), ...
+            "Phase", localNumericString(payload.phase), ...
+            "Bias", localNumericString(payload.bias), ...
+            "SampleTime", "0", ...
+            "Position", position);
+        signalPort = [inputName '/1'];
+        family = "SineWave";
     otherwise
         [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
         add_block("simulink/User-Defined Functions/MATLAB Function", [modelName '/' inputName], ...
@@ -317,7 +346,7 @@ switch nativeKind
 end
 end
 
-function [kind, payload] = localClassifyInputSpec(spec, inputName, timeVariable)
+function [kind, payload] = localClassifyInputSpec(spec, inputName, timeVariable, modelConfig)
 if isempty(spec)
     kind = "Constant";
     payload = struct("value", 0);
@@ -331,11 +360,42 @@ switch lower(specKind)
         payload = struct("value", double(localScalar(spec, "value", 0)));
         return;
     case "step"
+        bias = double(localScalar(spec, "bias", localScalar(spec, "initial_value", 0)));
+        amplitude = double(localScalar(spec, "amplitude", localScalar(spec, "final_value", 1) - bias));
         kind = "Step";
         payload = struct( ...
-            "step_time", double(localScalar(spec, "step_time", 0)), ...
-            "before", double(localScalar(spec, "initial_value", 0)), ...
-            "after", double(localScalar(spec, "final_value", 1)) ...
+            "step_time", double(localScalar(spec, "step_time", localScalar(spec, "start_time", 0))), ...
+            "before", bias, ...
+            "after", bias + amplitude ...
+        );
+        return;
+    case "pulse"
+        kind = "PulseGenerator";
+        payload = struct( ...
+            "amplitude", double(localScalar(spec, "amplitude", localScalar(spec, "value", 1))), ...
+            "start_time", double(localScalar(spec, "start_time", 0)), ...
+            "width", double(localScalar(spec, "width", 0.1)), ...
+            "period", double(localScalar(spec, "period", localDefaultPulsePeriodFromSpan( ...
+                double(localScalar(spec, "start_time", 0)), ...
+                double(localScalar(spec, "width", 0.1)), ...
+                localModelConfigSpan(modelConfig)))) ...
+        );
+        return;
+    case "ramp"
+        kind = "Ramp";
+        payload = struct( ...
+            "slope", double(localScalar(spec, "slope", 1)), ...
+            "start_time", double(localScalar(spec, "start_time", 0)), ...
+            "initial_output", double(localScalar(spec, "initial_output", 0)) ...
+        );
+        return;
+    case "sine"
+        kind = "SineWave";
+        payload = struct( ...
+            "amplitude", double(localScalar(spec, "amplitude", 1)), ...
+            "frequency", double(localScalar(spec, "frequency", localScalar(spec, "omega", 1))), ...
+            "phase", double(localScalar(spec, "phase", 0)), ...
+            "bias", double(localScalar(spec, "bias", 0)) ...
         );
         return;
     case "expression"
@@ -344,6 +404,24 @@ switch lower(specKind)
         if isStep
             kind = "Step";
             payload = stepPayload;
+            return;
+        end
+        [isPulse, pulsePayload] = localExpressionIsPulse(expression, timeVariable, localModelConfigSpan(modelConfig));
+        if isPulse
+            kind = "PulseGenerator";
+            payload = pulsePayload;
+            return;
+        end
+        [isRamp, rampPayload] = localExpressionIsRamp(expression, timeVariable);
+        if isRamp
+            kind = "Ramp";
+            payload = rampPayload;
+            return;
+        end
+        [isSine, sinePayload] = localExpressionIsSineWave(expression, timeVariable);
+        if isSine
+            kind = "SineWave";
+            payload = sinePayload;
             return;
         end
         numericValue = str2double(strtrim(expression));
@@ -364,6 +442,7 @@ end
 function [isStep, payload] = localExpressionIsStep(expression, timeVariable)
 expr = regexprep(char(string(expression)), "\s+", "");
 timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
 
 if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
     isStep = true;
@@ -371,15 +450,118 @@ if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
     return;
 end
 
-match = regexp(expr, ['^heaviside\(' timeToken '\-(?<delay>[-+]?[0-9]*\.?[0-9]+)\)$'], "names");
+match = regexp(expr, ['^heaviside\(' timeToken '\-(?<delay>' numberToken ')\)$'], "names");
 if ~isempty(match)
     isStep = true;
-    payload = struct("step_time", str2double(match.delay), "before", 0, "after", 1);
+    payload = struct("step_time", localNumericTokenToDouble(match.delay), "before", 0, "after", 1);
+    return;
+end
+
+match = regexp(expr, ['^heaviside\(' timeToken '\+(?<delay>' numberToken ')\)$'], "names");
+if ~isempty(match)
+    isStep = true;
+    payload = struct("step_time", -localNumericTokenToDouble(match.delay), "before", 0, "after", 1);
     return;
 end
 
 isStep = false;
 payload = struct("step_time", 0, "before", 0, "after", 0);
+end
+
+function [isPulse, payload] = localExpressionIsPulse(expression, timeVariable, tSpan)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
+pattern = ['^(?<amp>' numberToken ')\*heaviside\(' timeToken '\-(?<start>' numberToken ')\)(?<second>[+-])(?<amp2>' numberToken ')\*heaviside\(' timeToken '\-(?<stop>' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
+match = regexp(expr, pattern, "names");
+if isempty(match)
+    isPulse = false;
+    payload = struct("amplitude", 0, "start_time", 0, "width", 0, "period", 1);
+    return;
+end
+amp1 = localNumericTokenToDouble(match.amp);
+amp2 = localNumericTokenToDouble(match.amp2);
+startTime = localNumericTokenToDouble(match.start);
+stopTime = localNumericTokenToDouble(match.stop);
+if match.second ~= '-' || abs(amp1 - amp2) > 1e-9 || stopTime <= startTime
+    isPulse = false;
+    payload = struct("amplitude", 0, "start_time", 0, "width", 0, "period", 1);
+    return;
+end
+width = stopTime - startTime;
+period = localDefaultPulsePeriodFromSpan(startTime, width, tSpan);
+isPulse = true;
+payload = struct( ...
+    "amplitude", amp1, ...
+    "start_time", startTime, ...
+    "width", width, ...
+    "period", period ...
+);
+end
+
+function [isRamp, payload] = localExpressionIsRamp(expression, timeVariable)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
+pattern = ['^heaviside\(' timeToken '\-(?<start>' numberToken ')\)\*\((?<slope>' numberToken ')\*' timeToken '(?<offset>[+-]' numberToken ')\)(?<bias>[+-]' numberToken ')?$'];
+match = regexp(expr, pattern, "names");
+if isempty(match)
+    isRamp = false;
+    payload = struct("slope", 0, "start_time", 0, "initial_output", 0);
+    return;
+end
+startTime = localNumericTokenToDouble(match.start);
+slope = localNumericTokenToDouble(match.slope);
+offset = localNumericTokenToDouble(match.offset);
+expectedOffset = -slope * startTime;
+if abs(offset - expectedOffset) > 1e-9
+    isRamp = false;
+    payload = struct("slope", 0, "start_time", 0, "initial_output", 0);
+    return;
+end
+bias = 0.0;
+if isfield(match, "bias") && ~isempty(match.bias)
+    bias = localNumericTokenToDouble(match.bias);
+end
+isRamp = true;
+payload = struct( ...
+    "slope", slope, ...
+    "start_time", startTime, ...
+    "initial_output", bias ...
+);
+end
+
+function [isSine, payload] = localExpressionIsSineWave(expression, timeVariable)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
+pattern = ['^(?<amp>' numberToken ')\*(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'];
+match = regexp(expr, pattern, "names");
+if isempty(match)
+    isSine = false;
+    payload = struct("amplitude", 0, "frequency", 0, "phase", 0, "bias", 0);
+    return;
+end
+amplitude = localNumericTokenToDouble(match.amp);
+frequency = localNumericTokenToDouble(match.freq);
+phase = 0.0;
+if isfield(match, "phase") && ~isempty(match.phase)
+    phase = localNumericTokenToDouble(match.phase);
+end
+if strcmp(match.fn, 'cos')
+    phase = phase + pi / 2.0;
+end
+bias = 0.0;
+if isfield(match, "bias") && ~isempty(match.bias)
+    bias = localNumericTokenToDouble(match.bias);
+end
+isSine = true;
+payload = struct( ...
+    "amplitude", amplitude, ...
+    "frequency", frequency, ...
+    "phase", phase, ...
+    "bias", bias ...
+);
 end
 
 function [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal)
@@ -539,10 +721,29 @@ switch kind
     case "constant"
         expression = sym(double(localScalar(spec, "value", 0)));
     case "step"
-        before = double(localScalar(spec, "initial_value", 0));
-        after = double(localScalar(spec, "final_value", 1));
-        stepTime = double(localScalar(spec, "step_time", 0));
+        before = double(localScalar(spec, "bias", localScalar(spec, "initial_value", 0)));
+        amplitude = double(localScalar(spec, "amplitude", localScalar(spec, "final_value", 1) - before));
+        after = before + amplitude;
+        stepTime = double(localScalar(spec, "step_time", localScalar(spec, "start_time", 0)));
         expression = sym(before) + sym(after - before) * heaviside(timeSymbol - sym(stepTime));
+    case "pulse"
+        amplitude = double(localScalar(spec, "amplitude", localScalar(spec, "value", 1)));
+        startTime = double(localScalar(spec, "start_time", 0));
+        width = double(localScalar(spec, "width", 0.1));
+        bias = double(localScalar(spec, "bias", 0));
+        expression = sym(bias) + sym(amplitude) * ( ...
+            heaviside(timeSymbol - sym(startTime)) - heaviside(timeSymbol - sym(startTime + width)));
+    case "ramp"
+        slope = double(localScalar(spec, "slope", 1));
+        startTime = double(localScalar(spec, "start_time", 0));
+        initialOutput = double(localScalar(spec, "initial_output", 0));
+        expression = sym(initialOutput) + sym(slope) * (timeSymbol - sym(startTime)) * heaviside(timeSymbol - sym(startTime));
+    case "sine"
+        amplitude = double(localScalar(spec, "amplitude", 1));
+        frequency = double(localScalar(spec, "frequency", localScalar(spec, "omega", 1)));
+        phase = double(localScalar(spec, "phase", 0));
+        bias = double(localScalar(spec, "bias", 0));
+        expression = sym(bias) + sym(amplitude) * sin(sym(frequency) * timeSymbol + sym(phase));
     case "expression"
         expression = str2sym(char(string(localScalar(spec, "expression", "0"))));
     otherwise
@@ -788,6 +989,15 @@ function family = localBlockFamily(blockPath)
 blockType = char(string(get_param(blockPath, "BlockType")));
 if strcmp(blockType, "SubSystem")
     try
+        maskType = char(string(get_param(blockPath, "MaskType")));
+        if strcmp(maskType, "Ramp")
+            family = "Ramp";
+            return;
+        end
+    catch
+        % Fall through to other subsystem detection.
+    end
+    try
         sfType = char(string(get_param(blockPath, "SFBlockType")));
         if strcmp(sfType, "MATLAB Function")
             family = "MATLAB Function";
@@ -796,6 +1006,14 @@ if strcmp(blockType, "SubSystem")
     catch
         % Fall through to BlockType.
     end
+end
+if strcmp(blockType, "DiscretePulseGenerator")
+    family = "PulseGenerator";
+    return;
+end
+if strcmp(blockType, "Sin")
+    family = "SineWave";
+    return;
 end
 family = blockType;
 end
@@ -924,6 +1142,25 @@ if isempty(opts.Tolerance)
 else
     tolerance = double(opts.Tolerance);
 end
+end
+
+function pattern = localNumberPattern()
+pattern = '[-+]?(?:[0-9]*\\.?[0-9]+|[0-9]+/[0-9]+)';
+end
+
+function value = localNumericTokenToDouble(token)
+value = double(vpa(str2sym(char(string(token)))));
+end
+
+function value = localDefaultPulsePeriodFromSpan(startTime, width, tSpan)
+simulationEnd = double(tSpan(2));
+value = max(width * 2.0, (simulationEnd - startTime) + width + max(width, 1.0));
+end
+
+function tSpan = localModelConfigSpan(modelConfig)
+startTime = str2double(char(string(localScalar(modelConfig, "StartTime", "0.0"))));
+stopTime = str2double(char(string(localScalar(modelConfig, "StopTime", "10.0"))));
+tSpan = [startTime, stopTime];
 end
 
 function mode = localInvocationParityMode(invocation)

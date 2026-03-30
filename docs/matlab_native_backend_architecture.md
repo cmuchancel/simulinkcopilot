@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-5 runtime/parity split checkpoint**:
+`matlabv2native` currently exists as a **phase-6 parity-expansion checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -13,6 +13,11 @@ This document describes the additive native MATLAB backend effort that sits besi
 - it computes a MATLAB ODE reference solve for current native explicit-ODE anchor cases
 - it validates current native explicit-ODE anchor cases against the MATLAB numerical reference in the default runtime path
 - it keeps Python parity available explicitly for those same anchor cases
+- it now covers the next runtime-native waveform set through the native input-spec path:
+  - pulse
+  - ramp
+  - sine
+- it now has committed native-runtime integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
 - it still delegates non-eligible cases to the existing Python backend
 
@@ -55,9 +60,13 @@ These behaviors are implemented on the MATLAB side today:
 - native MATLAB ODE reference solving for the current explicit-ODE anchor cases
 - default runtime-mode generation and validation for those current anchor cases without requiring a Python build/sim
 - explicit Python parity mode for those current anchor cases through `ParityMode="python"`
+- committed integration coverage for a coupled explicit native-runtime case
 - native input-source lowering for the currently supported native families:
   - constant
   - step / delayed step
+  - pulse
+  - ramp
+  - sine
   - unsupported symbolic input expression lowered to a MATLAB Function source block
 - runtime/performance timing capture for:
   - preview analysis
@@ -88,11 +97,11 @@ These behaviors still use the existing Python backend, either as the primary exe
 - non-explicit or ambiguous systems
 - broader normalization beyond the current explicit-ODE native preview boundary
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
-- input families not yet lowered natively in MATLAB
-- input families not yet evaluated natively in the MATLAB numerical oracle
+- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/fallback set
+- input families not yet evaluated natively in the MATLAB numerical oracle beyond that same set
 - broader lowering/validation coverage beyond the current anchor matrix
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the first widened waveform family set. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 
@@ -150,7 +159,9 @@ Those will be added as the native backend matures beyond the current runtime/par
 
 1. widen native explicit-ODE input lowering beyond constant/step/fallback anchor coverage
 2. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
-3. keep Python parity as an explicit comparison/debug flow rather than a default dependency
-4. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-5. compare native vs Python first-order RHS semantics
-6. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
+3. widen native support to square/sawtooth/triangle and then saturation/dead-zone style nonlinear families
+4. improve symbolic-expression recognition for widened families, not just struct-style input specs
+5. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+6. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
+7. compare native vs Python first-order RHS semantics
+8. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green

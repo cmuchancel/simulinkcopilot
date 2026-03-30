@@ -328,6 +328,122 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertFalse(has_python_vs_matlab)
         self.assertTrue(validation_passes)
 
+    def test_matlabv2native_generate_builds_native_coupled_explicit_system(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns x y u", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) y(t) u(t)", nargout=0)
+        self.eng.eval("eqns = [diff(x,t) == -x + y + u(t); diff(y,t) == -2*y + x];", nargout=0)
+        self.eng.eval("u(t) = heaviside(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x','y'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_coupled_native', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x", "y"))
+
+    def test_matlabv2native_runtime_native_supports_pulse_ramp_and_sine_specs(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "pulse",
+                "u = struct('kind','pulse','amplitude',2,'start_time',0.3,'width',0.2);",
+                "PulseGenerator",
+            ),
+            (
+                "ramp",
+                "u = struct('kind','ramp','slope',2,'start_time',0.5,'initial_output',-1);",
+                "Ramp",
+            ),
+            (
+                "sine",
+                "u = struct('kind','sine','amplitude',2,'frequency',1.5,'phase',0.25,'bias',1);",
+                "SineWave",
+            ),
+        ]
+
+        for case_name, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval("syms x(t) u", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u;", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_native', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+
+    def test_matlabv2native_python_parity_mode_supports_pulse_ramp_and_sine_specs(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "pulse",
+                "u = struct('kind','pulse','amplitude',2,'start_time',0.3,'width',0.2);",
+                "PulseGenerator",
+            ),
+            (
+                "ramp",
+                "u = struct('kind','ramp','slope',2,'start_time',0.5,'initial_output',-1);",
+                "Ramp",
+            ),
+            (
+                "sine",
+                "u = struct('kind','sine','amplitude',2,'frequency',1.5,'phase',0.25,'bias',1);",
+                "SineWave",
+            ),
+        ]
+
+        for case_name, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval("syms x(t) u", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u;", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'ParityMode', 'python', 'ModelName', 'matlabv2native_{case_name}_parity', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+                native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+                python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+                native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_with_python_parity")
+                self.assertTrue(source_family_match)
+                self.assertTrue(native_vs_matlab_match)
+                self.assertTrue(python_vs_matlab_match)
+                self.assertTrue(native_vs_python_match)
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertGreater(python_parity_sec, 0.0)
+
     def _run_input_validation_case(
         self,
         *,
