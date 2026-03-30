@@ -1,4 +1,4 @@
-function [result, notes] = nativeExplicitOdePreview(primaryInput, sourceType, states, inputs, parameters, timeVariable)
+function [result, notes] = nativeExplicitOdePreview(primaryInput, sourceType, states, algebraics, inputs, parameters, timeVariable, callerWorkspace)
 % nativeExplicitOdePreview Build a native explicit-ODE preview when MATLAB symbolic tools can support it.
 
 notes = {};
@@ -24,56 +24,37 @@ if isempty(strtrim(char(string(timeVariable))))
     return;
 end
 
-try
-    [vectorField, stateBasis] = odeToVectorField(symbolicEquations);
-catch exc
-    notes{end + 1} = "Native explicit-ODE preview delegated: " + string(exc.message); %#ok<AGROW>
+[explicitPreview, explicitNotes, explicitOk] = localBuildVectorFieldPreview( ...
+    symbolicEquations, ...
+    states, ...
+    inputs, ...
+    parameters, ...
+    timeVariable, ...
+    "explicit_ode", ...
+    "odeToVectorField");
+notes = [notes, explicitNotes];
+if explicitOk
+    result = explicitPreview;
     return;
 end
 
-canonicalBasis = cell(numel(stateBasis), 1);
-for index = 1:numel(stateBasis)
-    [canonicalName, ok] = localCanonicalStateName(stateBasis(index));
-    if ~ok
-        notes{end + 1} = "Native explicit-ODE preview delegated: unable to canonicalize state basis " + string(stateBasis(index)) + "."; %#ok<AGROW>
-        return;
-    end
-    canonicalBasis{index} = canonicalName;
+if ~localHasAlgebraicShape(symbolicEquations)
+    return;
 end
 
-orderedStates = localCanonicalStateOrder(canonicalBasis, states);
-equationStates = cell(1, numel(canonicalBasis));
-equationRhs = cell(1, numel(canonicalBasis));
-for index = 1:numel(canonicalBasis)
-    equationStates{index} = canonicalBasis{index};
-    equationRhs{index} = localCanonicalizeRhs(char(vectorField(index)), canonicalBasis, inputs, timeVariable);
+[daePreview, daeNotes, daeOk] = localAttemptReducibleDaePreview( ...
+    symbolicEquations, ...
+    states, ...
+    algebraics, ...
+    inputs, ...
+    parameters, ...
+    timeVariable, ...
+    callerWorkspace);
+notes = [notes, daeNotes];
+result = daePreview;
+if daeOk
+    return;
 end
-
-stateEquations = struct("state", cell(1, numel(orderedStates)), "rhs", cell(1, numel(orderedStates)));
-for index = 1:numel(orderedStates)
-    stateName = orderedStates{index};
-    rhsIndex = find(strcmp(equationStates, stateName), 1);
-    if isempty(rhsIndex)
-        notes{end + 1} = "Native explicit-ODE preview delegated: canonical state ordering did not align with MATLAB vector-field output."; %#ok<AGROW>
-        return;
-    end
-    stateEquations(index).state = stateName;
-    stateEquations(index).rhs = equationRhs{rhsIndex};
-end
-
-result.Route = "explicit_ode";
-result.Status = "native_supported";
-result.FirstOrderPreview = struct( ...
-    "Available", true, ...
-    "Method", "odeToVectorField", ...
-    "States", {orderedStates}, ...
-    "Inputs", {reshape(localUniqueCell(inputs), 1, [])}, ...
-    "Parameters", {reshape(localUniqueCell(parameters), 1, [])}, ...
-    "IndependentVariable", char(string(timeVariable)), ...
-    "OriginalStateBasis", {cellstr(string(stateBasis(:)).')}, ...
-    "StateEquations", stateEquations ...
-);
-notes{end + 1} = "Explicit-ODE route preview inferred natively with odeToVectorField."; %#ok<AGROW>
 end
 
 function [equations, available] = localSymbolicEquations(primaryInput)
@@ -106,6 +87,199 @@ if iscell(primaryInput)
 end
 available = false;
 equations = sym.empty(0, 1);
+end
+
+function [result, notes, ok] = localBuildVectorFieldPreview(symbolicEquations, states, inputs, parameters, timeVariable, routeName, methodName)
+notes = {};
+result = struct( ...
+    "Route", "", ...
+    "Status", "delegated", ...
+    "FirstOrderPreview", localEmptyFirstOrderPreview() ...
+);
+ok = false;
+
+try
+    [vectorField, stateBasis] = odeToVectorField(symbolicEquations);
+catch exc
+    notes{end + 1} = "Native explicit-ODE preview delegated: " + string(exc.message); %#ok<AGROW>
+    return;
+end
+
+canonicalBasis = cell(numel(stateBasis), 1);
+for index = 1:numel(stateBasis)
+    [canonicalName, basisOk] = localCanonicalStateName(stateBasis(index));
+    if ~basisOk
+        notes{end + 1} = "Native explicit-ODE preview delegated: unable to canonicalize state basis " + string(stateBasis(index)) + "."; %#ok<AGROW>
+        return;
+    end
+    canonicalBasis{index} = canonicalName;
+end
+
+orderedStates = localCanonicalStateOrder(canonicalBasis, states);
+equationStates = cell(1, numel(canonicalBasis));
+equationRhs = cell(1, numel(canonicalBasis));
+for index = 1:numel(canonicalBasis)
+    equationStates{index} = canonicalBasis{index};
+    equationRhs{index} = localCanonicalizeRhs(char(vectorField(index)), canonicalBasis, inputs, timeVariable);
+end
+
+stateEquations = struct("state", cell(1, numel(orderedStates)), "rhs", cell(1, numel(orderedStates)));
+for index = 1:numel(orderedStates)
+    stateName = orderedStates{index};
+    rhsIndex = find(strcmp(equationStates, stateName), 1);
+    if isempty(rhsIndex)
+        notes{end + 1} = "Native explicit-ODE preview delegated: canonical state ordering did not align with MATLAB vector-field output."; %#ok<AGROW>
+        return;
+    end
+    stateEquations(index).state = stateName;
+    stateEquations(index).rhs = equationRhs{rhsIndex};
+end
+
+result.Route = routeName;
+result.Status = "native_supported";
+result.FirstOrderPreview = struct( ...
+    "Available", true, ...
+    "Method", methodName, ...
+    "States", {orderedStates}, ...
+    "Inputs", {reshape(localUniqueCell(inputs), 1, [])}, ...
+    "Parameters", {reshape(localUniqueCell(parameters), 1, [])}, ...
+    "IndependentVariable", char(string(timeVariable)), ...
+    "OriginalStateBasis", {cellstr(string(stateBasis(:)).')}, ...
+    "StateEquations", stateEquations ...
+);
+notes{end + 1} = string(routeName) + " route preview inferred natively with " + string(methodName) + "."; %#ok<AGROW>
+ok = true;
+end
+
+function tf = localHasAlgebraicShape(symbolicEquations)
+tf = false;
+hasDifferential = false;
+hasNonDifferential = false;
+for index = 1:numel(symbolicEquations)
+    equationText = char(symbolicEquations(index));
+    if contains(equationText, "diff(")
+        hasDifferential = true;
+    else
+        hasNonDifferential = true;
+    end
+end
+tf = hasDifferential && hasNonDifferential;
+end
+
+function [result, notes, ok] = localAttemptReducibleDaePreview(symbolicEquations, states, algebraics, inputs, parameters, timeVariable, callerWorkspace)
+notes = {};
+result = struct( ...
+    "Route", "dae_algebraic", ...
+    "Status", "delegated", ...
+    "FirstOrderPreview", localEmptyFirstOrderPreview() ...
+);
+ok = false;
+
+[differentialEquations, algebraicEquations] = localPartitionDifferentialAndAlgebraicEquations(symbolicEquations);
+if isempty(differentialEquations) || isempty(algebraicEquations)
+    notes{end + 1} = "DAE/algebraic route delegated: mixed differential and algebraic equations were not detected cleanly."; %#ok<AGROW>
+    return;
+end
+
+algebraicNames = localResolveAlgebraicNames(algebraics, algebraicEquations, states, inputs, parameters, timeVariable, callerWorkspace);
+if numel(algebraicNames) ~= 1 || numel(algebraicEquations) ~= 1
+    notes{end + 1} = "DAE/algebraic route delegated: native reduction currently supports one algebraic variable solved from one algebraic equation."; %#ok<AGROW>
+    return;
+end
+
+target = localResolveCallerSymbol(callerWorkspace, algebraicNames{1});
+if isempty(target)
+    notes{end + 1} = "DAE/algebraic route delegated: unable to materialize algebraic variable '" + string(algebraicNames{1}) + "' from the caller workspace."; %#ok<AGROW>
+    return;
+end
+
+try
+    solution = solve(algebraicEquations(1), target);
+catch exc
+    notes{end + 1} = "DAE/algebraic route delegated: symbolic solve failed for algebraic variable '" + string(algebraicNames{1}) + "' with message: " + string(exc.message); %#ok<AGROW>
+    return;
+end
+
+if isempty(solution) || numel(solution) ~= 1
+    notes{end + 1} = "DAE/algebraic route delegated: algebraic solve did not return a unique reduction for '" + string(algebraicNames{1}) + "'."; %#ok<AGROW>
+    return;
+end
+
+reducedEquations = subs(differentialEquations, target, solution);
+equationTexts = arrayfun(@char, reducedEquations(:), "UniformOutput", false);
+if any(contains(equationTexts, char(string(target))))
+    notes{end + 1} = "DAE/algebraic route delegated: algebraic variable '" + string(algebraicNames{1}) + "' remained after attempted substitution."; %#ok<AGROW>
+    return;
+end
+
+[reducedPreview, reducedNotes, reducedOk] = localBuildVectorFieldPreview( ...
+    reducedEquations, ...
+    states, ...
+    inputs, ...
+    parameters, ...
+    timeVariable, ...
+    "dae_reduced_to_explicit_ode", ...
+    "algebraic_elimination+odeToVectorField");
+notes = [notes, reducedNotes];
+result = reducedPreview;
+if reducedOk
+    notes{end + 1} = "Reducible DAE preview inferred natively by solving algebraic variable '" + string(algebraicNames{1}) + "' before explicit-ODE lowering."; %#ok<AGROW>
+    ok = true;
+    return;
+end
+
+result.Route = "dae_algebraic";
+result.Status = "delegated";
+end
+
+function [differentialEquations, algebraicEquations] = localPartitionDifferentialAndAlgebraicEquations(symbolicEquations)
+differentialEquations = sym.empty(0, 1);
+algebraicEquations = sym.empty(0, 1);
+for index = 1:numel(symbolicEquations)
+    equation = symbolicEquations(index);
+    if contains(char(equation), "diff(")
+        differentialEquations(end + 1, 1) = equation; %#ok<AGROW>
+    else
+        algebraicEquations(end + 1, 1) = equation; %#ok<AGROW>
+    end
+end
+end
+
+function names = localResolveAlgebraicNames(algebraics, algebraicEquations, states, inputs, parameters, timeVariable, callerWorkspace)
+names = reshape(localUniqueCell(algebraics), 1, []);
+if ~isempty(names)
+    return;
+end
+
+reserved = localUniqueCell([states(:); inputs(:); parameters(:); {timeVariable}; localKnownFunctionNames()']);
+rawNames = {};
+for index = 1:numel(algebraicEquations)
+    tokens = regexp(char(algebraicEquations(index)), "[A-Za-z][A-Za-z0-9_]*", "match");
+    for tokenIndex = 1:numel(tokens)
+        token = tokens{tokenIndex};
+        if any(strcmp(token, reserved))
+            continue;
+        end
+        if isfield(callerWorkspace, token)
+            value = callerWorkspace.(token);
+            if isa(value, "symfun") || isa(value, "sym")
+                rawNames{end + 1} = token; %#ok<AGROW>
+            end
+        end
+    end
+end
+names = reshape(localUniqueCell(rawNames), 1, []);
+end
+
+function target = localResolveCallerSymbol(callerWorkspace, name)
+target = sym.empty(0, 1);
+if ~isfield(callerWorkspace, name)
+    return;
+end
+value = callerWorkspace.(name);
+if isa(value, "symfun") || isa(value, "sym")
+    target = value;
+end
 end
 
 function orderedStates = localCanonicalStateOrder(canonicalBasis, preferredBases)
@@ -159,6 +333,17 @@ for index = 1:numel(inputs)
     rhs = regexprep(rhs, pattern, name);
 end
 rhs = strtrim(rhs);
+end
+
+function names = localKnownFunctionNames
+names = { ...
+    "diff", "abs", "sin", "cos", "tan", "sec", "csc", "cot", ...
+    "asin", "acos", "atan", "sinh", "cosh", "tanh", "sech", "csch", "coth", ...
+    "asinh", "acosh", "atanh", "exp", "log", "sqrt", "atan2", "min", "max", ...
+    "sat", "sign", "sawtooth", "rand", "randn", ...
+    "heaviside", "Heaviside", "dirac", "Dirac", "piecewise", "Piecewise", ...
+    "Abs", "Min", "Max", "True", "False" ...
+};
 end
 
 function [canonicalName, ok] = localCanonicalStateName(rawBasis)

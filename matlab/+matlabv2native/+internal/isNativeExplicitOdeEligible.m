@@ -7,19 +7,24 @@ if ~strcmp(sourceType, "matlab_symbolic")
     return;
 end
 
-if ~isstruct(preview) || ~isfield(preview, "Route") || ~strcmp(char(string(preview.Route)), "explicit_ode")
+route = '';
+if isstruct(preview) && isfield(preview, 'Route')
+    route = strtrim(char(string(preview.Route)));
+end
+routeMatches = strcmp(route, 'explicit_ode') || strcmp(route, 'dae_reduced_to_explicit_ode');
+if ~isstruct(preview) || ~isfield(preview, 'Route') || ~routeMatches
     tf = false;
-    reason = "native lowering currently requires an explicit_ode native preview";
+    reason = "native lowering currently requires an explicit_ode or dae_reduced_to_explicit_ode native preview";
     return;
 end
 
-if ~isfield(preview, "FirstOrderPreview") || ~isstruct(preview.FirstOrderPreview)
+if ~isfield(preview, 'FirstOrderPreview') || ~isstruct(preview.FirstOrderPreview)
     tf = false;
     reason = "native lowering currently requires a first-order preview";
     return;
 end
 
-if ~isfield(preview.FirstOrderPreview, "Available") || ~logical(preview.FirstOrderPreview.Available)
+if ~isfield(preview.FirstOrderPreview, 'Available') || ~logical(preview.FirstOrderPreview.Available)
     tf = false;
     reason = "native lowering currently requires an available first-order preview";
     return;

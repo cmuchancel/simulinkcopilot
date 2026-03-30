@@ -157,7 +157,12 @@ function spec = localRecognizeAffineStep(expr, timeToken, numberToken)
 spec = [];
 patterns = { ...
     ['^(?<amp>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<num>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])(?:(?<amp>' numberToken ')\*)?heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])(?<num>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')$'] ...
 };
 
 match = [];
@@ -177,6 +182,13 @@ end
 amplitude = 1.0;
 if isfield(match, "amp") && ~isempty(match.amp)
     amplitude = localNumericTokenToDouble(match.amp);
+elseif isfield(match, "num") && ~isempty(match.num) && isfield(match, "den") && ~isempty(match.den)
+    amplitude = localNumericTokenToDouble(match.num) / localNumericTokenToDouble(match.den);
+elseif isfield(match, "den") && ~isempty(match.den)
+    amplitude = 1.0 / localNumericTokenToDouble(match.den);
+end
+if isfield(match, "join") && ~isempty(match.join) && match.join == '-'
+    amplitude = -amplitude;
 end
 
 stepTime = 0.0;
@@ -188,6 +200,8 @@ end
 bias = 0.0;
 if isfield(match, "bias") && ~isempty(match.bias)
     bias = localNumericTokenToDouble(match.bias);
+elseif isfield(match, "leading_bias") && ~isempty(match.leading_bias)
+    bias = localNumericTokenToDouble(match.leading_bias);
 end
 
 spec = struct("kind", "step", "step_time", stepTime, "bias", bias, "amplitude", amplitude);

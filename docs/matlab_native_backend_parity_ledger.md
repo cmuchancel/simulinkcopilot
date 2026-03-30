@@ -14,6 +14,7 @@ The goal is to keep claims explicit:
 - branch: `matlab-native-backend-campaign`
 - latest parity-expansion phase after runtime split: symbolic math runtime widening for `atan`, `atan2`, `exp`, `log`, and `sqrt`
 - latest benchmark-stability phase: cart-pendulum, planar-quadrotor, and acrobot MATLAB-symbolic runtime coverage
+- latest route-boundary phase: reducible single-algebraic DAE reduction plus explicit `sawtooth` / `triangle` MATLAB-symbolic boundary documentation
 
 ## Front Doors
 
@@ -33,7 +34,8 @@ The goal is to keep claims explicit:
 | coupled explicit ODE system | Yes | Yes | Yes | Yes | Runtime-native and parity-mode integration coverage exist; cart-pendulum, planar-quadrotor, and acrobot benchmark regressions now also pass on the MATLAB-symbolic runtime path |
 | parameterized explicit ODE | Yes | Yes | Yes | Yes for current anchor-style cases | Parameters must still be provided numerically |
 | non-explicit / ambiguous systems | Partial / delegated | No | No | Python only | Still delegated |
-| DAE / descriptor-style systems | No meaningful native parity yet | No | No | Python only | Do not overclaim |
+| reducible DAE / algebraic system | Yes | Yes for the current single-algebraic reduction path | Yes | No | Native route now supports a bounded subset by solving one algebraic variable and substituting it before explicit-ODE lowering |
+| irreducible DAE / descriptor-style systems | Yes for route classification | No | No | Python only | Native preview now labels these explicitly as `dae_algebraic`; do not overclaim |
 
 ## Input Family Status
 
@@ -47,8 +49,8 @@ The goal is to keep claims explicit:
 | sine | Yes | Yes | Yes | Yes | Yes | No | Direct symbolic sine/cosine-form recognition now lowers natively |
 | cosine | No | No | Python only | No | No | Yes | Still pending native promotion |
 | square | Yes | Yes | Yes | Yes | Yes | No | Direct symbolic square recognition now lowers natively; parity uses semantic family matching because Python may compose it as `Sum` |
-| sawtooth | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; direct MATLAB symbolic `sawtooth(sym)` is not reliable and Python parity is still pending |
-| triangle | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; direct MATLAB symbolic `sawtooth(sym,0.5)` is not reliable and Python parity is still pending |
+| sawtooth | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; raw MATLAB symbolic `sawtooth(sym)` is rejected by MATLAB itself, so this family remains intentionally expression-spec-only and Python parity is still pending |
+| triangle | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; raw MATLAB symbolic `sawtooth(sym,0.5)` is rejected by MATLAB itself, so this family remains intentionally expression-spec-only and Python parity is still pending |
 | saturation | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `min(max(...))` clamp now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | dead zone | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic dead-zone piecewise form now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | sign | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `sign(...)` now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
@@ -73,7 +75,9 @@ The goal is to keep claims explicit:
 - MATLAB symbolic canonical forms such as `angle(t*(1 + 1i) + 1)` and `(t + 1)^(1/2)` are now normalized back into native `atan2` and `sqrt` input specs.
 - Biased/scaled/fractional `heaviside(...)` step forms such as `1 + heaviside(t)` and `heaviside(t - 1/2)/5 + 1/10` now normalize back into native step specs instead of falling through to MATLAB Function source fallback.
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
-- `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not yet claimed as broad direct-symbolic families because MATLAB does not reliably preserve raw `sawtooth(sym)` forms as symbolic expressions.
+- `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not broad direct-symbolic families because MATLAB itself rejects raw `sawtooth(sym)` / `sawtooth(sym, 0.5)` constructions before `matlabv2native` can analyze them.
+- Reducible DAE/algebraic systems with one algebraic variable solved from one algebraic equation now have a bounded native route through algebraic elimination followed by the existing explicit-ODE lowering path.
+- Irreducible DAE/algebraic systems are now labeled explicitly as `dae_algebraic` with delegated status instead of being left as a vague non-explicit boundary.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.
 - `saturation` and `dead zone` are now MATLAB-symbolic runtime-native with MATLAB-reference validation, but this checkpoint does not claim Python-parity cleanliness for those families yet.
 - The default runtime path stays lean for runtime-native cases. Python parity remains explicit and heavier.
@@ -81,7 +85,7 @@ The goal is to keep claims explicit:
 
 ## Next Gaps To Close
 
-1. Finish or explicitly bound direct symbolic-native support for repeating-sequence families: `sawtooth`, `triangle`.
+1. Decide whether to widen DAE reduction beyond the current single-algebraic-variable elimination path.
 2. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
 3. Expand benchmark coverage beyond the current cart-pendulum, planar-quadrotor, and acrobot checkpoints.
 4. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.

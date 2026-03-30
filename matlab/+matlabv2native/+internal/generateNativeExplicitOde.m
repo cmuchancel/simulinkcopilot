@@ -117,7 +117,7 @@ out.SourceType = sourceType;
 out.Invocation = invocation;
 out.NativePreview = nativePreview;
 out.PublicOptions = localPublicOptions(opts);
-out.Route = "explicit_ode";
+out.Route = char(string(localScalar(nativePreview, "Route", "explicit_ode")));
 out.GeneratedModelPath = nativeBuild.GeneratedModelPath;
 out.ModelName = nativeBuild.ModelName;
 out.Validation = nativeValidation;
@@ -245,6 +245,10 @@ for index = 1:numel(stateEquations)
 end
 
 set_param(modelName, "SimulationCommand", "Update");
+
+if isempty(clockSignal) && localDeferredBlocksNeedClock(deferredBlocks, timeVariable)
+    [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal); %#ok<NASGU>
+end
 
 for index = 1:numel(deferredBlocks)
     blockName = deferredBlocks(index).block_name;
@@ -797,7 +801,12 @@ numberToken = localNumberPattern();
 
 patterns = { ...
     ['^(?<amp>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<num>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])(?:(?<amp>' numberToken ')\*)?heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')$'], ...
+    ['^(?<leading_bias>' numberToken ')(?<join>[+-])(?<num>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)/(?<den>' numberToken ')$'] ...
 };
 
 for index = 1:numel(patterns)
@@ -808,6 +817,13 @@ for index = 1:numel(patterns)
     amplitude = 1.0;
     if isfield(match, "amp") && ~isempty(match.amp)
         amplitude = localNumericTokenToDouble(match.amp);
+    elseif isfield(match, "num") && ~isempty(match.num) && isfield(match, "den") && ~isempty(match.den)
+        amplitude = localNumericTokenToDouble(match.num) / localNumericTokenToDouble(match.den);
+    elseif isfield(match, "den") && ~isempty(match.den)
+        amplitude = 1.0 / localNumericTokenToDouble(match.den);
+    end
+    if isfield(match, "join") && ~isempty(match.join) && match.join == '-'
+        amplitude = -amplitude;
     end
     stepTime = 0.0;
     if isfield(match, "offset") && ~isempty(match.offset)
@@ -816,6 +832,8 @@ for index = 1:numel(patterns)
     bias = 0.0;
     if isfield(match, "bias") && ~isempty(match.bias)
         bias = localNumericTokenToDouble(match.bias);
+    elseif isfield(match, "leading_bias") && ~isempty(match.leading_bias)
+        bias = localNumericTokenToDouble(match.leading_bias);
     end
     isStep = true;
     payload = struct("step_time", stepTime, "before", bias, "after", bias + amplitude);
@@ -1137,6 +1155,20 @@ if isfield(signalSources, dependency)
 end
 error("matlabv2native:MissingSignalDependency", ...
     "Missing signal dependency '%s' while wiring the native explicit-ODE model.", dependency);
+end
+
+function tf = localDeferredBlocksNeedClock(deferredBlocks, timeVariable)
+tf = false;
+timeName = char(string(timeVariable));
+for index = 1:numel(deferredBlocks)
+    dependencies = deferredBlocks(index).dependencies;
+    for depIndex = 1:numel(dependencies)
+        if strcmp(char(string(dependencies{depIndex})), timeName)
+            tf = true;
+            return;
+        end
+    end
+end
 end
 
 function signalPort = localNativeAffineRhsPort( ...

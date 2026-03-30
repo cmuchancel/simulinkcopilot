@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-11 symbolic-math-runtime checkpoint**:
+`matlabv2native` currently exists as a **route-boundary checkpoint after symbolic math runtime widening and complex benchmark stabilization**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -42,6 +42,7 @@ This document describes the additive native MATLAB backend effort that sits besi
   - coupled cart-pendulum benchmark
   - planar quadrotor benchmark with biased step thrust input
   - acrobot benchmark with biased step torque input
+- it now supports a bounded reducible-DAE native route by eliminating one algebraic variable before the existing explicit-ODE lowering path
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -79,6 +80,8 @@ These behaviors are implemented on the MATLAB side today:
 - basic derivative/state inference
 - basic input vs parameter inference from caller-workspace values
 - explicit-ODE route preview for MATLAB symbolic equations when `odeToVectorField` succeeds
+- reducible DAE/algebraic route preview for a bounded single-algebraic-variable subset via symbolic elimination plus `odeToVectorField`
+- explicit route classification for irreducible DAE/algebraic systems as delegated `dae_algebraic`
 - native first-order state preview for those explicit ODEs
 - native-lowering eligibility checks for MATLAB symbolic explicit ODEs
 - native Simulink lowering for the current explicit-ODE anchor cases
@@ -111,6 +114,7 @@ These behaviors are implemented on the MATLAB side today:
   - cart-pendulum equations with coupled second-order mechanics
   - planar quadrotor equations with trigonometric state coupling and biased step/constant thrust inputs
   - acrobot equations with coupled trigonometric dynamics and biased step torque input
+- bounded reducible DAE runtime coverage for one algebraic variable solved from one algebraic equation before native explicit-ODE lowering
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
   - `x - 2*y`
@@ -131,6 +135,8 @@ These behaviors are implemented on the MATLAB side today:
   - log
   - sqrt
   - biased/scaled/fractional `heaviside(...)` step forms such as `1 + heaviside(t)` and `heaviside(t - 1/2)/5 + 1/10`
+- explicit MATLAB-symbolic boundary recognition for:
+  - raw `sawtooth(sym)` / `sawtooth(sym, 0.5)` forms, which MATLAB rejects before native analysis
 - runtime/performance timing capture for:
   - preview analysis
   - native model build
@@ -161,18 +167,19 @@ The current family comparison is semantic rather than purely literal in one impo
 These behaviors still use the existing Python backend, either as the primary execution path or as the oracle:
 
 - authoritative handling for non-symbolic front doors
-- non-explicit or ambiguous systems
+- non-explicit or ambiguous systems outside the bounded reducible-DAE route
 - broader normalization beyond the current explicit-ODE native preview boundary
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
 - Python parity for `sawtooth` / `triangle` expression-input paths, which is still pending because the current Python oracle model fails during model initialization for those cases
 - Python parity for `saturation` / `dead_zone`, which is not yet claimed in this checkpoint even though the MATLAB-symbolic runtime path is native and MATLAB-reference validated
 - Python parity for `sign`, `abs`, `min/max`, `atan`, `atan2`, `exp`, `log`, and `sqrt`, which is not yet claimed in this checkpoint even though the MATLAB-symbolic runtime path is native and MATLAB-reference validated
 - direct symbolic-native support for `cosine` and impulse-style inputs
-- robust direct symbolic-native support for `sawtooth` / `triangle`, which still depends on expression/input-spec forms because MATLAB does not preserve raw symbolic `sawtooth(...)` forms cleanly enough
+- broad direct symbolic-native support for `sawtooth` / `triangle`, which still depends on expression/input-spec forms because MATLAB rejects raw symbolic `sawtooth(...)` constructions before `matlabv2native` sees them
+- irreducible DAE / descriptor-style systems, which are now labeled explicitly as `dae_algebraic` delegated cases rather than implicitly falling through
 - broader lowering/validation coverage beyond the current anchor matrix
 - broader benchmark coverage beyond the current cart-pendulum and planar-quadrotor checkpoints
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the current widened waveform, nonlinear, and math-family set. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 

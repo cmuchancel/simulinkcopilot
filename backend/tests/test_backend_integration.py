@@ -596,6 +596,28 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertEqual(source_family, expected_family)
                 self.assertEqual(python_parity_sec, 0.0)
 
+    def test_matlabv2native_symbolic_sawtooth_and_triangle_are_expression_spec_only(self) -> None:
+        cases = [
+            ("sawtooth", "tmp = sawtooth(4*t);"),
+            ("triangle", "tmp = sawtooth(3*t, 0.5);"),
+        ]
+
+        for case_name, raw_expression in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear raw_supported raw_message t tmp", nargout=0)
+                self.eng.eval("syms t real", nargout=0)
+                self.eng.eval("raw_supported = true; raw_message = \"\";", nargout=0)
+                self.eng.eval(
+                    f"try, {raw_expression}; catch exc, raw_supported = false; raw_message = string(exc.message); end;",
+                    nargout=0,
+                )
+
+                raw_supported = self.eng.eval("raw_supported", nargout=1)
+                raw_message = self.eng.eval("char(raw_message)", nargout=1)
+
+                self.assertFalse(raw_supported)
+                self.assertIn("single, double", raw_message)
+
     def test_matlabv2native_runtime_native_supports_symbolic_waveform_expressions(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
         self.eng.eval(f"cd('{repo_root}')", nargout=0)
@@ -956,6 +978,56 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(source_block_tau, "Step")
         self.assertFalse(has_source_matlab_function)
         self.assertEqual(first_order_states, ("theta1", "theta2", "omega1", "omega2"))
+
+    def test_matlabv2native_generate_builds_native_reducible_dae_benchmark(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns x z", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) z(t)", nargout=0)
+        self.eng.eval("eqns = [diff(x,t) == z; 0 == z - sin(t)];", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x'}, 'Algebraics', {'z'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_reducible_dae_benchmark', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        preview_route = self.eng.eval("out.NativePreview.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        first_rhs = self.eng.eval("char(out.NativePreview.FirstOrderPreview.StateEquations(1).rhs)", nargout=1)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "dae_reduced_to_explicit_ode")
+        self.assertEqual(preview_route, "dae_reduced_to_explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x",))
+        self.assertEqual(first_rhs, "sin(t)")
+
+    def test_matlabv2native_native_preview_classifies_irreducible_dae_as_dae_algebraic(self) -> None:
+        self.eng.eval("clear preview opts caller eqns x z", nargout=0)
+        self.eng.eval("syms x(t) z(t)", nargout=0)
+        self.eng.eval("eqns = [diff(x,t) == z; 0 == z^2 + x - 1];", nargout=0)
+        self.eng.eval(
+            "opts = simucopilot.internal.validateOptions(struct('Build', false, 'OpenModel', false), 'States', {'x'}, 'Algebraics', {'z'}, 'TimeVariable', 't');",
+            nargout=0,
+        )
+        self.eng.eval("caller = struct('x', x, 'z', z);", nargout=0)
+        self.eng.eval(
+            "preview = matlabv2native.internal.nativeAnalyze('matlab_symbolic', eqns, opts, caller);",
+            nargout=0,
+        )
+
+        route = self.eng.eval("preview.Route", nargout=1)
+        route_status = self.eng.eval("preview.RouteStatus", nargout=1)
+        first_order_available = self.eng.eval("preview.FirstOrderPreview.Available", nargout=1)
+        notes = tuple(self.eng.eval("cellstr(string(preview.Notes))", nargout=1))
+
+        self.assertEqual(route, "dae_algebraic")
+        self.assertEqual(route_status, "delegated")
+        self.assertFalse(first_order_available)
+        self.assertTrue(any("DAE/algebraic route delegated" in note for note in notes))
 
     def _run_input_validation_case(
         self,
