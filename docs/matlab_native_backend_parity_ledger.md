@@ -12,7 +12,7 @@ The goal is to keep claims explicit:
 ## Current Checkpoint
 
 - branch: `matlab-native-backend-campaign`
-- latest parity-expansion phase after runtime split: symbolic waveform-recognition widening plus runtime-only sawtooth/triangle expression-spec promotion
+- latest parity-expansion phase after runtime split: symbolic nonlinear runtime widening for saturation and dead zone
 
 ## Front Doors
 
@@ -48,8 +48,8 @@ The goal is to keep claims explicit:
 | square | Yes | Yes | Yes | Yes | Yes | No | Direct symbolic square recognition now lowers natively; parity uses semantic family matching because Python may compose it as `Sum` |
 | sawtooth | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; direct MATLAB symbolic `sawtooth(sym)` is not reliable and Python parity is still pending |
 | triangle | Yes | Yes | No | No | Yes | No | Runtime-native through expression/input-spec path; direct MATLAB symbolic `sawtooth(sym,0.5)` is not reliable and Python parity is still pending |
-| saturation | No | No | Python only | No | No | Yes | Pending native promotion |
-| dead zone | No | No | Python only | No | No | Yes | Pending native promotion |
+| saturation | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic `min(max(...))` clamp now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
+| dead zone | Yes | Yes | No | Yes | Yes | No | Direct MATLAB symbolic dead-zone piecewise form now lowers natively and validates against the MATLAB reference; Python parity is not yet claimed |
 | sign | No | No | Python only | No | No | Yes | Pending native promotion |
 | abs | No | No | Python only | No | No | Yes | Pending native promotion |
 | min/max | No | No | Python only | No | No | Yes | Pending native promotion |
@@ -63,18 +63,19 @@ The goal is to keep claims explicit:
 
 ## Important Notes
 
-- `pulse`, `ramp`, `sine`, and `square` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
+- `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
 - `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not yet claimed as broad direct-symbolic families because MATLAB does not reliably preserve raw `sawtooth(sym)` forms as symbolic expressions.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.
+- `saturation` and `dead zone` are now MATLAB-symbolic runtime-native with MATLAB-reference validation, but this checkpoint does not claim Python-parity cleanliness for those families yet.
 - The default runtime path stays lean for runtime-native cases. Python parity remains explicit and heavier.
 - The current comparison surface is strongest for explicit ODEs. DAE / descriptor parity is still Python-only.
 
 ## Next Gaps To Close
 
 1. Finish Python-parity support for runtime-native repeating-sequence families: `sawtooth`, `triangle`.
-2. Promote nonlinear source families: `saturation`, `dead_zone`, `sign`, `abs`, `min/max`.
-3. Promote unary math families: `atan`, `atan2`, `exp`, `log`, `sqrt`.
-4. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
-5. Expand the heavy comparison API so parity beyond preview metadata is easier to run and inspect.
-6. Keep route coverage honest for symbolic systems that are still delegated, especially DAE / descriptor-style cases.
+2. Decide whether to claim Python parity for runtime-native nonlinear families: `saturation`, `dead_zone`.
+3. Promote the next nonlinear source families: `sign`, `abs`, `min/max`.
+4. Promote unary math families: `atan`, `atan2`, `exp`, `log`, `sqrt`.
+5. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
+6. Expand the heavy comparison API so parity beyond preview metadata is easier to run and inspect.

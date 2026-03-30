@@ -699,6 +699,46 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertEqual(source_family, expected_family)
                 self.assertGreater(python_parity_sec, 0.0)
 
+    def test_matlabv2native_runtime_native_supports_symbolic_nonlinear_expressions(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "saturation_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = min(max(2*sin(t), -0.5), 0.75);",
+                "Saturation",
+            ),
+            (
+                "dead_zone_symbolic",
+                "syms x(t) u(t)",
+                "u(t) = piecewise(abs(t) < 1/2, 0, 1/2 < t, t - 1/2, t + 1/2);",
+                "DeadZone",
+            ),
+        ]
+
+        for case_name, symbolic_setup, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval(symbolic_setup, nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u(t);", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+
     def _run_input_validation_case(
         self,
         *,

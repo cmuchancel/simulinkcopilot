@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **phase-8 symbolic-recognition checkpoint**:
+`matlabv2native` currently exists as a **phase-9 symbolic-nonlinear-runtime checkpoint**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -26,6 +26,9 @@ This document describes the additive native MATLAB backend effort that sits besi
   - ramp
   - sine
   - square
+- it now recognizes and lowers direct MATLAB symbolic nonlinear input expressions for:
+  - saturation
+  - dead zone
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -80,12 +83,16 @@ These behaviors are implemented on the MATLAB side today:
   - square
   - sawtooth via expression/input spec
   - triangle via expression/input spec
+  - saturation
+  - dead zone
   - unsupported symbolic input expression lowered to a MATLAB Function source block
 - direct symbolic-expression recognition for:
   - pulse
   - ramp
   - sine
   - square
+  - saturation
+  - dead zone
 - runtime/performance timing capture for:
   - preview analysis
   - native model build
@@ -120,7 +127,8 @@ These behaviors still use the existing Python backend, either as the primary exe
 - broader normalization beyond the current explicit-ODE native preview boundary
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
 - Python parity for `sawtooth` / `triangle` expression-input paths, which is still pending because the current Python oracle model fails during model initialization for those cases
-- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/sawtooth/triangle/fallback set
+- Python parity for `saturation` / `dead_zone`, which is not yet claimed in this checkpoint even though the MATLAB-symbolic runtime path is native and MATLAB-reference validated
+- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/sawtooth/triangle/saturation/dead-zone/fallback set
 - input families not yet evaluated natively in the MATLAB numerical oracle beyond that same set
 - broader lowering/validation coverage beyond the current anchor matrix
 

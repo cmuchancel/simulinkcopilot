@@ -293,6 +293,10 @@ switch nativeKind
             "Position", position);
         signalPort = [inputName '/1'];
         family = "Constant";
+    case "Clock"
+        [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
+        signalPort = clockSignal;
+        family = "Clock";
     case "Step"
         add_block("simulink/Sources/Step", [modelName '/' inputName], ...
             "Time", localNumericString(payload.step_time), ...
@@ -333,6 +337,22 @@ switch nativeKind
         [signalPort, family] = localAddSquareWaveSource(modelName, inputName, position, payload);
     case "RepeatingSequence"
         [signalPort, family] = localAddRepeatingSequenceSource(modelName, inputName, position, payload);
+    case "Saturation"
+        [signalPort, family, clockBlockName, clockSignal] = localAddUnaryNativeInputSource( ...
+            modelName, inputName, position, payload, ...
+            "simulink/Discontinuities/Saturation", "Saturation", ...
+            struct( ...
+                "LowerLimit", localNumericString(payload.lower_limit), ...
+                "UpperLimit", localNumericString(payload.upper_limit)), ...
+            signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+    case "DeadZone"
+        [signalPort, family, clockBlockName, clockSignal] = localAddUnaryNativeInputSource( ...
+            modelName, inputName, position, payload, ...
+            "simulink/Discontinuities/Dead Zone", "DeadZone", ...
+            struct( ...
+                "LowerValue", localNumericString(payload.lower_limit), ...
+                "UpperValue", localNumericString(payload.upper_limit)), ...
+            signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
     otherwise
         [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
         add_block("simulink/User-Defined Functions/MATLAB Function", [modelName '/' inputName], ...
@@ -362,6 +382,10 @@ switch lower(specKind)
     case "constant"
         kind = "Constant";
         payload = struct("value", double(localScalar(spec, "value", 0)));
+        return;
+    case "time"
+        kind = "Clock";
+        payload = struct();
         return;
     case "step"
         bias = double(localScalar(spec, "bias", localScalar(spec, "initial_value", 0)));
@@ -426,8 +450,29 @@ switch lower(specKind)
             "width", double(localScalar(spec, "width", widthDefault)) ...
         );
         return;
+    case "saturation"
+        kind = "Saturation";
+        payload = struct( ...
+            "input_spec", localScalar(spec, "input", struct("kind", "time")), ...
+            "lower_limit", double(localScalar(spec, "lower_limit", -1)), ...
+            "upper_limit", double(localScalar(spec, "upper_limit", 1)) ...
+        );
+        return;
+    case "dead_zone"
+        kind = "DeadZone";
+        payload = struct( ...
+            "input_spec", localScalar(spec, "input", struct("kind", "time")), ...
+            "lower_limit", double(localScalar(spec, "lower_limit", -1)), ...
+            "upper_limit", double(localScalar(spec, "upper_limit", 1)) ...
+        );
+        return;
     case "expression"
         expression = char(string(localScalar(spec, "expression", "")));
+        recognizedSpec = simucopilot.internal.recognizeExpressionInputSpec(expression, timeVariable);
+        if ~isempty(recognizedSpec)
+            [kind, payload] = localClassifyInputSpec(recognizedSpec, inputName, timeVariable, modelConfig);
+            return;
+        end
         [isStep, stepPayload] = localExpressionIsStep(expression, timeVariable);
         if isStep
             kind = "Step";
@@ -549,6 +594,27 @@ add_block("simulink/Continuous/Transport Delay", [modelName '/' delayName], ...
 add_line(modelName, [sourceName '/1'], [delayName '/1'], "autorouting", "on");
 signalPort = [delayName '/1'];
 family = "RepeatingSequence";
+end
+
+function [signalPort, family, clockBlockName, clockSignal] = localAddUnaryNativeInputSource( ...
+    modelName, inputName, position, payload, blockPath, familyName, params, ...
+    signalSources, parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal)
+
+innerInputName = [inputName '_src'];
+innerSpecs = struct();
+innerSpecs.(innerInputName) = payload.input_spec;
+innerPosition = position + [-140 0 -140 0];
+[innerPort, ~, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, innerInputName, innerPosition, struct(), innerSpecs, signalSources, ...
+    parameterNames, stateNames, timeVariable, modelConfig, clockBlockName, clockSignal);
+
+paramPairs = localStructNameValuePairs(params);
+add_block(blockPath, [modelName '/' inputName], ...
+    paramPairs{:}, ...
+    "Position", position);
+add_line(modelName, innerPort, [inputName '/1'], "autorouting", "on");
+signalPort = [inputName '/1'];
+family = familyName;
 end
 
 function [isStep, payload] = localExpressionIsStep(expression, timeVariable)
@@ -983,6 +1049,8 @@ kind = lower(char(string(localScalar(spec, "kind", "expression"))));
 switch kind
     case "constant"
         expression = sym(double(localScalar(spec, "value", 0)));
+    case "time"
+        expression = timeSymbol;
     case "step"
         before = double(localScalar(spec, "bias", localScalar(spec, "initial_value", 0)));
         amplitude = double(localScalar(spec, "amplitude", localScalar(spec, "final_value", 1) - before));
@@ -1024,8 +1092,32 @@ switch kind
         end
         wave = localSawtoothSymbolicWave(timeSymbol, frequency, phase, width);
         expression = sym(bias) + sym(amplitude) * wave;
+    case "saturation"
+        innerName = [inputName '_inner'];
+        innerSpecs = struct();
+        innerSpecs.(innerName) = localScalar(spec, "input", struct("kind", "time"));
+        innerExpression = localInputExpression(innerName, struct(), innerSpecs, timeSymbol);
+        lowerLimit = double(localScalar(spec, "lower_limit", -1));
+        upperLimit = double(localScalar(spec, "upper_limit", 1));
+        expression = min(max(innerExpression, sym(lowerLimit)), sym(upperLimit));
+    case "dead_zone"
+        innerName = [inputName '_inner'];
+        innerSpecs = struct();
+        innerSpecs.(innerName) = localScalar(spec, "input", struct("kind", "time"));
+        innerExpression = localInputExpression(innerName, struct(), innerSpecs, timeSymbol);
+        lowerLimit = double(localScalar(spec, "lower_limit", -1));
+        upperLimit = double(localScalar(spec, "upper_limit", 1));
+        expression = max(innerExpression - sym(upperLimit), sym(0)) + ...
+            min(innerExpression - sym(lowerLimit), sym(0));
     case "expression"
         expressionText = char(string(localScalar(spec, "expression", "0")));
+        recognizedSpec = simucopilot.internal.recognizeExpressionInputSpec(expressionText, char(string(timeSymbol)));
+        if ~isempty(recognizedSpec)
+            innerSpecs = struct();
+            innerSpecs.(inputName) = recognizedSpec;
+            expression = localInputExpression(inputName, struct(), innerSpecs, timeSymbol);
+            return;
+        end
         [isStep, stepPayload] = localExpressionIsStep(expressionText, char(string(timeSymbol)));
         if isStep
             before = double(stepPayload.before);
@@ -1678,6 +1770,15 @@ if isstruct(container) && isfield(container, fieldName) && isstruct(container.(f
     value = container.(fieldName);
 else
     value = struct();
+end
+end
+
+function pairs = localStructNameValuePairs(values)
+fields = fieldnames(values);
+pairs = cell(1, numel(fields) * 2);
+for index = 1:numel(fields)
+    pairs{(index - 1) * 2 + 1} = fields{index};
+    pairs{(index - 1) * 2 + 2} = values.(fields{index});
 end
 end
 

@@ -11,6 +11,11 @@ end
 timeToken = regexptranslate("escape", timeValue);
 numberToken = localNumberPattern();
 
+spec = localRecognizeTime(expr, timeValue);
+if ~isempty(spec)
+    return;
+end
+
 if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
     spec = struct("kind", "step", "step_time", 0, "bias", 0, "amplitude", 1);
     return;
@@ -67,6 +72,23 @@ if ~isempty(spec)
 end
 
 spec = localRecognizeRepeatingSequence(expr, timeToken, numberToken);
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeSaturation(expr, timeValue, numberToken);
+if ~isempty(spec)
+    return;
+end
+
+spec = localRecognizeDeadZone(expr, timeValue, numberToken);
+end
+
+function spec = localRecognizeTime(expr, timeValue)
+spec = [];
+if strcmp(localStripOuterParens(expr), timeValue)
+    spec = struct("kind", "time");
+end
 end
 
 function spec = localRecognizeRamp(expr, timeToken, numberToken)
@@ -113,10 +135,10 @@ end
 function spec = localRecognizeSineLike(expr, timeToken, numberToken)
 spec = [];
 patterns = { ...
-    ['^(?:(?<amp>' numberToken ')\*)?(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\((?<num>' numberToken ')\*(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\((?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'] ...
+    ['^(?:(?<amp>' numberToken ')\*)?(?<fn>sin|cos)\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<fn>sin|cos)\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\((?<num>' numberToken ')\*(?<fn>sin|cos)\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\((?<fn>sin|cos)\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'] ...
 };
 
 match = [];
@@ -143,6 +165,10 @@ end
 phase = 0.0;
 if isfield(match, "phase") && ~isempty(match.phase)
     phase = localNumericTokenToDouble(match.phase);
+end
+frequency = 1.0;
+if isfield(match, "freq") && ~isempty(match.freq)
+    frequency = localNumericTokenToDouble(match.freq);
 end
 if strcmp(match.fn, "cos")
     phase = phase + pi / 2.0;
@@ -155,7 +181,7 @@ end
 spec = struct( ...
     "kind", "sine", ...
     "amplitude", amplitude, ...
-    "frequency", localNumericTokenToDouble(match.freq), ...
+    "frequency", frequency, ...
     "phase", phase, ...
     "bias", bias);
 end
@@ -163,10 +189,10 @@ end
 function spec = localRecognizeSquare(expr, timeToken, numberToken)
 spec = [];
 patterns = { ...
-    ['^(?:(?<amp>' numberToken ')\*)?sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\((?<num>' numberToken ')\*sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\(sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'] ...
+    ['^(?:(?<amp>' numberToken ')\*)?sign\(sin\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^sign\(sin\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\((?<num>' numberToken ')\*sign\(sin\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\(sign\(sin\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'] ...
 };
 
 match = [];
@@ -193,6 +219,10 @@ end
 phase = 0.0;
 if isfield(match, "phase") && ~isempty(match.phase)
     phase = localNumericTokenToDouble(match.phase);
+end
+frequency = 1.0;
+if isfield(match, "freq") && ~isempty(match.freq)
+    frequency = localNumericTokenToDouble(match.freq);
 end
 bias = 0.0;
 if isfield(match, "bias") && ~isempty(match.bias)
@@ -202,7 +232,7 @@ end
 spec = struct( ...
     "kind", "square", ...
     "amplitude", amplitude, ...
-    "frequency", localNumericTokenToDouble(match.freq), ...
+    "frequency", frequency, ...
     "phase", phase, ...
     "bias", bias);
 end
@@ -210,16 +240,16 @@ end
 function spec = localRecognizeRepeatingSequence(expr, timeToken, numberToken)
 spec = [];
 patterns = { ...
-    ['^(?<amp>' numberToken ')\*sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\((?<num>' numberToken ')\*sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\(sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^(?<amp>' numberToken ')\*sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\((?<num>' numberToken ')\*sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^\(sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
-    ['^sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)(?<bias>[+-]' numberToken ')?$'], ...
-    ['^sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
+    ['^(?<amp>' numberToken ')\*sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\((?<num>' numberToken ')\*sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\(sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^(?<amp>' numberToken ')\*sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\*(?<amp>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\((?<num>' numberToken ')\*sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^\(sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)\*(?<num>' numberToken ')\)/(?<den>' numberToken ')(?<bias>[+-]' numberToken ')?$'], ...
+    ['^sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?,(?<width>' numberToken ')\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^sawtooth\((?:(?<freq>' numberToken ')\*)?' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
 };
 
 match = [];
@@ -246,6 +276,10 @@ end
 phase = 0.0;
 if isfield(match, "phase") && ~isempty(match.phase)
     phase = localNumericTokenToDouble(match.phase);
+end
+frequency = 1.0;
+if isfield(match, "freq") && ~isempty(match.freq)
+    frequency = localNumericTokenToDouble(match.freq);
 end
 width = 1.0;
 if isfield(match, "width") && ~isempty(match.width)
@@ -264,10 +298,338 @@ end
 spec = struct( ...
     "kind", kind, ...
     "amplitude", amplitude, ...
-    "frequency", localNumericTokenToDouble(match.freq), ...
+    "frequency", frequency, ...
     "phase", phase, ...
     "bias", bias, ...
     "width", width);
+end
+
+function spec = localRecognizeSaturation(expr, timeValue, numberToken)
+spec = [];
+
+[innerExpr, lowerToken, upperToken] = localRecognizeSaturationTokens(expr, numberToken);
+if isempty(innerExpr)
+    return;
+end
+innerExpr = localStripOuterParens(innerExpr);
+if strcmp(innerExpr, localStripOuterParens(expr))
+    return;
+end
+
+innerSpec = simucopilot.internal.recognizeExpressionInputSpec(innerExpr, timeValue);
+if isempty(innerSpec)
+    return;
+end
+
+spec = struct( ...
+    "kind", "saturation", ...
+    "input", innerSpec, ...
+    "lower_limit", localNumericTokenToDouble(lowerToken), ...
+    "upper_limit", localNumericTokenToDouble(upperToken));
+end
+
+function [innerExpr, lowerToken, upperToken] = localRecognizeSaturationTokens(expr, numberToken)
+innerExpr = "";
+lowerToken = "";
+upperToken = "";
+
+cleanPatterns = { ...
+    ['^min\(max\((?<inner>.+),(?<lower>' numberToken ')\),(?<upper>' numberToken ')\)$'], ...
+    ['^min\((?<upper>' numberToken '),max\((?<inner>.+),(?<lower>' numberToken ')\)\)$'], ...
+    ['^max\(min\((?<inner>.+),(?<upper>' numberToken ')\),(?<lower>' numberToken ')\)$'], ...
+    ['^max\((?<lower>' numberToken '),min\((?<inner>.+),(?<upper>' numberToken ')\)\)$'] ...
+};
+
+for index = 1:numel(cleanPatterns)
+    match = regexp(expr, cleanPatterns{index}, "names");
+    if isempty(match)
+        continue;
+    end
+    innerExpr = localStripOuterParens(match.inner);
+    lowerToken = string(match.lower);
+    upperToken = string(match.upper);
+    return;
+end
+
+outerArgs = localParseFunctionArgs(expr, "min");
+if isempty(outerArgs)
+    return;
+end
+outerVector = strtrim(outerArgs{1});
+if strlength(string(outerVector)) < 2 || outerVector(1) ~= '[' || outerVector(end) ~= ']'
+    return;
+end
+outerItems = localSplitTopLevel(outerVector(2:end-1));
+if numel(outerItems) ~= 2
+    return;
+end
+upperCandidate = outerItems{1};
+innerMaxExpr = outerItems{2};
+if isempty(regexp(upperCandidate, ['^' numberToken '$'], "once"))
+    return;
+end
+
+innerArgs = localParseFunctionArgs(innerMaxExpr, "max");
+if isempty(innerArgs)
+    return;
+end
+innerVector = strtrim(innerArgs{1});
+if strlength(string(innerVector)) < 2 || innerVector(1) ~= '[' || innerVector(end) ~= ']'
+    return;
+end
+innerItems = localSplitTopLevel(innerVector(2:end-1));
+if numel(innerItems) ~= 2
+    return;
+end
+lowerCandidate = innerItems{1};
+if isempty(regexp(lowerCandidate, ['^' numberToken '$'], "once"))
+    return;
+end
+
+innerExpr = localStripOuterParens(innerItems{2});
+lowerToken = string(lowerCandidate);
+upperToken = string(upperCandidate);
+end
+
+function spec = localRecognizeDeadZone(expr, timeValue, numberToken)
+spec = [];
+
+[innerExpr, lowerValue, upperValue] = localRecognizeDeadZoneTokens(expr, numberToken);
+if isempty(innerExpr)
+    return;
+end
+innerExpr = localStripOuterParens(innerExpr);
+if strcmp(innerExpr, localStripOuterParens(expr))
+    return;
+end
+
+innerSpec = simucopilot.internal.recognizeExpressionInputSpec(innerExpr, timeValue);
+if isempty(innerSpec)
+    return;
+end
+
+spec = struct( ...
+    "kind", "dead_zone", ...
+    "input", innerSpec, ...
+    "lower_limit", lowerValue, ...
+    "upper_limit", upperValue);
+end
+
+function [innerExpr, lowerValue, upperValue] = localRecognizeDeadZoneTokens(expr, numberToken)
+innerExpr = "";
+lowerValue = [];
+upperValue = [];
+
+args = localParseFunctionArgs(expr, "piecewise");
+if isempty(args)
+    return;
+end
+
+if numel(args) == 3
+    [cond1, value1, ok1] = localParsePiecewiseTuple(args{1});
+    [cond2, value2, ok2] = localParsePiecewiseTuple(args{2});
+    [cond3, value3, ok3] = localParsePiecewiseTuple(args{3});
+    if ~(ok1 && ok2 && ok3)
+        return;
+    end
+    [innerExpr, lowerValue, upperValue] = localMatchDeadZoneBranches(cond1, value1, cond2, value2, cond3, value3, numberToken);
+    return;
+end
+
+if numel(args) == 5
+    [innerExpr, lowerValue, upperValue] = localMatchDeadZoneBranches(args{1}, args{2}, args{3}, args{4}, "symtrue", args{5}, numberToken);
+    return;
+end
+
+if numel(args) == 6
+    [innerExpr, lowerValue, upperValue] = localMatchDeadZoneBranches(args{1}, args{2}, args{3}, args{4}, args{5}, args{6}, numberToken);
+end
+end
+
+function [condText, valueText, ok] = localParsePiecewiseTuple(tupleExpr)
+ok = false;
+condText = "";
+valueText = "";
+inner = localStripOuterParens(tupleExpr);
+parts = localSplitTopLevel(inner);
+if numel(parts) ~= 2
+    return;
+end
+valueText = parts{1};
+condText = parts{2};
+ok = true;
+end
+
+function [innerExpr, lowerValue, upperValue] = localMatchDeadZoneBranches(cond1, value1, cond2, value2, cond3, value3, numberToken)
+innerExpr = "";
+lowerValue = [];
+upperValue = [];
+
+zeroValue = str2double(value1);
+if ~(~isnan(zeroValue) && abs(zeroValue) <= 1e-12)
+    return;
+end
+
+[innerFromAbs, widthToken] = localMatchAbsLess(cond1, numberToken);
+if isempty(innerFromAbs)
+    return;
+end
+
+[innerFromUpper, upperToken] = localMatchGreaterThan(cond2, numberToken);
+if isempty(innerFromUpper) || ~strcmp(innerFromUpper, innerFromAbs)
+    return;
+end
+
+[innerFromPositive, positiveToken] = localMatchSubtractConstant(value2, numberToken);
+if isempty(innerFromPositive) || ~strcmp(innerFromPositive, innerFromAbs)
+    return;
+end
+
+if ~strcmpi(cond3, "symtrue") && ~strcmpi(cond3, "true")
+    return;
+end
+
+[innerFromNegative, negativeToken] = localMatchAddConstant(value3, numberToken);
+if isempty(innerFromNegative) || ~strcmp(innerFromNegative, innerFromAbs)
+    return;
+end
+
+widthValue = localNumericTokenToDouble(widthToken);
+upperValueCandidate = localNumericTokenToDouble(upperToken);
+positiveValue = localNumericTokenToDouble(positiveToken);
+negativeValue = localNumericTokenToDouble(negativeToken);
+
+if abs(widthValue - upperValueCandidate) > 1e-12 || ...
+        abs(widthValue - positiveValue) > 1e-12 || ...
+        abs(widthValue - negativeValue) > 1e-12
+    return;
+end
+
+innerExpr = localStripOuterParens(innerFromAbs);
+lowerValue = -widthValue;
+upperValue = widthValue;
+end
+
+function [innerExpr, limitToken] = localMatchAbsLess(condExpr, numberToken)
+innerExpr = "";
+limitToken = "";
+patterns = { ...
+    ['^abs\((?<inner>.+)\)<(?<limit>' numberToken ')$'], ...
+    ['^(?<limit>' numberToken ')>abs\((?<inner>.+)\)$'] ...
+};
+for index = 1:numel(patterns)
+    match = regexp(condExpr, patterns{index}, "names");
+    if isempty(match)
+        continue;
+    end
+    innerExpr = localStripOuterParens(match.inner);
+    limitToken = string(match.limit);
+    return;
+end
+end
+
+function [innerExpr, limitToken] = localMatchGreaterThan(expr, numberToken)
+innerExpr = "";
+limitToken = "";
+patterns = { ...
+    ['^(?<inner>.+)>(?<limit>' numberToken ')$'], ...
+    ['^(?<limit>' numberToken ')<(?<inner>.+)$'] ...
+};
+for index = 1:numel(patterns)
+    match = regexp(expr, patterns{index}, "names");
+    if isempty(match)
+        continue;
+    end
+    innerExpr = localStripOuterParens(match.inner);
+    limitToken = string(match.limit);
+    return;
+end
+end
+
+function [innerExpr, limitToken] = localMatchSubtractConstant(expr, numberToken)
+innerExpr = "";
+limitToken = "";
+match = regexp(expr, ['^(?<inner>.+)-(?<limit>' numberToken ')$'], "names");
+if isempty(match)
+    return;
+end
+innerExpr = localStripOuterParens(match.inner);
+limitToken = string(match.limit);
+end
+
+function [innerExpr, limitToken] = localMatchAddConstant(expr, numberToken)
+innerExpr = "";
+limitToken = "";
+match = regexp(expr, ['^(?<inner>.+)\+(?<limit>' numberToken ')$'], "names");
+if isempty(match)
+    return;
+end
+innerExpr = localStripOuterParens(match.inner);
+limitToken = string(match.limit);
+end
+
+function args = localParseFunctionArgs(expr, functionName)
+args = {};
+prefix = functionName + "(";
+if ~startsWith(string(expr), prefix) || ~endsWith(string(expr), ")")
+    return;
+end
+inner = extractBetween(string(expr), strlength(prefix) + 1, strlength(string(expr)) - 1);
+if isempty(inner)
+    return;
+end
+args = localSplitTopLevel(char(inner));
+end
+
+function parts = localSplitTopLevel(expr)
+parts = {};
+depthParen = 0;
+depthBracket = 0;
+tokenStart = 1;
+expr = char(string(expr));
+for index = 1:strlength(string(expr))
+    ch = expr(index);
+    switch ch
+        case '('
+            depthParen = depthParen + 1;
+        case ')'
+            depthParen = depthParen - 1;
+        case '['
+            depthBracket = depthBracket + 1;
+        case ']'
+            depthBracket = depthBracket - 1;
+        case ','
+            if depthParen == 0 && depthBracket == 0
+                parts{end + 1} = expr(tokenStart:index-1); %#ok<AGROW>
+                tokenStart = index + 1;
+            end
+    end
+end
+parts{end + 1} = expr(tokenStart:end);
+parts = cellfun(@(item) localStripOuterParens(strtrim(item)), parts, "UniformOutput", false);
+end
+
+function value = localStripOuterParens(expr)
+value = strtrim(char(string(expr)));
+while strlength(string(value)) >= 2 && value(1) == '(' && value(end) == ')'
+    depth = 0;
+    balanced = true;
+    for index = 1:numel(value)
+        if value(index) == '('
+            depth = depth + 1;
+        elseif value(index) == ')'
+            depth = depth - 1;
+            if depth == 0 && index < numel(value)
+                balanced = false;
+                break;
+            end
+        end
+    end
+    if ~balanced || depth ~= 0
+        break;
+    end
+    value = strtrim(value(2:end-1));
+end
 end
 
 function pattern = localNumberPattern()
