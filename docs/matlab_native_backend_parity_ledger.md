@@ -64,6 +64,7 @@ The goal is to keep claims explicit:
 ## Important Notes
 
 - `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
+- For simple affine explicit-ODE RHS expressions, the native builder now uses `Sum` / `Gain` composition instead of dropping straight to a `MATLAB Function` block.
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
 - `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not yet claimed as broad direct-symbolic families because MATLAB does not reliably preserve raw `sawtooth(sym)` forms as symbolic expressions.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.

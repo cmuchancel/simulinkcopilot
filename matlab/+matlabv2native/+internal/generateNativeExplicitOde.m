@@ -221,6 +221,19 @@ for index = 1:numel(stateEquations)
         add_line(modelName, [constName '/1'], targetPort, "autorouting", "on");
         continue;
     end
+    nativeRhsPort = localNativeAffineRhsPort( ...
+        modelName, ...
+        stateName, ...
+        rhsText, ...
+        positions.rhs(index, :), ...
+        signalSources, ...
+        stateNames, ...
+        inputNames, ...
+        parameterNames);
+    if ~isempty(nativeRhsPort)
+        add_line(modelName, nativeRhsPort, targetPort, "autorouting", "on");
+        continue;
+    end
 
     blockName = ['rhs_' localSanitize(stateName)];
     blockPath = [modelName '/' blockName];
@@ -957,6 +970,149 @@ if isfield(signalSources, dependency)
 end
 error("matlabv2native:MissingSignalDependency", ...
     "Missing signal dependency '%s' while wiring the native explicit-ODE model.", dependency);
+end
+
+function signalPort = localNativeAffineRhsPort( ...
+    modelName, stateName, rhsText, position, signalSources, stateNames, inputNames, parameterNames)
+[isAffine, affine] = localAffineSignalExpression(rhsText, stateNames, inputNames, parameterNames);
+if ~isAffine
+    signalPort = '';
+    return;
+end
+
+mainName = ['rhs_' localSanitize(stateName)];
+terms = affine.terms;
+constantValue = affine.constant;
+termPorts = cell(1, 0);
+
+if abs(constantValue) <= 1e-12 && numel(terms) == 1 && abs(terms(1).coefficient - 1.0) > 1e-12
+    add_block("simulink/Math Operations/Gain", [modelName '/' mainName], ...
+        "Gain", localNumericString(terms(1).coefficient), ...
+        "Position", position);
+    add_line(modelName, signalSources.(terms(1).name), [mainName '/1'], "autorouting", "on");
+    signalPort = [mainName '/1'];
+    return;
+end
+
+for index = 1:numel(terms)
+    sourcePort = signalSources.(terms(index).name);
+    if abs(terms(index).coefficient - 1.0) <= 1e-12
+        termPorts{end + 1} = sourcePort; %#ok<AGROW>
+        continue;
+    end
+
+    gainName = sprintf('%s_gain_%s', mainName, localSanitize(terms(index).name));
+    add_block("simulink/Math Operations/Gain", [modelName '/' gainName], ...
+        "Gain", localNumericString(terms(index).coefficient), ...
+        "Position", localAffineAuxPosition(position, index - 1));
+    add_line(modelName, sourcePort, [gainName '/1'], "autorouting", "on");
+    termPorts{end + 1} = [gainName '/1']; %#ok<AGROW>
+end
+
+if abs(constantValue) > 1e-12
+    constName = [mainName '_const'];
+    add_block("simulink/Sources/Constant", [modelName '/' constName], ...
+        "Value", localNumericString(constantValue), ...
+        "Position", localAffineAuxPosition(position, numel(termPorts)));
+    termPorts{end + 1} = [constName '/1']; %#ok<AGROW>
+end
+
+if isempty(termPorts)
+    signalPort = '';
+    return;
+end
+
+if numel(termPorts) == 1
+    signalPort = termPorts{1};
+    return;
+end
+
+add_block("simulink/Math Operations/Sum", [modelName '/' mainName], ...
+    "Inputs", repmat('+', 1, numel(termPorts)), ...
+    "Position", position);
+for index = 1:numel(termPorts)
+    add_line(modelName, termPorts{index}, [mainName '/' num2str(index)], "autorouting", "on");
+end
+signalPort = [mainName '/1'];
+end
+
+function [isAffine, affine] = localAffineSignalExpression(rhsText, stateNames, inputNames, parameterNames)
+signalNames = [reshape(stateNames, 1, []), reshape(inputNames, 1, []), reshape(parameterNames, 1, [])];
+rhsExpression = str2sym(rhsText);
+constantExpression = rhsExpression;
+for index = 1:numel(signalNames)
+    constantExpression = subs(constantExpression, sym(signalNames{index}), 0);
+end
+
+if ~isempty(symvar(constantExpression))
+    isAffine = false;
+    affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+    return;
+end
+
+try
+    constantValue = double(constantExpression);
+catch
+    isAffine = false;
+    affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+    return;
+end
+
+residual = simplify(rhsExpression - constantExpression);
+terms = struct("name", {}, "coefficient", {});
+for index = 1:numel(signalNames)
+    signalName = signalNames{index};
+    coefficientExpression = simplify(diff(residual, sym(signalName)));
+    if ~isempty(symvar(coefficientExpression))
+        isAffine = false;
+        affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+        return;
+    end
+
+    try
+        coefficientValue = double(coefficientExpression);
+    catch
+        isAffine = false;
+        affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+        return;
+    end
+
+    if abs(coefficientValue) > 1e-12
+        terms(end + 1) = struct("name", signalName, "coefficient", coefficientValue); %#ok<AGROW>
+    end
+    residual = simplify(residual - coefficientExpression * sym(signalName));
+end
+
+if ~isempty(symvar(residual))
+    isAffine = false;
+    affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+    return;
+end
+
+try
+    residualValue = double(residual);
+catch
+    isAffine = false;
+    affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+    return;
+end
+
+if abs(residualValue) > 1e-12
+    isAffine = false;
+    affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+    return;
+end
+
+isAffine = true;
+affine = struct("constant", constantValue, "terms", terms);
+end
+
+function position = localAffineAuxPosition(rhsPosition, offsetIndex)
+x1 = rhsPosition(1) - 130;
+x2 = rhsPosition(1) - 50;
+y1 = rhsPosition(2) + 8 + 28 * offsetIndex;
+y2 = y1 + 22;
+position = [x1 y1 x2 y2];
 end
 
 function reference = localBuildMatlabReferenceSimulation(preview, opts, stateNames, modelConfig)

@@ -447,15 +447,24 @@ class BackendIntegrationTests(unittest.TestCase):
                     f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
                     nargout=0,
                 )
+                self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
 
                 backend_kind = self.eng.eval("out.BackendKind", nargout=1)
                 validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
                 source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
                 python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x'], 'BlockType')", nargout=1)
+                has_rhs_matlab_function = self.eng.eval(
+                    "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x']))",
+                    nargout=1,
+                )
+                self.eng.eval("bdclose(out.ModelName);", nargout=0)
                 self.assertEqual(backend_kind, "native_runtime_only")
                 self.assertTrue(validation_passes)
                 self.assertEqual(source_family, expected_family)
                 self.assertEqual(python_parity_sec, 0.0)
+                self.assertEqual(rhs_block_type, "Sum")
+                self.assertFalse(has_rhs_matlab_function)
 
     def test_matlabv2native_python_parity_mode_supports_square_specs(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")

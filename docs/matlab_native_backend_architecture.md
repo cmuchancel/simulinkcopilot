@@ -86,6 +86,10 @@ These behaviors are implemented on the MATLAB side today:
   - saturation
   - dead zone
   - unsupported symbolic input expression lowered to a MATLAB Function source block
+- native affine RHS lowering for simple explicit-ODE expressions such as:
+  - `-x + u`
+  - `x - 2*y`
+  - simple constant offsets combined with state/input/parameter signals
 - direct symbolic-expression recognition for:
   - pulse
   - ramp
