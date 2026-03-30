@@ -38,6 +38,9 @@ This document describes the additive native MATLAB backend effort that sits besi
   - exp
   - log
   - sqrt
+- it now has committed native-runtime benchmark coverage for larger MATLAB-symbolic nonlinear systems:
+  - coupled cart-pendulum benchmark
+  - planar quadrotor benchmark with biased step thrust input
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -103,6 +106,9 @@ These behaviors are implemented on the MATLAB side today:
   - log
   - sqrt
   - unsupported symbolic input expression lowered to a MATLAB Function source block
+- native runtime benchmark coverage for:
+  - cart-pendulum equations with coupled second-order mechanics
+  - planar quadrotor equations with trigonometric state coupling and biased step/constant thrust inputs
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
   - `x - 2*y`
@@ -122,6 +128,7 @@ These behaviors are implemented on the MATLAB side today:
   - exp
   - log
   - sqrt
+  - biased/scaled `heaviside(...)` step forms such as `1 + heaviside(t)`
 - runtime/performance timing capture for:
   - preview analysis
   - native model build
@@ -161,6 +168,7 @@ These behaviors still use the existing Python backend, either as the primary exe
 - direct symbolic-native support for `cosine` and impulse-style inputs
 - robust direct symbolic-native support for `sawtooth` / `triangle`, which still depends on expression/input-spec forms because MATLAB does not preserve raw symbolic `sawtooth(...)` forms cleanly enough
 - broader lowering/validation coverage beyond the current anchor matrix
+- broader benchmark coverage beyond the current cart-pendulum and planar-quadrotor checkpoints
 
 This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases plus the current widened waveform, nonlinear, and math-family set. It is still not a full native compiler with broad runtime coverage.
 

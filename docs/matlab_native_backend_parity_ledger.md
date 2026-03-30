@@ -13,6 +13,7 @@ The goal is to keep claims explicit:
 
 - branch: `matlab-native-backend-campaign`
 - latest parity-expansion phase after runtime split: symbolic math runtime widening for `atan`, `atan2`, `exp`, `log`, and `sqrt`
+- latest benchmark-stability phase: cart-pendulum and planar-quadrotor MATLAB-symbolic runtime coverage
 
 ## Front Doors
 
@@ -29,7 +30,7 @@ The goal is to keep claims explicit:
 | --- | --- | --- | --- | --- | --- |
 | first-order explicit scalar ODE | Yes | Yes | Yes | Yes | Anchor path is stable |
 | second-order scalar ODE reduced to first order | Yes | Yes | Yes | Yes | Anchor path is stable |
-| coupled explicit ODE system | Yes | Yes | Yes | Yes | Runtime-native and parity-mode integration coverage exist |
+| coupled explicit ODE system | Yes | Yes | Yes | Yes | Runtime-native and parity-mode integration coverage exist; cart-pendulum and planar-quadrotor benchmark regressions now also pass on the MATLAB-symbolic runtime path |
 | parameterized explicit ODE | Yes | Yes | Yes | Yes for current anchor-style cases | Parameters must still be provided numerically |
 | non-explicit / ambiguous systems | Partial / delegated | No | No | Python only | Still delegated |
 | DAE / descriptor-style systems | No meaningful native parity yet | No | No | Python only | Do not overclaim |
@@ -39,7 +40,7 @@ The goal is to keep claims explicit:
 | Family | Runtime-Native | MATLAB Reference | Python Parity | Symbolic Recognition | Struct-Spec Native | Python Required In Hot Path | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | constant | Yes | Yes | Yes | Yes | Yes | No | Stable |
-| step | Yes | Yes | Yes | Yes | Yes | No | Stable |
+| step | Yes | Yes | Yes | Yes | Yes | No | Stable; biased/scaled `heaviside(...)` forms such as `1 + heaviside(t)` now normalize back into native step specs |
 | delayed step | Yes | Yes | Yes | Yes | Yes | No | Stable for current native step path |
 | pulse | Yes | Yes | Yes | Yes | Yes | No | Direct symbolic `heaviside(...)` pulse recognition now lowers natively |
 | ramp | Yes | Yes | Yes | Yes | Yes | No | Direct symbolic ramp recognition now lowers natively |
@@ -66,6 +67,7 @@ The goal is to keep claims explicit:
 - `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `sign`, `abs`, and two-input `min/max` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `atan`, `atan2`, `exp`, `log`, and `sqrt` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
+- Larger MATLAB-symbolic nonlinear benchmarks now have committed runtime coverage: a coupled cart-pendulum and a planar quadrotor with biased step thrust input.
 - For simple affine explicit-ODE RHS expressions, the native builder now uses `Sum` / `Gain` composition instead of dropping straight to a `MATLAB Function` block.
 - MATLAB symbolic canonical forms such as `max([1/5, sin(t)], [], 2, ...)` and `min([1/5, sin(t)], [], 2, ...)` are now normalized back into native `MinMax` input specs.
 - MATLAB symbolic canonical forms such as `angle(t*(1 + 1i) + 1)` and `(t + 1)^(1/2)` are now normalized back into native `atan2` and `sqrt` input specs.
@@ -80,6 +82,6 @@ The goal is to keep claims explicit:
 
 1. Finish or explicitly bound direct symbolic-native support for repeating-sequence families: `sawtooth`, `triangle`.
 2. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
-3. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
-4. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks.
-5. Expand the heavy comparison API so parity beyond preview metadata is easier to run and inspect.
+3. Expand benchmark coverage beyond the current cart-pendulum and planar-quadrotor checkpoints.
+4. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
+5. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks.

@@ -190,7 +190,7 @@ for index = 1:numel(raw)
     end
     values{end + 1} = char(string(item)); %#ok<AGROW>
 end
-values = unique(values);
+	values = unique(values, "stable");
 end
 
 function role = localRoleFromWorkspaceValue(value, timeVariable)

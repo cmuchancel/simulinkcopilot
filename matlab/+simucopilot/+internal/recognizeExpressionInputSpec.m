@@ -21,6 +21,11 @@ if ~isempty(spec)
     return;
 end
 
+spec = localRecognizeAffineStep(expr, timeToken, numberToken);
+if ~isempty(spec)
+    return;
+end
+
 if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
     spec = struct("kind", "step", "step_time", 0, "bias", 0, "amplitude", 1);
     return;
@@ -146,6 +151,46 @@ spec = [];
 if ~isempty(regexp(expr, ['^' numberToken '$'], "once"))
     spec = struct("kind", "constant", "value", localNumericTokenToDouble(expr));
 end
+end
+
+function spec = localRecognizeAffineStep(expr, timeToken, numberToken)
+spec = [];
+patterns = { ...
+    ['^(?<amp>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
+};
+
+match = [];
+for index = 1:numel(patterns)
+    current = regexp(expr, patterns{index}, "names");
+    if isempty(current)
+        continue;
+    end
+    match = current;
+    break;
+end
+
+if isempty(match)
+    return;
+end
+
+amplitude = 1.0;
+if isfield(match, "amp") && ~isempty(match.amp)
+    amplitude = localNumericTokenToDouble(match.amp);
+end
+
+stepTime = 0.0;
+if isfield(match, "offset") && ~isempty(match.offset)
+    offset = localNumericTokenToDouble(match.offset);
+    stepTime = -offset;
+end
+
+bias = 0.0;
+if isfield(match, "bias") && ~isempty(match.bias)
+    bias = localNumericTokenToDouble(match.bias);
+end
+
+spec = struct("kind", "step", "step_time", stepTime, "bias", bias, "amplitude", amplitude);
 end
 
 function spec = localRecognizeRamp(expr, timeToken, numberToken)

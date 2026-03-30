@@ -795,23 +795,30 @@ expr = regexprep(char(string(expression)), "\s+", "");
 timeToken = regexptranslate("escape", char(string(timeVariable)));
 numberToken = localNumberPattern();
 
-if ~isempty(regexp(expr, ['^heaviside\(' timeToken '\)$'], "once"))
-    isStep = true;
-    payload = struct("step_time", 0, "before", 0, "after", 1);
-    return;
-end
+patterns = { ...
+    ['^(?<amp>' numberToken ')\*heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'], ...
+    ['^heaviside\(' timeToken '(?<offset>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'] ...
+};
 
-match = regexp(expr, ['^heaviside\(' timeToken '\-(?<delay>' numberToken ')\)$'], "names");
-if ~isempty(match)
+for index = 1:numel(patterns)
+    match = regexp(expr, patterns{index}, "names");
+    if isempty(match)
+        continue;
+    end
+    amplitude = 1.0;
+    if isfield(match, "amp") && ~isempty(match.amp)
+        amplitude = localNumericTokenToDouble(match.amp);
+    end
+    stepTime = 0.0;
+    if isfield(match, "offset") && ~isempty(match.offset)
+        stepTime = -localNumericTokenToDouble(match.offset);
+    end
+    bias = 0.0;
+    if isfield(match, "bias") && ~isempty(match.bias)
+        bias = localNumericTokenToDouble(match.bias);
+    end
     isStep = true;
-    payload = struct("step_time", localNumericTokenToDouble(match.delay), "before", 0, "after", 1);
-    return;
-end
-
-match = regexp(expr, ['^heaviside\(' timeToken '\+(?<delay>' numberToken ')\)$'], "names");
-if ~isempty(match)
-    isStep = true;
-    payload = struct("step_time", -localNumericTokenToDouble(match.delay), "before", 0, "after", 1);
+    payload = struct("step_time", stepTime, "before", bias, "after", bias + amplitude);
     return;
 end
 

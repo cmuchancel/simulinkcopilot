@@ -849,6 +849,71 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(source_block_type, "SubSystem")
                 self.assertFalse(has_source_matlab_function)
 
+    def test_matlabv2native_generate_builds_native_cart_pendulum_benchmark(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns x theta m_1 m_2 l I g k", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) theta(t) m_1 m_2 l I g k", nargout=0)
+        self.eng.eval(
+            "eqns = [(m_1 + m_2)*diff(x,t,2) + (m_2*l/2)*cos(theta)*diff(theta,t,2) - (m_2*l/2)*sin(theta)*diff(theta,t)^2 + k*x == 0; (m_2*l/2)*cos(theta)*diff(x,t,2) + (1/4)*(m_2*l^2 + 4*I)*diff(theta,t,2) + (m_2*g*l/2)*sin(theta) == 0];",
+            nargout=0,
+        )
+        self.eng.eval("m_1 = 10; m_2 = 2; l = 1; I = 0.17; g = 9.81; k = 100;", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x','theta'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_cart_pendulum_benchmark', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x", "x_dot", "theta", "theta_dot"))
+
+    def test_matlabv2native_generate_builds_native_planar_quadrotor_benchmark(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns x z theta u1 u2 m I L g", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) z(t) theta(t) u1(t) u2(t) m I L g", nargout=0)
+        self.eng.eval(
+            "eqns = [m*diff(x,t,2) == -(u1(t)+u2(t))*sin(theta); m*diff(z,t,2) == (u1(t)+u2(t))*cos(theta) - m*g; I*diff(theta,t,2) == L*(u1(t)-u2(t))];",
+            nargout=0,
+        )
+        self.eng.eval("m = 1.2; I = 0.03; L = 0.25; g = 9.81;", nargout=0)
+        self.eng.eval("u1(t) = 1 + heaviside(t);", nargout=0)
+        self.eng.eval("u2(t) = 1;", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x','z','theta'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_planar_quadrotor_benchmark', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        source_family_u1 = self.eng.eval("out.SourceBlockFamilies.u1", nargout=1)
+        source_family_u2 = self.eng.eval("out.SourceBlockFamilies.u2", nargout=1)
+        source_block_u1 = self.eng.eval("get_param([out.ModelName '/u1'], 'BlockType')", nargout=1)
+        has_source_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/u1']))",
+            nargout=1,
+        )
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(source_family_u1, "Step")
+        self.assertEqual(source_family_u2, "Constant")
+        self.assertEqual(source_block_u1, "Step")
+        self.assertFalse(has_source_matlab_function)
+
     def _run_input_validation_case(
         self,
         *,
