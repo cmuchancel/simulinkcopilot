@@ -12,7 +12,7 @@ The goal is to keep claims explicit:
 ## Current Checkpoint
 
 - branch: `matlab-native-backend-campaign`
-- latest parity-expansion phase after runtime split: pulse/ramp/sine promotion plus coupled explicit-system coverage
+- latest parity-expansion phase after runtime split: square promotion plus coupled explicit-system parity coverage
 
 ## Front Doors
 
@@ -29,7 +29,7 @@ The goal is to keep claims explicit:
 | --- | --- | --- | --- | --- | --- |
 | first-order explicit scalar ODE | Yes | Yes | Yes | Yes | Anchor path is stable |
 | second-order scalar ODE reduced to first order | Yes | Yes | Yes | Yes | Anchor path is stable |
-| coupled explicit ODE system | Yes | Yes | Yes | Not yet committed in parity mode | Runtime-native integration coverage exists |
+| coupled explicit ODE system | Yes | Yes | Yes | Yes | Runtime-native and parity-mode integration coverage exist |
 | parameterized explicit ODE | Yes | Yes | Yes | Yes for current anchor-style cases | Parameters must still be provided numerically |
 | non-explicit / ambiguous systems | Partial / delegated | No | No | Python only | Still delegated |
 | DAE / descriptor-style systems | No meaningful native parity yet | No | No | Python only | Do not overclaim |
@@ -41,13 +41,13 @@ The goal is to keep claims explicit:
 | constant | Yes | Yes | Yes | No | Stable |
 | step | Yes | Yes | Yes | No | Stable |
 | delayed step | Yes | Yes | Yes | No | Stable for current native step path |
-| pulse | Yes | Yes | Yes | No | Verified through native input spec struct path |
-| ramp | Yes | Yes | Yes | No | Verified through native input spec struct path |
-| sine | Yes | Yes | Yes | No | Verified through native input spec struct path |
+| pulse | Yes | Yes | Yes | No | Struct-spec native; symbolic-expression parity still narrow |
+| ramp | Yes | Yes | Yes | No | Struct-spec native; symbolic-expression parity still narrow |
+| sine | Yes | Yes | Yes | No | Struct-spec native; symbolic-expression parity still narrow |
 | cosine | No | No | Python only | Yes | Still pending native promotion |
-| square | No | No | Python only | Yes | Pending native promotion |
-| sawtooth | No | No | Python only | Yes | Pending native promotion |
-| triangle | No | No | Python only | Yes | Pending native promotion |
+| square | Yes | Yes | Yes | No | Runtime-native through native input-spec path; symbolic-expression parity not yet claimed broadly |
+| sawtooth | No | No | Python only | Yes | Still pending clean native promotion |
+| triangle | No | No | Python only | Yes | Still pending clean native promotion |
 | saturation | No | No | Python only | Yes | Pending native promotion |
 | dead zone | No | No | Python only | Yes | Pending native promotion |
 | sign | No | No | Python only | Yes | Pending native promotion |
@@ -63,14 +63,14 @@ The goal is to keep claims explicit:
 
 ## Important Notes
 
-- `pulse`, `ramp`, and `sine` are currently verified as runtime-native through the caller-workspace input-spec path, for example `u = struct('kind', 'sine', ...)` after the symbolic equation is formed.
-- Native symbolic-expression recognition for these widened families is not yet broad enough to claim full front-door parity with the Python expression normalizer.
+- `pulse`, `ramp`, and `square` are currently verified as runtime-native through the caller-workspace input-spec path, for example `u = struct('kind', 'square', ...)` after the symbolic equation is formed.
+- Native symbolic-expression recognition for widened waveform families is still not broad enough to claim full front-door parity with the Python expression normalizer.
 - The default runtime path stays lean for runtime-native cases. Python parity remains explicit and heavier.
 - The current comparison surface is strongest for explicit ODEs. DAE / descriptor parity is still Python-only.
 
 ## Next Gaps To Close
 
-1. Promote the next waveform families: `square`, `sawtooth`, `triangle`.
+1. Promote the next waveform families cleanly: `sawtooth`, `triangle`.
 2. Promote nonlinear source families: `saturation`, `dead_zone`, `sign`, `abs`, `min/max`.
 3. Promote unary math families: `atan`, `atan2`, `exp`, `log`, `sqrt`.
 4. Improve symbolic-expression recognition so widened families work natively without requiring struct-style input specs.

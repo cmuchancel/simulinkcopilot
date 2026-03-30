@@ -350,6 +350,37 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertTrue(validation_passes)
         self.assertEqual(first_order_states, ("x", "y"))
 
+    def test_matlabv2native_generate_builds_coupled_explicit_system_with_python_parity(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns x y u", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) y(t) u(t)", nargout=0)
+        self.eng.eval("eqns = [diff(x,t) == -x + y + u(t); diff(y,t) == -2*y + x];", nargout=0)
+        self.eng.eval("u(t) = heaviside(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x','y'}, 'ParityMode', 'python', 'ModelName', 'matlabv2native_coupled_parity', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route_match = self.eng.eval("out.ParityReport.Matches.route", nargout=1)
+        first_order_state_match = self.eng.eval("out.ParityReport.Matches.first_order_states", nargout=1)
+        source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+        native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+        python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+        native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+
+        self.assertEqual(backend_kind, "native_with_python_parity")
+        self.assertTrue(route_match)
+        self.assertTrue(first_order_state_match)
+        self.assertTrue(source_family_match)
+        self.assertTrue(native_vs_matlab_match)
+        self.assertTrue(python_vs_matlab_match)
+        self.assertTrue(native_vs_python_match)
+        self.assertTrue(validation_passes)
+
     def test_matlabv2native_runtime_native_supports_pulse_ramp_and_sine_specs(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
         self.eng.eval(f"cd('{repo_root}')", nargout=0)
@@ -392,6 +423,80 @@ class BackendIntegrationTests(unittest.TestCase):
                 self.assertTrue(validation_passes)
                 self.assertEqual(source_family, expected_family)
                 self.assertEqual(python_parity_sec, 0.0)
+
+    def test_matlabv2native_runtime_native_supports_square_specs(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "square",
+                "u = struct('kind','square','amplitude',1,'frequency',3,'phase',0,'bias',0);",
+                "SquareWave",
+            ),
+        ]
+
+        for case_name, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval("syms x(t) u", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u;", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_{case_name}_runtime', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_runtime_only")
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertEqual(python_parity_sec, 0.0)
+
+    def test_matlabv2native_python_parity_mode_supports_square_specs(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            (
+                "square",
+                "u = struct('kind','square','amplitude',1,'frequency',3,'phase',0,'bias',0);",
+                "SquareWave",
+            ),
+        ]
+
+        for case_name, input_setup, expected_family in cases:
+            with self.subTest(case=case_name):
+                self.eng.eval("clear out eqn x u t", nargout=0)
+                self.eng.eval("syms x(t) u", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + u;", nargout=0)
+                self.eng.eval(input_setup, nargout=0)
+                self.eng.eval(
+                    f"out = matlabv2native.generate(eqn, 'State', 'x', 'ParityMode', 'python', 'ModelName', 'matlabv2native_{case_name}_runtime_parity', 'OpenModel', false);",
+                    nargout=0,
+                )
+
+                backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+                source_family_match = self.eng.eval("out.ParityReport.Matches.source_block_family", nargout=1)
+                native_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.native_vs_matlab_reference", nargout=1)
+                python_vs_matlab_match = self.eng.eval("out.ParityReport.Matches.python_vs_matlab_reference", nargout=1)
+                native_vs_python_match = self.eng.eval("out.ParityReport.Matches.native_vs_python_delegate", nargout=1)
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                source_family = self.eng.eval("out.SourceBlockFamilies.u", nargout=1)
+                python_parity_sec = self.eng.eval("out.Timing.python_parity_sec", nargout=1)
+                self.assertEqual(backend_kind, "native_with_python_parity")
+                self.assertTrue(source_family_match)
+                self.assertTrue(native_vs_matlab_match)
+                self.assertTrue(python_vs_matlab_match)
+                self.assertTrue(native_vs_python_match)
+                self.assertTrue(validation_passes)
+                self.assertEqual(source_family, expected_family)
+                self.assertGreater(python_parity_sec, 0.0)
 
     def test_matlabv2native_python_parity_mode_supports_pulse_ramp_and_sine_specs(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")

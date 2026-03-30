@@ -329,6 +329,10 @@ switch nativeKind
             "Position", position);
         signalPort = [inputName '/1'];
         family = "SineWave";
+    case "SquareWave"
+        [signalPort, family] = localAddSquareWaveSource(modelName, inputName, position, payload);
+    case "RepeatingSequence"
+        [signalPort, family] = localAddRepeatingSequenceSource(modelName, inputName, position, payload);
     otherwise
         [clockBlockName, clockSignal] = localEnsureClock(modelName, clockBlockName, clockSignal);
         add_block("simulink/User-Defined Functions/MATLAB Function", [modelName '/' inputName], ...
@@ -398,6 +402,30 @@ switch lower(specKind)
             "bias", double(localScalar(spec, "bias", 0)) ...
         );
         return;
+    case "square"
+        kind = "SquareWave";
+        payload = struct( ...
+            "amplitude", double(localScalar(spec, "amplitude", 1)), ...
+            "frequency", double(localScalar(spec, "frequency", localScalar(spec, "omega", 1))), ...
+            "phase", double(localScalar(spec, "phase", 0)), ...
+            "bias", double(localScalar(spec, "bias", 0)) ...
+        );
+        return;
+    case {"sawtooth", "triangle"}
+        widthDefault = 1.0;
+        if strcmp(specKind, "triangle")
+            widthDefault = 0.5;
+        end
+        kind = "RepeatingSequence";
+        payload = struct( ...
+            "waveform_kind", specKind, ...
+            "amplitude", double(localScalar(spec, "amplitude", 1)), ...
+            "frequency", double(localScalar(spec, "frequency", localScalar(spec, "omega", 1))), ...
+            "phase", double(localScalar(spec, "phase", 0)), ...
+            "bias", double(localScalar(spec, "bias", 0)), ...
+            "width", double(localScalar(spec, "width", widthDefault)) ...
+        );
+        return;
     case "expression"
         expression = char(string(localScalar(spec, "expression", "")));
         [isStep, stepPayload] = localExpressionIsStep(expression, timeVariable);
@@ -424,6 +452,18 @@ switch lower(specKind)
             payload = sinePayload;
             return;
         end
+        [isSquare, squarePayload] = localExpressionIsSquareWave(expression, timeVariable);
+        if isSquare
+            kind = "SquareWave";
+            payload = squarePayload;
+            return;
+        end
+        [isRepeating, repeatingPayload] = localExpressionIsRepeatingSequenceWave(expression, timeVariable);
+        if isRepeating
+            kind = "RepeatingSequence";
+            payload = repeatingPayload;
+            return;
+        end
         numericValue = str2double(strtrim(expression));
         if ~isnan(numericValue)
             kind = "Constant";
@@ -437,6 +477,78 @@ switch lower(specKind)
         kind = "MATLAB Function";
         payload = struct("expression", char(string(localScalar(spec, "expression", specKind))), "input_name", inputName);
 end
+end
+
+function [signalPort, family] = localAddSquareWaveSource(modelName, inputName, position, payload)
+sourceName = [inputName '_src'];
+signName = [inputName '_sign'];
+
+add_block("simulink/Sources/Sine Wave", [modelName '/' sourceName], ...
+    "Amplitude", "1", ...
+    "Frequency", localNumericString(payload.frequency), ...
+    "Phase", localNumericString(payload.phase), ...
+    "Bias", "0", ...
+    "SampleTime", "0", ...
+    "Position", position);
+add_block("simulink/Math Operations/Sign", [modelName '/' signName], ...
+    "Position", position + [130 0 130 0]);
+add_line(modelName, [sourceName '/1'], [signName '/1'], "autorouting", "on");
+
+currentPort = [signName '/1'];
+if abs(payload.amplitude - 1.0) > 1e-12
+    gainName = [inputName '_gain'];
+    add_block("simulink/Math Operations/Gain", [modelName '/' gainName], ...
+        "Gain", localNumericString(payload.amplitude), ...
+        "Position", position + [260 0 260 0]);
+    add_line(modelName, currentPort, [gainName '/1'], "autorouting", "on");
+    currentPort = [gainName '/1'];
+end
+
+if abs(payload.bias) > 1e-12
+    constName = [inputName '_bias'];
+    sumName = inputName;
+    add_block("simulink/Sources/Constant", [modelName '/' constName], ...
+        "Value", localNumericString(payload.bias), ...
+        "Position", position + [260 80 260 80]);
+    add_block("simulink/Math Operations/Sum", [modelName '/' sumName], ...
+        "Inputs", "++", ...
+        "Position", position + [390 0 390 0]);
+    add_line(modelName, currentPort, [sumName '/1'], "autorouting", "on");
+    add_line(modelName, [constName '/1'], [sumName '/2'], "autorouting", "on");
+    signalPort = [sumName '/1'];
+else
+    signalPort = currentPort;
+end
+family = "SquareWave";
+end
+
+function [signalPort, family] = localAddRepeatingSequenceSource(modelName, inputName, position, payload)
+period = localPeriodicSourcePeriod(payload.frequency);
+[times, values] = localRepeatingSequencePoints(period, payload.amplitude, payload.bias, payload.width);
+sourceName = inputName;
+if abs(payload.phase) > 1e-12
+    sourceName = [inputName '_src'];
+end
+
+add_block("simulink/Sources/Repeating Sequence", [modelName '/' sourceName], ...
+    "rep_seq_t", ['[' strjoin(cellfun(@localNumericString, num2cell(times), "UniformOutput", false), ' ') ']'], ...
+    "rep_seq_y", ['[' strjoin(cellfun(@localNumericString, num2cell(values), "UniformOutput", false), ' ') ']'], ...
+    "Position", position);
+
+if abs(payload.phase) <= 1e-12
+    signalPort = [sourceName '/1'];
+    family = "RepeatingSequence";
+    return;
+end
+
+delayName = inputName;
+add_block("simulink/Continuous/Transport Delay", [modelName '/' delayName], ...
+    "DelayTime", localNumericString(localPeriodicPhaseDelay(payload.frequency, payload.phase)), ...
+    "InitialOutput", localNumericString(values(1)), ...
+    "Position", position + [150 0 150 0]);
+add_line(modelName, [sourceName '/1'], [delayName '/1'], "autorouting", "on");
+signalPort = [delayName '/1'];
+family = "RepeatingSequence";
 end
 
 function [isStep, payload] = localExpressionIsStep(expression, timeVariable)
@@ -535,14 +647,17 @@ function [isSine, payload] = localExpressionIsSineWave(expression, timeVariable)
 expr = regexprep(char(string(expression)), "\s+", "");
 timeToken = regexptranslate("escape", char(string(timeVariable)));
 numberToken = localNumberPattern();
-pattern = ['^(?<amp>' numberToken ')\*(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'];
+pattern = ['^(?:(?<amp>' numberToken ')\*)?(?<fn>sin|cos)\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)(?<bias>[+-]' numberToken ')?$'];
 match = regexp(expr, pattern, "names");
 if isempty(match)
     isSine = false;
     payload = struct("amplitude", 0, "frequency", 0, "phase", 0, "bias", 0);
     return;
 end
-amplitude = localNumericTokenToDouble(match.amp);
+amplitude = 1.0;
+if isfield(match, "amp") && ~isempty(match.amp)
+    amplitude = localNumericTokenToDouble(match.amp);
+end
 frequency = localNumericTokenToDouble(match.freq);
 phase = 0.0;
 if isfield(match, "phase") && ~isempty(match.phase)
@@ -561,6 +676,85 @@ payload = struct( ...
     "frequency", frequency, ...
     "phase", phase, ...
     "bias", bias ...
+);
+end
+
+function [isSquare, payload] = localExpressionIsSquareWave(expression, timeVariable)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
+pattern = ['^(?:(?<amp>' numberToken ')\*)?sign\(sin\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?\)\)(?<bias>[+-]' numberToken ')?$'];
+match = regexp(expr, pattern, "names");
+if isempty(match)
+    isSquare = false;
+    payload = struct("amplitude", 0, "frequency", 0, "phase", 0, "bias", 0);
+    return;
+end
+
+amplitude = 1.0;
+if isfield(match, "amp") && ~isempty(match.amp)
+    amplitude = localNumericTokenToDouble(match.amp);
+end
+frequency = localNumericTokenToDouble(match.freq);
+phase = 0.0;
+if isfield(match, "phase") && ~isempty(match.phase)
+    phase = localNumericTokenToDouble(match.phase);
+end
+bias = 0.0;
+if isfield(match, "bias") && ~isempty(match.bias)
+    bias = localNumericTokenToDouble(match.bias);
+end
+isSquare = true;
+payload = struct( ...
+    "amplitude", amplitude, ...
+    "frequency", frequency, ...
+    "phase", phase, ...
+    "bias", bias ...
+);
+end
+
+function [isRepeating, payload] = localExpressionIsRepeatingSequenceWave(expression, timeVariable)
+expr = regexprep(char(string(expression)), "\s+", "");
+timeToken = regexptranslate("escape", char(string(timeVariable)));
+numberToken = localNumberPattern();
+pattern = ['^(?:(?<amp>' numberToken ')\*)?sawtooth\((?<freq>' numberToken ')\*' timeToken '(?<phase>[+-]' numberToken ')?(?:,(?<width>' numberToken '))?\)(?<bias>[+-]' numberToken ')?$'];
+match = regexp(expr, pattern, "names");
+if isempty(match)
+    isRepeating = false;
+    payload = struct("waveform_kind", "", "amplitude", 0, "frequency", 0, "phase", 0, "bias", 0, "width", 1);
+    return;
+end
+
+amplitude = 1.0;
+if isfield(match, "amp") && ~isempty(match.amp)
+    amplitude = localNumericTokenToDouble(match.amp);
+end
+frequency = localNumericTokenToDouble(match.freq);
+phase = 0.0;
+if isfield(match, "phase") && ~isempty(match.phase)
+    phase = localNumericTokenToDouble(match.phase);
+end
+width = 1.0;
+if isfield(match, "width") && ~isempty(match.width)
+    width = localNumericTokenToDouble(match.width);
+end
+bias = 0.0;
+if isfield(match, "bias") && ~isempty(match.bias)
+    bias = localNumericTokenToDouble(match.bias);
+end
+
+waveformKind = "sawtooth";
+if abs(width - 0.5) <= 1e-12
+    waveformKind = "triangle";
+end
+isRepeating = true;
+payload = struct( ...
+    "waveform_kind", waveformKind, ...
+    "amplitude", amplitude, ...
+    "frequency", frequency, ...
+    "phase", phase, ...
+    "bias", bias, ...
+    "width", width ...
 );
 end
 
@@ -744,6 +938,23 @@ switch kind
         phase = double(localScalar(spec, "phase", 0));
         bias = double(localScalar(spec, "bias", 0));
         expression = sym(bias) + sym(amplitude) * sin(sym(frequency) * timeSymbol + sym(phase));
+    case "square"
+        amplitude = double(localScalar(spec, "amplitude", 1));
+        frequency = double(localScalar(spec, "frequency", localScalar(spec, "omega", 1)));
+        phase = double(localScalar(spec, "phase", 0));
+        bias = double(localScalar(spec, "bias", 0));
+        expression = sym(bias) + sym(amplitude) * sign(sin(sym(frequency) * timeSymbol + sym(phase)));
+    case {"sawtooth", "triangle"}
+        amplitude = double(localScalar(spec, "amplitude", 1));
+        frequency = double(localScalar(spec, "frequency", localScalar(spec, "omega", 1)));
+        phase = double(localScalar(spec, "phase", 0));
+        bias = double(localScalar(spec, "bias", 0));
+        width = double(localScalar(spec, "width", 0.5));
+        if strcmp(kind, "sawtooth")
+            width = double(localScalar(spec, "width", 1.0));
+        end
+        wave = localSawtoothSymbolicWave(timeSymbol, frequency, phase, width);
+        expression = sym(bias) + sym(amplitude) * wave;
     case "expression"
         expression = str2sym(char(string(localScalar(spec, "expression", "0"))));
     otherwise
@@ -753,6 +964,24 @@ switch kind
             error("matlabv2native:UnsupportedReferenceInputSpec", ...
                 "Unsupported reference input spec kind '%s' for input '%s'.", kind, inputName);
         end
+end
+
+function wave = localSawtoothSymbolicWave(timeSymbol, frequency, phase, width)
+argument = sym(frequency) * timeSymbol + sym(phase);
+cycle = mod(argument, sym(2) * sym(pi)) / (sym(2) * sym(pi));
+if width >= 1.0 - 1e-12
+    wave = sym(2) * cycle - sym(1);
+    return;
+end
+if abs(width - 0.5) <= 1e-12
+    wave = sym(1) - sym(4) * abs(cycle - sym(0.5));
+    return;
+end
+
+widthSym = sym(width);
+wave = piecewise( ...
+    cycle < widthSym, sym(2) * cycle / widthSym - sym(1), ...
+    sym(1) - sym(2) * (cycle - widthSym) / (sym(1) - widthSym));
 end
 end
 
@@ -974,15 +1203,44 @@ load_system(modelPath);
 cleanupModel = onCleanup(@() localBestEffortClose(modelName));
 for index = 1:numel(inputNames)
     inputName = inputNames{index};
-    blockPath = [modelName '/' inputName];
-    handle = getSimulinkBlockHandle(blockPath);
-    if ~isnumeric(handle) || handle <= 0
+    family = localInputFamilyForModel(modelName, inputName);
+    if strlength(string(family)) == 0
         continue;
     end
-    families.(inputName) = localBlockFamily(blockPath);
+    families.(inputName) = family;
 end
 clear cleanupModel
 close_system(modelName, 0);
+end
+
+function family = localInputFamilyForModel(modelName, inputName)
+family = "";
+blockPath = [modelName '/' inputName];
+handle = getSimulinkBlockHandle(blockPath);
+if isnumeric(handle) && handle > 0
+    baseFamily = localBlockFamily(blockPath);
+    sourcePath = [modelName '/' inputName '_src'];
+    sourceHandle = getSimulinkBlockHandle(sourcePath);
+    if strcmp(baseFamily, "TransportDelay") && isnumeric(sourceHandle) && sourceHandle > 0
+        sourceFamily = localBlockFamily(sourcePath);
+        if strcmp(sourceFamily, "RepeatingSequence")
+            family = "RepeatingSequence";
+            return;
+        end
+    end
+    family = baseFamily;
+    return;
+end
+
+signPath = [modelName '/' inputName '_sign'];
+sourcePath = [modelName '/' inputName '_src'];
+signHandle = getSimulinkBlockHandle(signPath);
+sourceHandle = getSimulinkBlockHandle(sourcePath);
+if isnumeric(signHandle) && signHandle > 0 && isnumeric(sourceHandle) && sourceHandle > 0
+    if strcmp(localBlockFamily(signPath), "Sign") && strcmp(localBlockFamily(sourcePath), "SineWave")
+        family = "SquareWave";
+    end
+end
 end
 
 function family = localBlockFamily(blockPath)
@@ -1013,6 +1271,14 @@ if strcmp(blockType, "DiscretePulseGenerator")
 end
 if strcmp(blockType, "Sin")
     family = "SineWave";
+    return;
+end
+if strcmp(blockType, "Signum")
+    family = "Sign";
+    return;
+end
+if strcmp(blockType, "RepeatingSequenceInterpolated")
+    family = "RepeatingSequence";
     return;
 end
 family = blockType;
@@ -1155,6 +1421,35 @@ end
 function value = localDefaultPulsePeriodFromSpan(startTime, width, tSpan)
 simulationEnd = double(tSpan(2));
 value = max(width * 2.0, (simulationEnd - startTime) + width + max(width, 1.0));
+end
+
+function period = localPeriodicSourcePeriod(frequency)
+if abs(frequency) <= 1e-12
+    error("matlabv2native:InvalidPeriodicFrequency", ...
+        "Native periodic input frequency must be non-zero.");
+end
+period = abs((2.0 * pi) / double(frequency));
+end
+
+function [times, values] = localRepeatingSequencePoints(period, amplitude, bias, width)
+normalizedWidth = min(max(double(width), 1e-6), 1.0);
+if normalizedWidth >= 1.0 - 1e-12
+    epsilon = max(period * 1e-9, 1e-9);
+    times = [0.0, max(period - epsilon, 0.0), period];
+    values = [bias - amplitude, bias + amplitude, bias - amplitude];
+    return;
+end
+riseTime = normalizedWidth * period;
+times = [0.0, riseTime, period];
+values = [bias - amplitude, bias + amplitude, bias - amplitude];
+end
+
+function delayTime = localPeriodicPhaseDelay(frequency, phase)
+period = localPeriodicSourcePeriod(frequency);
+delayTime = mod((-double(phase) / double(frequency)), period);
+if delayTime < 0.0
+    delayTime = delayTime + period;
+end
 end
 
 function tSpan = localModelConfigSpan(modelConfig)

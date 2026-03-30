@@ -17,7 +17,9 @@ This document describes the additive native MATLAB backend effort that sits besi
   - pulse
   - ramp
   - sine
+  - square
 - it now has committed native-runtime integration coverage for a coupled explicit system
+- it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
 - it still delegates non-eligible cases to the existing Python backend
 
@@ -67,6 +69,7 @@ These behaviors are implemented on the MATLAB side today:
   - pulse
   - ramp
   - sine
+  - square
   - unsupported symbolic input expression lowered to a MATLAB Function source block
 - runtime/performance timing capture for:
   - preview analysis
@@ -97,7 +100,7 @@ These behaviors still use the existing Python backend, either as the primary exe
 - non-explicit or ambiguous systems
 - broader normalization beyond the current explicit-ODE native preview boundary
 - the Python oracle model used as an explicit secondary parity surface beside the MATLAB numerical reference
-- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/fallback set
+- input families not yet lowered natively in MATLAB beyond the current constant/step/pulse/ramp/sine/square/fallback set
 - input families not yet evaluated natively in the MATLAB numerical oracle beyond that same set
 - broader lowering/validation coverage beyond the current anchor matrix
 
@@ -157,11 +160,10 @@ Those will be added as the native backend matures beyond the current runtime/par
 
 ## Immediate Next Steps
 
-1. widen native explicit-ODE input lowering beyond constant/step/fallback anchor coverage
+1. widen native explicit-ODE input lowering to the next waveform families such as `sawtooth` and `triangle`, then into nonlinear families
 2. widen the MATLAB numerical oracle input evaluation to match that larger native input matrix
-3. widen native support to square/sawtooth/triangle and then saturation/dead-zone style nonlinear families
-4. improve symbolic-expression recognition for widened families, not just struct-style input specs
-5. keep Python parity as an explicit comparison/debug flow rather than a default dependency
-6. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-7. compare native vs Python first-order RHS semantics
-8. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
+3. improve symbolic-expression recognition for widened families, not just struct-style input specs
+4. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+5. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
+6. compare native vs Python first-order RHS semantics
+7. reduce MATLAB Function usage where native block compositions exist while keeping the Python backend and `matlabv1` green
