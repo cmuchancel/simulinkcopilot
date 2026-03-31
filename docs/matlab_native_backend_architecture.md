@@ -119,6 +119,10 @@ These behaviors are implemented on the MATLAB side today:
   - `-x + u`
   - `x - 2*y`
   - simple constant offsets combined with state/input/parameter signals
+- native time-driven RHS lowering for recognized pure-time expressions such as:
+  - `sin(t)`
+  - `t + 1`
+  - reducible-DAE results that simplify to those same pure-time native families
 - direct symbolic-expression recognition for:
   - pulse
   - ramp
@@ -179,7 +183,7 @@ These behaviors still use the existing Python backend, either as the primary exe
 - broader lowering/validation coverage beyond the current anchor matrix
 - broader benchmark coverage beyond the current cart-pendulum and planar-quadrotor checkpoints
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, native pure-time RHS lowering, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 

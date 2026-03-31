@@ -990,6 +990,7 @@ class BackendIntegrationTests(unittest.TestCase):
             "out = matlabv2native.generate(eqns, 'State', {'x'}, 'Algebraics', {'z'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_reducible_dae_benchmark', 'OpenModel', false);",
             nargout=0,
         )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
 
         backend_kind = self.eng.eval("out.BackendKind", nargout=1)
         route = self.eng.eval("out.Route", nargout=1)
@@ -997,6 +998,12 @@ class BackendIntegrationTests(unittest.TestCase):
         validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
         first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
         first_rhs = self.eng.eval("char(out.NativePreview.FirstOrderPreview.StateEquations(1).rhs)", nargout=1)
+        rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x'], 'BlockType')", nargout=1)
+        has_rhs_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x']))",
+            nargout=1,
+        )
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
         self.assertEqual(backend_kind, "native_runtime_only")
         self.assertEqual(route, "dae_reduced_to_explicit_ode")
@@ -1004,6 +1011,39 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertTrue(validation_passes)
         self.assertEqual(first_order_states, ("x",))
         self.assertEqual(first_rhs, "sin(t)")
+        self.assertIn(rhs_block_type, ("Sin", "SineWave"))
+        self.assertFalse(has_rhs_matlab_function)
+
+    def test_matlabv2native_generate_builds_native_affine_time_rhs_without_matlab_function(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqn x", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t)", nargout=0)
+        self.eng.eval("eqn = diff(x,t) == t + 1;", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_affine_time_rhs_native', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x'], 'BlockType')", nargout=1)
+        has_rhs_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x']))",
+            nargout=1,
+        )
+        has_clock = self.eng.eval("bdIsLoaded(out.ModelName) && ~isempty(find_system(out.ModelName, 'SearchDepth', 1, 'BlockType', 'Clock'))", nargout=1)
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(rhs_block_type, "Sum")
+        self.assertTrue(has_clock)
+        self.assertFalse(has_rhs_matlab_function)
 
     def test_matlabv2native_native_preview_classifies_irreducible_dae_as_dae_algebraic(self) -> None:
         self.eng.eval("clear preview opts caller eqns x z", nargout=0)

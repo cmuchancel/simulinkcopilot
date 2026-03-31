@@ -15,6 +15,7 @@ The goal is to keep claims explicit:
 - latest parity-expansion phase after runtime split: symbolic math runtime widening for `atan`, `atan2`, `exp`, `log`, and `sqrt`
 - latest benchmark-stability phase: cart-pendulum, planar-quadrotor, and acrobot MATLAB-symbolic runtime coverage
 - latest route-boundary phase: reducible single-algebraic DAE reduction plus explicit `sawtooth` / `triangle` MATLAB-symbolic boundary documentation
+- latest lowering-quality phase: native pure-time RHS lowering for explicit ODEs and reducible DAE outputs
 
 ## Front Doors
 
@@ -77,6 +78,7 @@ The goal is to keep claims explicit:
 - `square` parity is semantic rather than byte-identical: the native path uses `SquareWave`, while the Python backend may compose the same symbolic square wave as a `Sum`-based subgraph.
 - `sawtooth` and `triangle` are runtime-native through expression/input-spec forms, but not broad direct-symbolic families because MATLAB itself rejects raw `sawtooth(sym)` / `sawtooth(sym, 0.5)` constructions before `matlabv2native` can analyze them.
 - Reducible DAE/algebraic systems with one algebraic variable solved from one algebraic equation now have a bounded native route through algebraic elimination followed by the existing explicit-ODE lowering path.
+- Recognized pure-time RHS expressions such as `sin(t)` and `t + 1` now lower natively instead of falling through to deferred `MATLAB Function` RHS blocks, which also improves readability for reducible-DAE outputs that simplify to pure-time expressions.
 - Irreducible DAE/algebraic systems are now labeled explicitly as `dae_algebraic` with delegated status instead of being left as a vague non-explicit boundary.
 - Python parity for `sawtooth` and `triangle` expression/input-spec forms is still pending because the current Python oracle model path fails during model initialization for those cases.
 - `saturation` and `dead zone` are now MATLAB-symbolic runtime-native with MATLAB-reference validation, but this checkpoint does not claim Python-parity cleanliness for those families yet.
@@ -89,4 +91,4 @@ The goal is to keep claims explicit:
 2. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
 3. Expand benchmark coverage beyond the current cart-pendulum, planar-quadrotor, and acrobot checkpoints.
 4. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
-5. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks.
+5. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks, especially for time-plus-parameter or other non-pure-time symbolic RHS forms.

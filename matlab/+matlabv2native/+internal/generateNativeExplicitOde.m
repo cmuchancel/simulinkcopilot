@@ -235,6 +235,20 @@ for index = 1:numel(stateEquations)
         continue;
     end
 
+    [nativeRhsPort, ~, clockBlockName, clockSignal] = localNativeTimeExpressionRhsPort( ...
+        modelName, ...
+        stateName, ...
+        rhsText, ...
+        positions.rhs(index, :), ...
+        timeVariable, ...
+        oracleConfig, ...
+        clockBlockName, ...
+        clockSignal);
+    if ~isempty(nativeRhsPort)
+        add_line(modelName, nativeRhsPort, targetPort, "autorouting", "on");
+        continue;
+    end
+
     blockName = ['rhs_' localSanitize(stateName)];
     blockPath = [modelName '/' blockName];
     add_block("simulink/User-Defined Functions/MATLAB Function", blockPath, ...
@@ -1169,6 +1183,100 @@ for index = 1:numel(deferredBlocks)
         end
     end
 end
+end
+
+function [signalPort, family, clockBlockName, clockSignal] = localNativeTimeExpressionRhsPort( ...
+    modelName, stateName, rhsText, position, timeVariable, modelConfig, clockBlockName, clockSignal)
+
+signalPort = '';
+family = "";
+
+if ~localExpressionDependsOnlyOnTime(rhsText, timeVariable)
+    return;
+end
+
+rhsSpec = simucopilot.internal.recognizeExpressionInputSpec(rhsText, timeVariable);
+if isempty(rhsSpec)
+    rhsSpec = localRecognizeAffineTimeSpec(rhsText, timeVariable);
+end
+if isempty(rhsSpec)
+    return;
+end
+
+blockName = ['rhs_' localSanitize(stateName)];
+inputSpecs = struct();
+inputSpecs.(blockName) = rhsSpec;
+[signalPort, family, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, blockName, position, struct(), inputSpecs, struct(), {}, {}, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal);
+end
+
+function tf = localExpressionDependsOnlyOnTime(rhsText, timeVariable)
+tf = false;
+try
+    vars = symvar(str2sym(rhsText));
+catch
+    return;
+end
+
+if isempty(vars)
+    return;
+end
+
+timeName = char(string(timeVariable));
+varNames = arrayfun(@char, vars, "UniformOutput", false);
+tf = all(strcmp(varNames, timeName));
+end
+
+function spec = localRecognizeAffineTimeSpec(expr, timeVariable)
+spec = [];
+timeName = char(string(timeVariable));
+if isempty(strtrim(timeName))
+    return;
+end
+
+expr = strtrim(char(string(expr)));
+if strcmp(expr, timeName)
+    return;
+end
+
+try
+    tSym = sym(timeName);
+    exprSym = str2sym(expr);
+    exprVars = arrayfun(@char, symvar(exprSym), "UniformOutput", false);
+    if ~all(strcmp(exprVars, timeName))
+        return;
+    end
+
+    gainExpr = simplify(diff(exprSym, tSym));
+    if ~isempty(symvar(gainExpr))
+        return;
+    end
+    gainValue = double(gainExpr);
+
+    biasExpr = simplify(subs(exprSym, tSym, 0));
+    if ~isempty(symvar(biasExpr))
+        return;
+    end
+    biasValue = double(biasExpr);
+
+    residual = simplify(exprSym - (sym(gainValue) * tSym + sym(biasValue)));
+    if ~isempty(symvar(residual)) || abs(double(residual)) > 1e-12
+        return;
+    end
+catch
+    return;
+end
+
+if abs(gainValue - 1.0) <= 1e-12 && abs(biasValue) <= 1e-12
+    return;
+end
+
+spec = struct( ...
+    "kind", "affine", ...
+    "input", struct("kind", "time"), ...
+    "gain", gainValue, ...
+    "bias", biasValue);
 end
 
 function signalPort = localNativeAffineRhsPort( ...
