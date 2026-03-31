@@ -47,6 +47,10 @@ This document describes the additive native MATLAB backend effort that sits besi
 - it now requires explicit `State` / `States` declarations for the `matlab_symbolic` front door instead of silently inferring public state order
 - it now wraps main MATLAB-symbolic front-door failures in structured diagnostics with stable codes, stage names, likely-cause text, and concrete fix guidance
 - it now returns structured `FrontDoorReadout` and deterministic `FrontDoorDiagnosis` payloads on successful public-entrypoint runs
+- it now exposes an explicit `NativeRhsStyle` option so recursive nonlinear RHS graphs can be rendered as:
+  - grouped native subsystems
+  - flat exploded native block graphs
+  - forced `MATLAB Function` RHS blocks
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -178,6 +182,10 @@ These behaviors are implemented on the MATLAB side today:
   - integer powers and square roots
   - `sin`, `cos`, `atan`, `atan2`, `abs`, `sign`, `exp`, `log`, `sqrt`, `min`, and `max`
   - current acrobot benchmark RHS expressions, which now lower to native math/trig/product graphs instead of `MATLAB Function` blocks
+- explicit RHS presentation control through `NativeRhsStyle`:
+  - `subsystem_native` groups recursive nonlinear RHS graphs behind per-state subsystem boundaries for readability
+  - `flat_native` keeps the same recursive nonlinear RHS graphs exploded directly on the top level
+  - `matlab_function` preserves the compact deferred `MATLAB Function` RHS path for complex expressions when a compact diagram is preferred over native block expansion
 - native time-driven RHS lowering for recognized pure-time expressions such as:
   - `sin(t)`
   - `t + 1`

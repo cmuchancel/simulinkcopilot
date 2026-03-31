@@ -1076,9 +1076,49 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(source_block_tau, "Step")
         self.assertFalse(has_source_matlab_function)
         self.assertFalse(has_any_top_level_matlab_function)
-        self.assertNotEqual(rhs_omega1_block_type, "SubSystem")
-        self.assertNotEqual(rhs_omega2_block_type, "SubSystem")
+        self.assertEqual(rhs_omega1_block_type, "SubSystem")
+        self.assertEqual(rhs_omega2_block_type, "SubSystem")
         self.assertEqual(first_order_states, ("theta1", "theta2", "omega1", "omega2"))
+
+    def test_matlabv2native_generate_supports_selectable_recursive_rhs_styles(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+
+        cases = [
+            ("subsystem_native", "SubSystem", False),
+            ("flat_native", "not_subsystem", False),
+            ("matlab_function", "any", True),
+        ]
+
+        for style, expected_block_shape, expect_matlab_function in cases:
+            with self.subTest(style=style):
+                self.eng.eval("clear out eqn x", nargout=0)
+                self.eng.eval("syms x(t)", nargout=0)
+                self.eng.eval("eqn = diff(x,t) == -x + sin(x) + exp(-t);", nargout=0)
+                self.eng.eval(
+                    "out = matlabv2native.generate(eqn, 'State', 'x', 'NativeRhsStyle', '%s', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_recursive_rhs_%s', 'OpenModel', false);"
+                    % (style, style),
+                    nargout=0,
+                )
+                self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+                validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+                public_style = self.eng.eval("out.PublicOptions.NativeRhsStyle", nargout=1)
+                rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x'], 'BlockType')", nargout=1)
+                has_rhs_matlab_function = self.eng.eval(
+                    "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x']))",
+                    nargout=1,
+                )
+                self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+                self.assertTrue(validation_passes)
+                self.assertEqual(public_style, style)
+                self.assertEqual(has_rhs_matlab_function, expect_matlab_function)
+                if expected_block_shape == "SubSystem":
+                    self.assertEqual(rhs_block_type, "SubSystem")
+                elif expected_block_shape == "not_subsystem":
+                    self.assertNotEqual(rhs_block_type, "SubSystem")
 
     def test_matlabv2native_generate_builds_native_reducible_dae_benchmark(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")

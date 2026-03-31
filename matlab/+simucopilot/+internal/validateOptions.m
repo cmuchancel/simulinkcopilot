@@ -32,6 +32,7 @@ addParameter(parser, "Verbose", defaults.Verbose, @(value) islogical(value) || i
 addParameter(parser, "ClassificationMode", defaults.ClassificationMode, @(value) ischar(value) || isstring(value));
 addParameter(parser, "SymbolConfig", defaults.SymbolConfig, @(value) isstruct(value) || isempty(value));
 addParameter(parser, "RuntimeOverride", defaults.RuntimeOverride, @(value) isstruct(value) || isempty(value));
+addParameter(parser, "NativeRhsStyle", defaults.NativeRhsStyle, @(value) ischar(value) || isstring(value));
 addParameter(parser, "SimulinkOutputDir", defaults.SimulinkOutputDir, @(value) ischar(value) || isstring(value));
 addParameter(parser, "Assumptions", defaults.Assumptions, @(value) isstruct(value) || isempty(value));
 addParameter(parser, "DerivativeMap", defaults.DerivativeMap, @(value) isstruct(value) || isempty(value));
@@ -56,6 +57,7 @@ opts.BackendEntryPoint = char(string(opts.BackendEntryPoint));
 opts.KeepTempFiles = logical(opts.KeepTempFiles);
 opts.Verbose = logical(opts.Verbose);
 opts.ClassificationMode = char(string(opts.ClassificationMode));
+opts.NativeRhsStyle = localNormalizeNativeRhsStyle(opts.NativeRhsStyle);
 opts.SimulinkOutputDir = char(string(opts.SimulinkOutputDir));
 
 if isempty(opts.SymbolConfig)
@@ -91,6 +93,21 @@ end
 if ~isempty(opts.Tolerance) && opts.Tolerance <= 0
     error("simucopilot:InvalidTolerance", ...
         "Tolerance must be positive when provided.");
+end
+end
+
+function style = localNormalizeNativeRhsStyle(raw)
+style = lower(strtrim(char(string(raw))));
+switch style
+    case {"subsystem_native", "grouped_native", "native_subsystem", "subsystem", "grouped"}
+        style = "subsystem_native";
+    case {"flat_native", "native_flat", "flat", "exploded_native", "exploded"}
+        style = "flat_native";
+    case {"matlab_function", "function", "rhs_matlab_function", "function_blocks"}
+        style = "matlab_function";
+    otherwise
+        error("simucopilot:InvalidNativeRhsStyle", ...
+            "NativeRhsStyle must be 'subsystem_native', 'flat_native', or 'matlab_function'.");
 end
 end
 
