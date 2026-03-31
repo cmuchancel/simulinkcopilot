@@ -43,6 +43,7 @@ This document describes the additive native MATLAB backend effort that sits besi
   - planar quadrotor benchmark with biased step thrust input
   - acrobot benchmark with biased step torque input
 - it now supports a bounded reducible-DAE native route by eliminating one algebraic variable before the existing explicit-ODE lowering path
+- it now accepts plain vector-valued MATLAB symbolic equation arrays such as `diff(X,t) == A*X` and `diff(X,t) == A*X + B*u(t)` when MATLAB presents them as `sym` / `symfun` arrays
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -84,6 +85,10 @@ These behaviors are implemented on the MATLAB side today:
 - explicit route classification for irreducible DAE/algebraic systems as delegated `dae_algebraic`
 - native first-order state preview for those explicit ODEs
 - native-lowering eligibility checks for MATLAB symbolic explicit ODEs
+- vector-form symbolic equation flattening for plain `sym` / `symfun` arrays that MATLAB already represents elementwise, including:
+  - `diff(X,t) == A*X`
+  - `diff(X,t) == A*X + B*u(t)`
+- explicit user-provided state-order preservation for those vector-form systems
 - native Simulink lowering for the current explicit-ODE anchor cases
 - native simulation of those generated explicit-ODE models
 - native MATLAB ODE reference solving for the current explicit-ODE anchor cases
@@ -114,11 +119,17 @@ These behaviors are implemented on the MATLAB side today:
   - cart-pendulum equations with coupled second-order mechanics
   - planar quadrotor equations with trigonometric state coupling and biased step/constant thrust inputs
   - acrobot equations with coupled trigonometric dynamics and biased step torque input
+  - vector-form linear systems such as `diff(X,t) == A*X`
+  - vector-form affine systems such as `diff(X,t) == A*X + B*u(t)`
 - bounded reducible DAE runtime coverage for one algebraic variable solved from one algebraic equation before native explicit-ODE lowering
+- bounded reducible DAE runtime coverage for vector-form systems that flatten into the same one-algebraic-variable elimination path
 - native affine RHS lowering for simple explicit-ODE expressions such as:
   - `-x + u`
   - `x - 2*y`
   - simple constant offsets combined with state/input/parameter signals
+- native mixed signal-plus-time RHS lowering for recognized expressions such as:
+  - `-x1 - 2*x2 - 3*x3 + 1 + heaviside(t - 1/2)`
+  - vector-form affine systems that flatten into the same pattern
 - native time-driven RHS lowering for recognized pure-time expressions such as:
   - `sin(t)`
   - `t + 1`
@@ -180,10 +191,11 @@ These behaviors still use the existing Python backend, either as the primary exe
 - direct symbolic-native support for `cosine` and impulse-style inputs
 - broad direct symbolic-native support for `sawtooth` / `triangle`, which still depends on expression/input-spec forms because MATLAB rejects raw symbolic `sawtooth(...)` constructions before `matlabv2native` sees them
 - irreducible DAE / descriptor-style systems, which are now labeled explicitly as `dae_algebraic` delegated cases rather than implicitly falling through
+- `symmatrix` object-class intake and broader MATLAB matrix-symbolic object models beyond plain vector-valued `sym` / `symfun` arrays
 - broader lowering/validation coverage beyond the current anchor matrix
-- broader benchmark coverage beyond the current cart-pendulum and planar-quadrotor checkpoints
+- broader benchmark coverage beyond the current cart-pendulum, planar-quadrotor, acrobot, and vector-form regression checkpoints
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, native pure-time RHS lowering, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, vector-form symbolic equation arrays that flatten cleanly, native pure-time and mixed signal-plus-time RHS lowering, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 
@@ -240,9 +252,9 @@ Those will be added as the native backend matures beyond the current runtime/par
 
 ## Immediate Next Steps
 
-1. harden or explicitly bound direct symbolic-native support for `sawtooth` and `triangle`
-2. add native symbolic coverage for `cosine` and impulse-style inputs
-3. keep reducing `MATLAB Function` fallback where native block composition exists
-4. keep Python parity as an explicit comparison/debug flow rather than a default dependency
-5. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity
-6. compare native vs Python first-order RHS semantics where that still matters for debugging
+1. decide whether to widen matrix/vector symbolic intake beyond plain vector-valued `sym` / `symfun` arrays and keep `symmatrix` explicitly in or out of scope
+2. decide whether to widen DAE reduction beyond the current single-algebraic-variable elimination path
+3. add native symbolic coverage for `cosine` and impulse-style inputs
+4. keep reducing `MATLAB Function` fallback where native block composition exists
+5. keep Python parity as an explicit comparison/debug flow rather than a default dependency
+6. extend `compareWithPython(...)` or add a new comparison API for build/simulate/reference parity

@@ -1045,6 +1045,164 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertTrue(has_clock)
         self.assertFalse(has_rhs_matlab_function)
 
+    def test_matlabv2native_generate_builds_native_vector_form_linear_system(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns X A x1 x2 x3", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x1(t) x2(t) x3(t)", nargout=0)
+        self.eng.eval("X = [x1; x2; x3];", nargout=0)
+        self.eng.eval("A = sym([0 1 0; 0 0 1; -1 -2 -3]);", nargout=0)
+        self.eng.eval("eqns = diff(X,t) == A*X;", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x1','x2','x3'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_vector_linear_native', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x3'], 'BlockType')", nargout=1)
+        has_rhs_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x3']))",
+            nargout=1,
+        )
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x1", "x2", "x3"))
+        self.assertEqual(rhs_block_type, "Sum")
+        self.assertFalse(has_rhs_matlab_function)
+
+    def test_matlabv2native_generate_builds_native_vector_form_affine_input_system(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns X A B u x1 x2 x3", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x1(t) x2(t) x3(t) u(t)", nargout=0)
+        self.eng.eval("X = [x1; x2; x3];", nargout=0)
+        self.eng.eval("A = sym([0 1 0; 0 0 1; -1 -2 -3]);", nargout=0)
+        self.eng.eval("B = sym([0; 0; 1]);", nargout=0)
+        self.eng.eval("u(t) = 1 + heaviside(t - 0.5);", nargout=0)
+        self.eng.eval("eqns = diff(X,t) == A*X + B*u(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x1','x2','x3'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_vector_affine_native', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x3'], 'BlockType')", nargout=1)
+        has_rhs_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x3']))",
+            nargout=1,
+        )
+        has_step_block = self.eng.eval(
+            "bdIsLoaded(out.ModelName) && ~isempty(find_system(out.ModelName, 'SearchDepth', 1, 'BlockType', 'Step'))",
+            nargout=1,
+        )
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x1", "x2", "x3"))
+        self.assertEqual(rhs_block_type, "Sum")
+        self.assertTrue(has_step_block)
+        self.assertFalse(has_rhs_matlab_function)
+
+    def test_matlabv2native_generate_preserves_explicit_state_order_for_vector_form_system(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns X A B u x1 x2 x3", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x1(t) x2(t) x3(t) u(t)", nargout=0)
+        self.eng.eval("X = [x1; x2; x3];", nargout=0)
+        self.eng.eval("A = sym([0 1 0; 0 0 1; -1 -2 -3]);", nargout=0)
+        self.eng.eval("B = sym([0; 0; 1]);", nargout=0)
+        self.eng.eval("u(t) = 1 + heaviside(t - 0.5);", nargout=0)
+        self.eng.eval("eqns = diff(X,t) == A*X + B*u(t);", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x3','x1','x2'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_vector_affine_reordered_native', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x3", "x1", "x2"))
+
+    def test_matlabv2native_generate_builds_native_vector_form_reducible_dae(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqns X x1 x2 z", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x1(t) x2(t) z(t)", nargout=0)
+        self.eng.eval("X = [x1; x2];", nargout=0)
+        self.eng.eval("eqns = [diff(X,t) == [z; -x1]; 0 == z - sin(t)];", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqns, 'State', {'x1','x2'}, 'Algebraics', {'z'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_vector_reducible_dae_native', 'OpenModel', false);",
+            nargout=0,
+        )
+        self.eng.eval("load_system(out.GeneratedModelPath);", nargout=0)
+
+        backend_kind = self.eng.eval("out.BackendKind", nargout=1)
+        route = self.eng.eval("out.Route", nargout=1)
+        preview_route = self.eng.eval("out.NativePreview.Route", nargout=1)
+        validation_passes = self.eng.eval("out.Validation.passes", nargout=1)
+        first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
+        rhs_block_type = self.eng.eval("get_param([out.ModelName '/rhs_x1'], 'BlockType')", nargout=1)
+        has_rhs_matlab_function = self.eng.eval(
+            "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/rhs_x1']))",
+            nargout=1,
+        )
+        self.eng.eval("bdclose(out.ModelName);", nargout=0)
+
+        self.assertEqual(backend_kind, "native_runtime_only")
+        self.assertEqual(route, "dae_reduced_to_explicit_ode")
+        self.assertEqual(preview_route, "dae_reduced_to_explicit_ode")
+        self.assertTrue(validation_passes)
+        self.assertEqual(first_order_states, ("x1", "x2"))
+        self.assertIn(rhs_block_type, ("Sin", "SineWave"))
+        self.assertFalse(has_rhs_matlab_function)
+
+    def test_matlabv2native_native_preview_classifies_vector_form_irreducible_dae_as_dae_algebraic(self) -> None:
+        self.eng.eval("clear preview opts caller eqns X x1 x2 z", nargout=0)
+        self.eng.eval("syms x1(t) x2(t) z(t)", nargout=0)
+        self.eng.eval("X = [x1; x2];", nargout=0)
+        self.eng.eval("eqns = [diff(X,t) == [z; -x1]; 0 == z^2 + x1 - 1];", nargout=0)
+        self.eng.eval(
+            "opts = simucopilot.internal.validateOptions(struct('Build', false, 'OpenModel', false), 'States', {'x1','x2'}, 'Algebraics', {'z'}, 'TimeVariable', 't');",
+            nargout=0,
+        )
+        self.eng.eval("caller = struct('x1', x1, 'x2', x2, 'z', z);", nargout=0)
+        self.eng.eval(
+            "preview = matlabv2native.internal.nativeAnalyze('matlab_symbolic', eqns, opts, caller);",
+            nargout=0,
+        )
+
+        route = self.eng.eval("preview.Route", nargout=1)
+        route_status = self.eng.eval("preview.RouteStatus", nargout=1)
+        first_order_available = self.eng.eval("preview.FirstOrderPreview.Available", nargout=1)
+        notes = tuple(self.eng.eval("cellstr(string(preview.Notes))", nargout=1))
+
+        self.assertEqual(route, "dae_algebraic")
+        self.assertEqual(route_status, "delegated")
+        self.assertFalse(first_order_available)
+        self.assertTrue(any("DAE/algebraic route delegated" in note for note in notes))
+
     def test_matlabv2native_native_preview_classifies_irreducible_dae_as_dae_algebraic(self) -> None:
         self.eng.eval("clear preview opts caller eqns x z", nargout=0)
         self.eng.eval("syms x(t) z(t)", nargout=0)

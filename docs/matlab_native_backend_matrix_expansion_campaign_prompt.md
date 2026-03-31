@@ -1,6 +1,6 @@
-# Campaign Prompt: Expand the Standalone-Native MATLAB Runtime Matrix
+# Campaign Prompt: Add Matrix / Vector MATLAB-Symbolic System Support
 
-Use this prompt to continue the native MATLAB backend campaign from the current repo state after the runtime/parity split checkpoint.
+Use this prompt to continue the native MATLAB backend campaign from the current repo state with the explicit goal of making `matlabv2native` handle matrix- and vector-form MATLAB symbolic systems, not just scalar equation lists.
 
 ## Prompt
 
@@ -8,7 +8,7 @@ You are continuing work inside the `simulinkcopilot` repository on branch:
 
 - `matlab-native-backend-campaign`
 
-Start from the already-pushed checkpoints:
+Start from the already-pushed checkpoints, including the current latest checkpoint:
 
 - baseline checkpoint: `c9d4aab`
 - phase-1 scaffold checkpoint: `5d78fec`
@@ -16,95 +16,142 @@ Start from the already-pushed checkpoints:
 - phase-3 native explicit-ODE lowering checkpoint: `5265910`
 - phase-4 MATLAB-reference anchor checkpoint: `da5e18a`
 - phase-5 runtime/parity split checkpoint: `f2899d0`
+- phase-6 parity-expansion checkpoint: `2891a9b`
+- phase-7 square/coupled parity checkpoint: `f43229c`
+- phase-8 symbolic-recognition checkpoint: `0979fca`
+- phase-9 nonlinear symbolic source checkpoint: `d9833b3`
+- phase-10 native affine RHS checkpoint: `2ef2957`
+- phase-11 nonlinear symbolic-family checkpoint: `2999600`
+- phase-12 unary-math symbolic-family checkpoint: `dbd12d9`
+- phase-13 complex benchmark checkpoint: `396cb2d`
+- phase-14 acrobot benchmark checkpoint: `638d6e7`
+- phase-15 bounded native DAE symbolic route checkpoint: `dc71d2d`
+- phase-16 native pure-time RHS lowering checkpoint: `0a9224b`
 
-Do not restart the campaign from scratch. Continue from the additive MATLAB-native scaffold and the already-pushed runtime/parity split work.
+Do not restart the campaign from scratch. Continue from the additive MATLAB-native scaffold and the already-pushed symbolic/native-runtime work.
+
+## Scope Lock
+
+This campaign is only about:
+
+- the `matlab_symbolic` front door
+- matrix / vector symbolic equation intake
+- scalarization of matrix-form systems into the existing native pipeline
+- preserving user-declared state ordering and system structure
+- routing matrix-form systems into the existing explicit-ODE and bounded-DAE native paths when valid
+
+Do not broaden this campaign into:
+
+- LaTeX parity
+- equation-text parity
+- structured ODE-spec parity
+- broad Python-parity work
+- unrelated UI or performance tuning
+
+Python must not regress, but Python is not the target. The target is making MATLAB users able to write matrix/vector symbolic systems naturally and still get the native path.
 
 ## Current State You Must Respect
 
 The repo already has:
 
-- the existing Python backend, which must remain intact for legacy workflows and parity/debug use
+- the existing Python backend, which must remain intact
 - the existing MATLAB bridge to Python
 - `matlabv1`, which must keep working
 - `matlabv2native`, which now has:
   - native symbolic explicit-ODE preview
   - native eligibility checks
-  - native explicit-ODE Simulink lowering for current anchor cases
   - native MATLAB/Simulink simulation
-  - a MATLAB ODE numerical reference for current anchor cases
-  - default runtime execution for native-eligible anchor cases without requiring a Python build/sim
+  - a MATLAB ODE numerical reference for supported native cases
+  - default runtime execution for supported symbolic native cases without requiring Python build/sim
   - explicit Python parity mode through `ParityMode="python"`
   - additive timing fields for preview/build/sim/reference/parity/total wall time
+  - committed nonlinear benchmark runtime coverage for:
+    - cart-pendulum
+    - planar quadrotor
+    - acrobot
+  - bounded reducible DAE support for one algebraic variable solved from one algebraic equation before native explicit-ODE lowering
+  - native pure-time RHS lowering for recognized time-only expressions such as `sin(t)` and `t + 1`
+  - direct symbolic recognition and runtime-native support for:
+    - constant
+    - step / delayed step
+    - pulse
+    - ramp
+    - sine
+    - square
+    - saturation
+    - dead zone
+    - sign
+    - abs
+    - min/max
+    - atan
+    - atan2
+    - exp
+    - log
+    - sqrt
+  - runtime-native expression/input-spec support for:
+    - sawtooth
+    - triangle
+  - fallback `MATLAB Function` source/RHS lowering for unsupported expressions inside the native explicit-ODE lane
+  - delegation outside the current native explicit-ODE lane
 
-Current standalone-native runtime coverage is still narrow:
+Current docs to keep updated:
 
-- constant input
-- step / delayed step
-- unsupported symbolic input via `MATLAB Function` source fallback
+- [matlab_native_backend_architecture.md](./matlab_native_backend_architecture.md)
+- [matlab_native_backend_parity_ledger.md](./matlab_native_backend_parity_ledger.md)
 
-Current focused tests already green at handoff:
+Current main test surface:
 
-```bash
-.venv/bin/python -m pytest pipeline/tests/test_matlab_bridge.py -q
-SIMULINKCOPILOT_RUN_MATLAB_TESTS=1 .venv/bin/python -m pytest backend/tests/test_backend_integration.py -q -k "matlabv1 or matlabv2native"
+- `backend/tests/test_backend_integration.py`
+
+## Core Strategic Goal
+
+Make `matlabv2native` accept matrix- and vector-form MATLAB symbolic systems and normalize them into the existing native pipeline.
+
+The campaign succeeds only if a MATLAB user can write something like:
+
+```matlab
+syms x1(t) x2(t) x3(t) x4(t) x5(t)
+X = [x1; x2; x3; x4; x5];
+A = [...];
+eqns = diff(X,t) == A*X;
+out = matlabv2native.generate(eqns, 'State', {'x1','x2','x3','x4','x5'});
 ```
 
-Results at handoff:
+and the system:
 
-- `15 passed`
-- `7 passed, 3 deselected`
+- understands that as a 5-state system
+- preserves the intended state order
+- scalarizes it correctly
+- routes it into the native explicit-ODE path when valid
 
-## Core Strategic Problem You Must Address
-
-The architecture is now in the right shape, but the standalone-native runtime matrix is too narrow to matter much in practice.
-
-Right now:
-
-- the default native runtime path is real for the anchor cases
-- MATLAB numerical-reference validation is real for the anchor cases
-- Python has been removed from the hot path for those anchor cases
-
-But:
-
-- most useful input families are not yet runtime-native
-- the MATLAB numerical oracle does not yet cover the broader supported family set
-- the native builder still overuses `MATLAB Function` blocks for RHS lowering
-- the only public comparison API is still Python-oriented and preview-heavy
-
-The next milestone is:
-
-- make `matlabv2native` meaningfully useful as a standalone runtime path across a broader explicit-ODE input matrix
-- keep Python parity available, but separate and heavy
-- make the runtime-native surface clearly measurable and documented
+This campaign is not complete if matrix systems still require the user to rewrite everything manually into scalar equation lists.
 
 ## Mission
 
-Advance `matlabv2native` from “runtime-native for two anchor cases” to “runtime-native for a meaningful explicit-ODE family set” by doing all of the following:
+Advance `matlabv2native` from “scalar symbolic equations only” to “matrix/vector symbolic systems normalized into the same native backend.”
 
-- widen native Simulink input-source lowering and MATLAB numerical-oracle input evaluation together
-- reduce `MATLAB Function` fallback usage in both source lowering and RHS lowering where native block composition exists
-- add a dedicated heavy comparison API for native-vs-Python-vs-reference checks
-- publish a runtime/parity coverage ledger so supported vs delegated cases are explicit
-- keep Python out of the default hot path for cases that are declared runtime-native
+You must close gaps in:
 
-You must keep the architecture additive.
+- matrix/vector symbolic intake
+- scalarization / flattening
+- state-order preservation
+- route classification after scalarization
+- validation coverage and documentation clarity
 
 ## Non-Negotiable Constraints
 
 1. Do not remove the Python backend.
 2. Do not regress `matlabv1`.
 3. Do not regress existing Python workflows.
-4. Do not silently reintroduce Python into the default runtime path for cases already marked standalone-native.
-5. Do not claim runtime-native support for an input family unless both native Simulink lowering and MATLAB numerical-oracle evaluation exist and are tested.
+4. Do not silently change semantics while widening MATLAB-symbolic intake.
+5. Every new MATLAB-native capability must have automated tests.
 6. Every generated model must still simulate and validate.
-7. Do not weaken validation to make widening easier.
-8. If a family is not trustworthy yet, keep it delegated or parity-gated and say so explicitly.
-9. Do not introduce a public build-only escape hatch.
-10. Preserve Git discipline: test, commit, push after each stable phase.
+7. Do not weaken MATLAB-reference validation to make support claims easier.
+8. Do not claim broad matrix-symbolic support unless scalarization and route behavior are actually tested.
+9. Do not overclaim `symmatrix` or other MATLAB object classes if MATLAB representation details make them impractical; document the exact accepted forms instead.
+10. If a matrix-form system lands outside the current explicit-ODE / bounded-DAE native path, make the delegation or unsupported reason explicit.
 
 ## Git / Push Discipline
-
-You are continuing on an already-pushed branch. Preserve that discipline.
 
 For every completed phase:
 
@@ -114,180 +161,131 @@ For every completed phase:
 
 Do not accumulate large unpushed changes.
 
-If you get blocked, push the last stable checkpoint before continuing.
+## Primary Objectives For This Campaign
 
-If the remote or auth breaks, report that explicitly and continue with local commits, but do not pretend pushes happened.
+Close these gaps in this order:
 
-## Primary Objective for This Continuation
+1. matrix/vector symbolic intake normalization
+2. user-declared scalar state order preservation for matrix systems
+3. native explicit-ODE route support for scalarized matrix systems
+4. bounded DAE route support after scalarization where valid
+5. explicit delegation/unsupported metadata for matrix systems outside the native route
 
-Implement the next real runtime-expansion step in `matlabv2native`:
+At the same time:
 
-- widen the standalone-native runtime matrix beyond constant/step/fallback
-- keep MATLAB-reference validation as the default validation surface
-- keep Python parity explicit and separate
-- reduce unnecessary `MATLAB Function` usage
-- document the resulting coverage clearly
+- keep the existing scalar symbolic path stable
+- keep the complex benchmark anchors green
+- keep `MATLAB Function` fallback and delegation intentional
 
-You do not need full native DAE parity immediately. Explicit ODEs still come first.
+## Required Major Workstreams
 
-## Required Next Phases
+### Workstream 1: Probe Actual MATLAB Matrix-Symbolic Forms
 
-### Phase 6A: Widen the Runtime-Native Input Matrix
+Before implementing anything, determine which matrix/vector forms MATLAB actually hands to the native layer cleanly.
 
-Widen native support in both:
+At minimum probe:
 
-1. native Simulink source lowering
-2. MATLAB numerical-oracle input evaluation
+- column-vector equation arrays:
+  - `eqns = [diff(x1,t)==...; diff(x2,t)==...]`
+- vector-state forms:
+  - `X = [x1; x2; ...]; diff(X,t) == F(X,t)`
+- matrix multiplication forms:
+  - `diff(X,t) == A*X + B*u`
+- whether MATLAB presents these as plain `sym` arrays, symbolic equalities, or something else
+- whether `symmatrix` is relevant here or a distraction
 
-At minimum, add these families in both places:
+Document the exact accepted representations.
 
-- pulse
-- ramp
-- sine
-- square
-- sawtooth
-- triangle
-- saturation
-- dead zone
-- `atan`
-- `atan2`
-- `exp`
-- `log`
-- `sqrt`
+Do not guess.
 
-Requirements:
+### Workstream 2: Matrix / Vector Scalarization Layer
 
-- do not mark a family runtime-native unless both lowering and oracle support exist
-- if a native Simulink block exists, use it
-- use `MATLAB Function` fallback only when direct native block composition is not possible
-- preserve user-visible/editable inputs and parameters
-- keep the default runtime path Python-free for the families you promote to runtime-native
+Add an additive normalization layer before the current native preview path.
 
-### Phase 6B: Reduce `MATLAB Function` Fallback in RHS Lowering
+That layer must:
 
-The current native builder still overuses `MATLAB Function` blocks for RHS expressions.
-
-Reduce this intentionally for explicit ODE anchor-style systems.
-
-At minimum, lower directly where practical with:
-
-- Sum
-- Gain
-- Product
-- reciprocal / division patterns where safe
-- Math Function
-- Trigonometric Function
-- Saturation
-- Dead Zone
+1. detect accepted matrix/vector symbolic equation forms
+2. flatten them into scalar symbolic equations
+3. flatten or resolve the corresponding scalar state basis
+4. preserve a deterministic, user-visible state order
+5. pass the scalarized result into the existing native explicit-ODE / bounded-DAE preview and lowering path
 
 Requirements:
 
-- keep diagrams readable
-- keep `MATLAB Function` only as a fallback
-- add tests that prove the converted cases now use native block families
+- preserve the user-provided order when `State` / `States` is explicitly passed
+- if state order is inferred, make the inference deterministic and documented
+- do not silently alphabetize matrix systems if the user gave a state list
 
-### Phase 6C: Add a Heavy Comparison API
+### Workstream 3: Explicit-ODE Matrix Route
 
-The default runtime path should remain lean. Add or expand a separate heavy comparison API.
+For matrix/vector symbolic systems that become explicit ODEs after scalarization:
 
-You must either:
+1. ensure native preview classifies them as explicit ODEs
+2. ensure native lowering and simulation work
+3. ensure MATLAB-reference validation works
+4. ensure result structs expose the correct flattened first-order state order
 
-- expand `matlabv2native.compareWithPython(...)`
+At minimum support:
 
-or
+- linear matrix systems like `diff(X,t) == A*X`
+- affine matrix systems like `diff(X,t) == A*X + B*u`
+- coupled nonlinear vector systems written in vector form, if MATLAB symbolic representation remains flattenable
 
-- add a new additive API such as:
-  - `matlabv2native.compareAll(...)`
-  - `matlabv2native.compareWithParity(...)`
+### Workstream 4: Matrix + DAE Boundary
 
-This API should compare, for native-eligible explicit ODEs:
+After scalarization, route matrix/vector systems through the current bounded-DAE logic when valid.
 
-- route/classification
-- first-order state set/order
-- first-order RHS semantics where practical
-- native source block family
-- MATLAB-reference validation results
-- Python parity results when requested
-- native vs Python trace agreement
+At minimum:
 
-Key design rule:
+1. test one reducible matrix/vector algebraic system that becomes native after elimination
+2. test one matrix/vector algebraic system that should still delegate
+3. make route/result metadata explicit
 
-- default runtime path stays lean
-- comparison API can stay heavy
+Do not overclaim broad matrix DAE support if only a subset is real.
 
-### Phase 6D: Add a Runtime/Parity Coverage Ledger
+### Workstream 5: Result Metadata And User-Facing Clarity
 
-Create a maintained doc that explicitly tracks which families are:
+For matrix/vector symbolic systems, make sure the result surface is explicit about:
 
-- runtime-native
-- MATLAB-reference supported
-- Python-parity supported
-- still delegated
+- original representation kind
+- scalarized equation count
+- flattened state order
+- route classification
+- whether the system stayed native, used bounded fallback, delegated, or is unsupported
 
-Start with:
+If adding a small new metadata field makes this clearer, do it additively.
 
-- constant
-- step
-- delayed step
-- pulse
-- ramp
-- sine
-- square
-- sawtooth
-- triangle
-- saturation
-- dead zone
-- `atan`
-- `atan2`
-- `exp`
-- `log`
-- `sqrt`
-- one unsupported symbolic expression using `MATLAB Function` fallback
+### Workstream 6: Benchmark-Style Anchors
 
-For each family, track:
+Add at least two committed regression anchors:
 
-1. native source block family
-2. native runtime validation against MATLAB reference
-3. optional Python parity result
-4. whether Python is required in the hot path
-5. whether the family is still delegated
+- one matrix/vector explicit-ODE benchmark that builds natively
+- one matrix/vector DAE/algebraic benchmark that is either natively reduced or explicitly delegated
 
-### Phase 6E: Strengthen Performance Visibility
+These should become “don’t regress” anchors like the current scalar benchmark systems.
 
-You already have timing fields. Make them genuinely useful.
+## Required MATLAB-Symbolic Coverage Matrix
 
-Requirements:
+At minimum, maintain/update coverage for these shapes:
 
-- ensure timing fields are present for runtime-native cases and explicit parity mode
-- document what each field measures
-- add at least one test that verifies the presence of timing fields in runtime mode
-- add at least one test that verifies Python parity timing is only populated when parity mode is requested
+- scalar explicit ODE
+- coupled explicit ODE system
+- matrix/vector explicit ODE system
+- matrix/vector affine system with external input
+- reducible matrix/vector DAE/algebraic system
+- irreducible matrix/vector algebraic system
 
-Do not hardcode speed thresholds. The goal is visibility, not brittle benchmarks.
+For each case, track:
 
-## Required Runtime/Parity Matrix
-
-At minimum, advance the matrix to cover:
-
-- constant
-- step
-- delayed step
-- pulse
-- ramp
-- sine
-- saturation
-- `atan`
-- `exp`
-- one unsupported symbolic expression using `MATLAB Function` fallback
-
-If more families can be completed cleanly in the same phase, include them, but do not overclaim partial support.
-
-For each promoted family, prove:
-
-1. native source block family is what you expect
-2. native runtime validation passes against MATLAB reference
-3. Python is not required in the hot path
-4. explicit Python parity remains available
+1. accepted MATLAB symbolic representation
+2. scalarization support
+3. route classification
+4. runtime-native support
+5. MATLAB-reference support
+6. fallback/delegation status
+7. flattened state order behavior
+8. validation result
+9. whether Python is required in the hot path
 
 ## Required Testing
 
@@ -295,52 +293,44 @@ Add or extend tests in:
 
 - MATLAB-engine-backed Python integration tests
 - direct MATLAB-side smoke/regression tests where practical
-- parity tests specific to `matlabv2native`
-- timing-field contract tests where practical
+- route/preview tests where practical
 
-Do not remove existing tests.
+Minimum expectations for this campaign:
 
-You must keep these green:
-
-- existing Python tests you touch
-- `matlabv1` integration tests
-- `matlabv2native` tests you add
-
-Minimum expectations for this continuation:
-
-- at least one widened-input integration test that is runtime-native and MATLAB-reference validated
-- at least one explicit parity-mode test for a widened input family
-- at least one test showing a reduced `MATLAB Function` footprint for an RHS case
-- at least one timing-field contract test
-- at least one coverage-ledger/doc update committed with the code
+- a committed test for a 3-to-5-state vector-form explicit ODE system
+- a committed test for a matrix-form linear system like `diff(X,t) == A*X`
+- a committed test that explicit `State` order is preserved for matrix/vector intake
+- a committed test for a matrix/vector affine input system
+- a committed reducible matrix/vector DAE route test
+- a committed irreducible matrix/vector delegated-route test
+- tests proving result metadata exposes the flattened state order and route boundary
 
 ## Required Documentation
 
 Update docs as you go:
 
 - keep [matlab_native_backend_architecture.md](./matlab_native_backend_architecture.md) current
-- add a runtime/parity coverage ledger doc if it does not already exist
-- document which families are now truly runtime-native
-- document which families still require parity mode or delegation
-- document any remaining reliance on `MATLAB Function` fallback
-- document the comparison API boundary: lean runtime vs heavy parity
+- keep [matlab_native_backend_parity_ledger.md](./matlab_native_backend_parity_ledger.md) current
 
 Document explicitly:
 
-- which new families no longer require Python during normal execution
-- which new families still delegate
-- which fields in the result struct indicate runtime mode vs parity mode
+- which matrix/vector MATLAB symbolic forms are accepted
+- whether `symmatrix` is actually supported or intentionally out of scope
+- how scalarization works
+- how state order is determined
+- which matrix/vector routes are native vs delegated
+- which matrix/vector DAE/algebraic routes are still bounded or delegated
 
 ## Failure Conditions
 
-You fail this continuation if you:
+You fail this campaign if you:
 
 - break current Python behavior
 - break `matlabv1`
-- silently reintroduce Python into the default runtime path for runtime-native cases
-- claim runtime-native support for a family without MATLAB-reference validation
-- widen support in lowering but not in the MATLAB numerical oracle
-- leave coverage status implicit instead of documented
+- claim matrix/vector support without tests
+- silently reorder user-provided states
+- widen intake without validating the scalarized/native result
+- make route behavior for matrix systems implicit or ambiguous
 - leave large unpushed local changes
 
 ## Execution Style
@@ -350,25 +340,21 @@ Work in small phases. Report after each phase:
 - what changed
 - what was tested
 - what was pushed
-- which families are now runtime-native
-- which families still require parity mode or delegation
-- what `MATLAB Function` usage was eliminated
-- what still blocks widening the matrix further
+- which matrix/vector forms are now accepted
+- which routes are now native vs delegated
+- how flattened state order behaves
+- what still blocks broad matrix-symbolic support
 
 ## Concrete First Step
 
-Start by promoting the next smallest, defensible family set to runtime-native:
+Start with the smallest defensible matrix/vector slice:
 
-- `pulse`
-- `ramp`
-- `sine`
+1. probe actual MATLAB symbolic representations for:
+   - `diff(X,t) == A*X`
+   - `diff(X,t) == A*X + B*u`
+2. implement scalarization for accepted vector-form explicit ODEs
+3. add a committed regression test for a 3-to-5-state matrix/vector system
+4. preserve explicit user-declared state order
+5. update the docs honestly
 
-For those families:
-
-1. add native Simulink lowering
-2. add MATLAB numerical-oracle evaluation
-3. validate them in runtime mode without Python in the loop
-4. verify explicit Python parity still works when requested
-5. update the coverage ledger
-
-Only after that family set is clean and green should you widen further to square/sawtooth/triangle, saturation/dead-zone, and unary math families like `atan`, `exp`, `log`, and `sqrt`.
+Only after that is clean and green should you widen to matrix/vector DAE/algebraic cases.

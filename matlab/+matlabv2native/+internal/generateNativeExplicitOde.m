@@ -221,6 +221,24 @@ for index = 1:numel(stateEquations)
         add_line(modelName, [constName '/1'], targetPort, "autorouting", "on");
         continue;
     end
+    [nativeRhsPort, clockBlockName, clockSignal] = localNativeSignalPlusTimeRhsPort( ...
+        modelName, ...
+        stateName, ...
+        rhsText, ...
+        positions.rhs(index, :), ...
+        signalSources, ...
+        stateNames, ...
+        inputNames, ...
+        parameterNames, ...
+        timeVariable, ...
+        oracleConfig, ...
+        clockBlockName, ...
+        clockSignal);
+    if ~isempty(nativeRhsPort)
+        add_line(modelName, nativeRhsPort, targetPort, "autorouting", "on");
+        continue;
+    end
+
     nativeRhsPort = localNativeAffineRhsPort( ...
         modelName, ...
         stateName, ...
@@ -1341,6 +1359,135 @@ for index = 1:numel(termPorts)
     add_line(modelName, termPorts{index}, [mainName '/' num2str(index)], "autorouting", "on");
 end
 signalPort = [mainName '/1'];
+end
+
+function [signalPort, clockBlockName, clockSignal] = localNativeSignalPlusTimeRhsPort( ...
+    modelName, stateName, rhsText, position, signalSources, stateNames, inputNames, parameterNames, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal)
+[isMixed, affine, timeExpression] = localSignalPlusTimeExpression(rhsText, stateNames, inputNames, parameterNames, timeVariable);
+signalPort = '';
+if ~isMixed
+    return;
+end
+
+timeSpec = simucopilot.internal.recognizeExpressionInputSpec(timeExpression, timeVariable);
+if isempty(timeSpec)
+    timeSpec = localRecognizeAffineTimeSpec(timeExpression, timeVariable);
+end
+if isempty(timeSpec)
+    return;
+end
+
+mainName = ['rhs_' localSanitize(stateName)];
+termPorts = cell(1, 0);
+terms = affine.terms;
+
+for index = 1:numel(terms)
+    sourcePort = signalSources.(terms(index).name);
+    if abs(terms(index).coefficient - 1.0) <= 1e-12
+        termPorts{end + 1} = sourcePort; %#ok<AGROW>
+        continue;
+    end
+
+    gainName = sprintf('%s_gain_%s', mainName, localSanitize(terms(index).name));
+    add_block("simulink/Math Operations/Gain", [modelName '/' gainName], ...
+        "Gain", localNumericString(terms(index).coefficient), ...
+        "Position", localAffineAuxPosition(position, index - 1));
+    add_line(modelName, sourcePort, [gainName '/1'], "autorouting", "on");
+    termPorts{end + 1} = [gainName '/1']; %#ok<AGROW>
+end
+
+timeName = [mainName '_time'];
+inputSpecs = struct();
+inputSpecs.(timeName) = timeSpec;
+[timePort, ~, clockBlockName, clockSignal] = localAddInputSource( ...
+    modelName, timeName, localAffineAuxPosition(position, numel(termPorts)), ...
+    struct(), inputSpecs, struct(), {}, {}, timeVariable, modelConfig, clockBlockName, clockSignal);
+termPorts{end + 1} = timePort; %#ok<AGROW>
+
+if isempty(termPorts)
+    return;
+end
+
+if numel(termPorts) == 1
+    signalPort = termPorts{1};
+    return;
+end
+
+add_block("simulink/Math Operations/Sum", [modelName '/' mainName], ...
+    "Inputs", repmat('+', 1, numel(termPorts)), ...
+    "Position", position);
+for index = 1:numel(termPorts)
+    add_line(modelName, termPorts{index}, [mainName '/' num2str(index)], "autorouting", "on");
+end
+signalPort = [mainName '/1'];
+end
+
+function [isMixed, affine, timeExpression] = localSignalPlusTimeExpression(rhsText, stateNames, inputNames, parameterNames, timeVariable)
+isMixed = false;
+affine = struct("constant", 0.0, "terms", struct("name", {}, "coefficient", {}));
+timeExpression = "";
+
+signalNames = [reshape(stateNames, 1, []), reshape(inputNames, 1, []), reshape(parameterNames, 1, [])];
+timeName = char(string(timeVariable));
+if isempty(strtrim(timeName))
+    return;
+end
+
+try
+    rhsExpression = str2sym(rhsText);
+catch
+    return;
+end
+
+timeOnlyExpression = rhsExpression;
+for index = 1:numel(signalNames)
+    timeOnlyExpression = subs(timeOnlyExpression, sym(signalNames{index}), 0);
+end
+
+timeVars = arrayfun(@char, symvar(timeOnlyExpression), "UniformOutput", false);
+if isempty(timeVars)
+    return;
+end
+if ~all(strcmp(timeVars, timeName))
+    return;
+end
+
+signalExpression = simplify(rhsExpression - timeOnlyExpression);
+terms = struct("name", {}, "coefficient", {});
+for index = 1:numel(signalNames)
+    signalName = signalNames{index};
+    coefficientExpression = simplify(diff(signalExpression, sym(signalName)));
+    if ~isempty(symvar(coefficientExpression))
+        return;
+    end
+    try
+        coefficientValue = double(coefficientExpression);
+    catch
+        return;
+    end
+    if abs(coefficientValue) > 1e-12
+        terms(end + 1) = struct("name", signalName, "coefficient", coefficientValue); %#ok<AGROW>
+    end
+    signalExpression = simplify(signalExpression - coefficientExpression * sym(signalName));
+end
+
+try
+    residualValue = double(signalExpression);
+catch
+    return;
+end
+if abs(residualValue) > 1e-12
+    return;
+end
+
+if isempty(terms)
+    return;
+end
+
+isMixed = true;
+affine = struct("constant", 0.0, "terms", terms);
+timeExpression = char(formula(simplify(timeOnlyExpression)));
 end
 
 function [isAffine, affine] = localAffineSignalExpression(rhsText, stateNames, inputNames, parameterNames)
