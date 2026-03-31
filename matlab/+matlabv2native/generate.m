@@ -8,62 +8,86 @@ function out = generate(primaryInput, varargin)
 %   - otherwise delegates build, simulation, and validation to the existing backend
 
 totalTimer = tic;
-[sourceType, opts, invocation] = matlabv2native.internal.prepareInvocation( ...
-    struct("Build", true, "OpenModel", false), ...
-    primaryInput, ...
-    varargin{:});
-
-callerNames = evalin("caller", "who");
-callerWorkspace = struct();
-for index = 1:numel(callerNames)
-    name = callerNames{index};
-    if ~isvarname(name)
-        continue;
-    end
-    try
-        callerWorkspace.(name) = evalin("caller", name);
-    catch
-        % Ignore values that cannot be materialized deterministically.
-    end
-end
-
-previewTimer = tic;
-nativePreview = matlabv2native.internal.nativeAnalyze(sourceType, primaryInput, opts, callerWorkspace);
-[canNativeLower, ~] = matlabv2native.internal.isNativeExplicitOdeEligible(sourceType, nativePreview);
-previewTimeSec = toc(previewTimer);
-if canNativeLower
-    nativeOpts = localApplyNativePreview(opts, nativePreview, callerWorkspace);
-    out = matlabv2native.internal.generateNativeExplicitOde( ...
+currentStage = "prepare_invocation";
+readout = struct();
+try
+    [sourceType, opts, invocation, readout] = matlabv2native.internal.prepareInvocation( ...
+        struct("Build", true, "OpenModel", false), ...
         primaryInput, ...
-        sourceType, ...
-        nativeOpts, ...
-        invocation, ...
-        callerWorkspace, ...
-        nativePreview);
-    out.Timing.preview_analysis_sec = previewTimeSec;
-    out.Timing.total_wall_time_sec = toc(totalTimer);
-    return;
+        varargin{:});
+
+    currentStage = "caller_capture";
+    callerNames = evalin("caller", "who");
+    callerWorkspace = struct();
+    for index = 1:numel(callerNames)
+        name = callerNames{index};
+        if ~isvarname(name)
+            continue;
+        end
+        try
+            callerWorkspace.(name) = evalin("caller", name);
+        catch
+            % Ignore values that cannot be materialized deterministically.
+        end
+    end
+    readout.Stages.caller_capture = "passed";
+
+    currentStage = "route_classification";
+    previewTimer = tic;
+    nativePreview = matlabv2native.internal.nativeAnalyze(sourceType, primaryInput, opts, callerWorkspace);
+    readout = matlabv2native.internal.frontDoorSupport("attach_preview", readout, primaryInput, nativePreview);
+    readout = matlabv2native.internal.frontDoorSupport("validate_state_binding", sourceType, primaryInput, opts, nativePreview, readout);
+    [canNativeLower, nativeEligibilityReason] = matlabv2native.internal.isNativeExplicitOdeEligible(sourceType, nativePreview);
+    previewTimeSec = toc(previewTimer);
+
+    if canNativeLower
+        currentStage = "lowering";
+        nativeOpts = localApplyNativePreview(opts, nativePreview, callerWorkspace);
+        out = matlabv2native.internal.generateNativeExplicitOde( ...
+            primaryInput, ...
+            sourceType, ...
+            nativeOpts, ...
+            invocation, ...
+            callerWorkspace, ...
+            nativePreview);
+        out.Timing.preview_analysis_sec = previewTimeSec;
+        out.Timing.total_wall_time_sec = toc(totalTimer);
+        readout = matlabv2native.internal.frontDoorSupport("attach_outcome", readout, out, canNativeLower, nativeEligibilityReason);
+        out.FrontDoorReadout = readout;
+        out.FrontDoorDiagnosis = matlabv2native.internal.frontDoorSupport("diagnose", readout);
+        return;
+    end
+
+    currentStage = "python_delegate";
+    delegateOpts = matlabv2native.internal.applyNativePreview(opts, nativePreview);
+    delegateOpts = simucopilot.internal.enrichProblemMetadata(sourceType, primaryInput, delegateOpts, callerWorkspace);
+    request = simucopilot.internal.makeRequestStruct(sourceType, primaryInput, delegateOpts);
+    backendOut = simucopilot.internal.callBackend(request, delegateOpts);
+    parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, backendOut);
+
+    out = backendOut;
+    out.Api = "matlabv2native";
+    out.BackendKind = "python_delegate";
+    out.SourceType = sourceType;
+    out.Invocation = invocation;
+    out.NativePreview = nativePreview;
+    out.ParityReport = parityReport;
+    out.PublicOptions = localPublicOptions(delegateOpts);
+    out.Timing = struct( ...
+        "preview_analysis_sec", previewTimeSec, ...
+        "python_delegate_sec", toc(totalTimer) - previewTimeSec, ...
+        "total_wall_time_sec", toc(totalTimer) ...
+    );
+    readout = matlabv2native.internal.frontDoorSupport("attach_outcome", readout, out, canNativeLower, nativeEligibilityReason);
+    out.FrontDoorReadout = readout;
+    out.FrontDoorDiagnosis = matlabv2native.internal.frontDoorSupport("diagnose", readout);
+catch exc
+    if matlabv2native.internal.frontDoorSupport("is_diagnostic_identifier", exc.identifier)
+        rethrow(exc);
+    end
+    readout = localMarkFailedStage(readout, currentStage, exc);
+    matlabv2native.internal.frontDoorSupport("raise_unexpected", currentStage, exc, readout);
 end
-
-delegateOpts = matlabv2native.internal.applyNativePreview(opts, nativePreview);
-delegateOpts = simucopilot.internal.enrichProblemMetadata(sourceType, primaryInput, delegateOpts, callerWorkspace);
-request = simucopilot.internal.makeRequestStruct(sourceType, primaryInput, delegateOpts);
-backendOut = simucopilot.internal.callBackend(request, delegateOpts);
-parityReport = matlabv2native.internal.comparePreviewToProblem(nativePreview, backendOut);
-
-out = backendOut;
-out.Api = "matlabv2native";
-out.BackendKind = "python_delegate";
-out.SourceType = sourceType;
-out.Invocation = invocation;
-out.NativePreview = nativePreview;
-out.ParityReport = parityReport;
-out.PublicOptions = localPublicOptions(delegateOpts);
-out.Timing = struct( ...
-    "preview_analysis_sec", previewTimeSec, ...
-    "python_delegate_sec", toc(totalTimer) - previewTimeSec, ...
-    "total_wall_time_sec", toc(totalTimer) ...
-);
 end
 
 function publicOptions = localPublicOptions(opts)
@@ -115,4 +139,19 @@ if iscell(raw)
     return;
 end
 values = {char(string(raw))};
+end
+
+function readout = localMarkFailedStage(readout, stage, exc)
+if isempty(readout)
+    readout = struct();
+end
+readout.FailedStage = char(string(stage));
+readout.UnderlyingErrorIdentifier = char(string(exc.identifier));
+readout.UnderlyingErrorMessage = char(string(exc.message));
+if isfield(readout, "Stages") && isstruct(readout.Stages)
+    fieldName = char(string(stage));
+    if isfield(readout.Stages, fieldName)
+        readout.Stages.(fieldName) = "failed";
+    end
+end
 end

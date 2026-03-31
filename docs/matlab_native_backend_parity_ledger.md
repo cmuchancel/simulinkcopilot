@@ -17,12 +17,13 @@ The goal is to keep claims explicit:
 - latest route-boundary phase: reducible single-algebraic DAE reduction plus explicit `sawtooth` / `triangle` MATLAB-symbolic boundary documentation
 - latest lowering-quality phase: native pure-time RHS lowering for explicit ODEs and reducible DAE outputs
 - latest matrix/vector intake phase: vector-form MATLAB symbolic equation arrays plus mixed signal-plus-time RHS lowering for affine vector systems
+- latest front-door hardening phase: explicit `State` / `States` requirement plus structured MATLAB-symbolic front-door diagnostics and readouts
 
 ## Front Doors
 
 | Front Door | Native Intake | Runtime-Native Build | Python Delegate / Parity Notes |
 | --- | --- | --- | --- |
-| `matlab_symbolic` | Yes | Yes for current explicit-ODE native set | Primary native front door today |
+| `matlab_symbolic` | Yes | Yes for current explicit-ODE native set | Primary native front door today; `State` / `States` is now required and failures are wrapped in structured front-door diagnostics |
 | MATLAB equation text | Partial preview / delegation | No | Delegates to Python for build/runtime |
 | LaTeX | No native lowering yet | No | Delegates to Python |
 | structured ODE spec | No native lowering yet | No | Delegates to Python |
@@ -70,6 +71,10 @@ The goal is to keep claims explicit:
 
 ## Important Notes
 
+- `matlab_symbolic` no longer treats public state inference as a convenience path. Callers must provide `State` / `States`, and state-order ownership is now explicit at the front door.
+- Successful `matlabv2native.analyze(...)`, `generate(...)`, and `compareWithPython(...)` results now carry `FrontDoorReadout` and deterministic `FrontDoorDiagnosis` payloads that expose stage-by-stage route/readout data.
+- Current wrapped front-door failure classes include missing-state declaration, conflicting `State` / `States`, invalid shared options, duplicate state names, role overlap between states and algebraics/inputs/parameters, state-binding mismatch, and internal-error wrapping.
+- Diagnosis in this checkpoint is deterministic and rule-based from the structured readout payload. An additive AI-assisted diagnosis layer is still future work.
 - `pulse`, `ramp`, `sine`, `square`, `saturation`, and `dead zone` now have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `sign`, `abs`, and two-input `min/max` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - `atan`, `atan2`, `exp`, `log`, and `sqrt` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
@@ -94,9 +99,10 @@ The goal is to keep claims explicit:
 
 ## Next Gaps To Close
 
-1. Decide whether to widen matrix/vector symbolic intake beyond plain vector-valued `sym` / `symfun` arrays and whether `symmatrix` should stay out of scope.
-2. Decide whether to widen DAE reduction beyond the current single-algebraic-variable elimination path.
-3. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
-4. Expand benchmark coverage beyond the current cart-pendulum, planar-quadrotor, acrobot, and vector-form regression checkpoints.
-5. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
-6. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks, especially for time-plus-parameter or other non-pure-time symbolic RHS forms.
+1. Extend the structured front-door readout and deterministic diagnosis surface to more delegated and unsupported families beyond the current hardening slice.
+2. Decide whether to widen matrix/vector symbolic intake beyond plain vector-valued `sym` / `symfun` arrays and whether `symmatrix` should stay out of scope.
+3. Decide whether to widen DAE reduction beyond the current single-algebraic-variable elimination path.
+4. Add committed native coverage for `cosine` and impulse-style symbolic inputs.
+5. Expand benchmark coverage beyond the current cart-pendulum, planar-quadrotor, acrobot, and vector-form regression checkpoints.
+6. Decide whether to claim Python parity for the runtime-native nonlinear and math families that are already MATLAB-reference clean.
+7. Keep reducing `MATLAB Function` fallback for source and RHS expressions that are simple enough to draw with standard Simulink blocks, especially for time-plus-parameter or other non-pure-time symbolic RHS forms.

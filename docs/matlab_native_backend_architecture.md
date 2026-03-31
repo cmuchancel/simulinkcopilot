@@ -4,7 +4,7 @@ This document describes the additive native MATLAB backend effort that sits besi
 
 ## Current Status
 
-`matlabv2native` currently exists as a **route-boundary checkpoint after symbolic math runtime widening and complex benchmark stabilization**:
+`matlabv2native` currently exists as a **route-boundary checkpoint after symbolic math runtime widening, vector-form symbolic intake, and initial front-door hardening**:
 
 - it provides a native MATLAB public API
 - it performs MATLAB-side source-type, symbol-metadata, and explicit-ODE preview
@@ -44,6 +44,9 @@ This document describes the additive native MATLAB backend effort that sits besi
   - acrobot benchmark with biased step torque input
 - it now supports a bounded reducible-DAE native route by eliminating one algebraic variable before the existing explicit-ODE lowering path
 - it now accepts plain vector-valued MATLAB symbolic equation arrays such as `diff(X,t) == A*X` and `diff(X,t) == A*X + B*u(t)` when MATLAB presents them as `sym` / `symfun` arrays
+- it now requires explicit `State` / `States` declarations for the `matlab_symbolic` front door instead of silently inferring public state order
+- it now wraps main MATLAB-symbolic front-door failures in structured diagnostics with stable codes, stage names, likely-cause text, and concrete fix guidance
+- it now returns structured `FrontDoorReadout` and deterministic `FrontDoorDiagnosis` payloads on successful public-entrypoint runs
 - it now has committed native-runtime integration coverage for a coupled explicit system
 - it now has committed parity-mode integration coverage for a coupled explicit system
 - it reports additive timing fields for preview, build, simulation, reference solve, optional Python parity, and total wall time
@@ -68,6 +71,40 @@ Recommended bootstrap:
 info = matlabv2native_setup();
 ```
 
+## Front-Door Contract
+
+For the `matlab_symbolic` front door, `State` / `States` is now intentionally required.
+
+That contract is strict:
+
+- missing `State` / `States` is a front-door validation error
+- duplicate state names are rejected before route analysis
+- state names cannot overlap with declared algebraics, inputs, or parameters
+- declared states must match the symbolic state basis extracted from the equations
+- vector-form symbolic systems keep the explicit user-declared state order instead of relying on heuristic inference
+
+Successful public-entrypoint results now expose:
+
+- `FrontDoorReadout`
+- `FrontDoorDiagnosis`
+
+Current wrapped front-door failures expose, at minimum:
+
+- stable error code
+- failure stage
+- short summary
+- detailed explanation
+- likely cause
+- suggested fix
+- support status
+- lower-level underlying MATLAB error fields when applicable
+
+This checkpoint ships deterministic structured diagnosis only. An additive AI-assisted diagnosis layer is not yet part of the runtime contract.
+
+See also:
+
+- [matlab_native_backend_front_door_diagnostics.md](./matlab_native_backend_front_door_diagnostics.md)
+
 ## Current Behavior
 
 ### Native in MATLAB
@@ -77,9 +114,13 @@ These behaviors are implemented on the MATLAB side today:
 - source-type inference
 - caller workspace capture
 - equation-string extraction
+- strict option validation for the `matlab_symbolic` front door
 - basic time-variable inference
 - basic derivative/state inference
 - basic input vs parameter inference from caller-workspace values
+- structured front-door readout population across option validation, caller capture, symbolic normalization, state binding, route classification, native eligibility, lowering, simulation, MATLAB reference, and parity stages
+- wrapped front-door diagnostics for missing states, invalid state declarations, conflicting state options, invalid parity mode, invalid shared options, state-binding mismatch, and internal-error wrapping
+- deterministic front-door diagnosis summaries derived from structured readouts
 - explicit-ODE route preview for MATLAB symbolic equations when `odeToVectorField` succeeds
 - reducible DAE/algebraic route preview for a bounded single-algebraic-variable subset via symbolic elimination plus `odeToVectorField`
 - explicit route classification for irreducible DAE/algebraic systems as delegated `dae_algebraic`
@@ -208,6 +249,7 @@ The scaffold is split into:
 Important internal helpers:
 
 - [prepareInvocation.m](../matlab/+matlabv2native/+internal/prepareInvocation.m)
+- [frontDoorSupport.m](../matlab/+matlabv2native/+internal/frontDoorSupport.m)
 - [inferSourceType.m](../matlab/+matlabv2native/+internal/inferSourceType.m)
 - [captureCallerWorkspace.m](../matlab/+matlabv2native/+internal/captureCallerWorkspace.m)
 - [equationTexts.m](../matlab/+matlabv2native/+internal/equationTexts.m)
@@ -244,6 +286,7 @@ Fields not yet compared automatically across the full API surface:
 
 - generated block structure beyond semantic source-family checks
 - first-order RHS semantics
+- AI-assisted diagnosis quality over the structured front-door readout surface
 - the wider explicit-ODE input matrix listed in the campaign prompt
 - non-explicit systems
 - build/simulate parity through `compareWithPython(...)`, which is still preview-oriented

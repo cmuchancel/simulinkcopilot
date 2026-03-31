@@ -203,6 +203,98 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(native_first_order_states, ("x",))
         self.assertEqual(native_first_order_states, python_first_order_states)
 
+    def test_matlabv2native_generate_requires_explicit_state_for_matlab_symbolic(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear eqn x out", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t)", nargout=0)
+        self.eng.eval("eqn = diff(x,t) == -x;", nargout=0)
+
+        with self.assertRaises(Exception) as exc_info:
+            self.eng.eval(
+                "out = matlabv2native.generate(eqn, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_missing_state_error', 'OpenModel', false);",
+                nargout=0,
+            )
+
+        message = str(exc_info.exception)
+        self.assertIn("Code: matlabv2native:FrontDoorMissingStateDeclaration", message)
+        self.assertIn("Stage: option_validation", message)
+        self.assertIn("State / States is required for matlab_symbolic.", message)
+        self.assertIn("SuggestedFix: Pass 'State', 'x'", message)
+
+    def test_matlabv2native_generate_rejects_duplicate_declared_states(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear eqns x y out", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t) y(t)", nargout=0)
+        self.eng.eval("eqns = [diff(x,t) == y; diff(y,t) == -x];", nargout=0)
+
+        with self.assertRaises(Exception) as exc_info:
+            self.eng.eval(
+                "out = matlabv2native.generate(eqns, 'State', {'x','x'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_duplicate_state_error', 'OpenModel', false);",
+                nargout=0,
+            )
+
+        message = str(exc_info.exception)
+        self.assertIn("Code: matlabv2native:FrontDoorDuplicateStateNames", message)
+        self.assertIn("Stage: option_validation", message)
+        self.assertIn("Declared state names must be unique.", message)
+
+    def test_matlabv2native_generate_rejects_state_binding_mismatch(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear eqns X x1 x2 out", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x1(t) x2(t)", nargout=0)
+        self.eng.eval("X = [x1; x2];", nargout=0)
+        self.eng.eval("eqns = diff(X,t) == [x2; -x1];", nargout=0)
+
+        with self.assertRaises(Exception) as exc_info:
+            self.eng.eval(
+                "out = matlabv2native.generate(eqns, 'State', {'x1','x3'}, 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_state_binding_error', 'OpenModel', false);",
+                nargout=0,
+            )
+
+        message = str(exc_info.exception)
+        self.assertIn("Code: matlabv2native:FrontDoorStateBindingMismatch", message)
+        self.assertIn("Stage: state_binding", message)
+        self.assertIn("Declared State / States does not match the symbolic system.", message)
+        self.assertIn("BoundStates: {x1, x2}", message)
+
+    def test_matlabv2native_generate_populates_front_door_readout_for_native_success(self) -> None:
+        repo_root = str(REPO_ROOT).replace("'", "''")
+        self.eng.eval(f"cd('{repo_root}')", nargout=0)
+        self.eng.eval("clear out eqn x", nargout=0)
+        self.eng.eval("info = matlabv2native_setup();", nargout=0)
+        self.eng.eval("syms x(t)", nargout=0)
+        self.eng.eval("eqn = diff(x,t) == -x + 1;", nargout=0)
+        self.eng.eval(
+            "out = matlabv2native.generate(eqn, 'State', 'x', 'PythonExecutable', '__missing_python__', 'ModelName', 'matlabv2native_frontdoor_native_success', 'OpenModel', false);",
+            nargout=0,
+        )
+
+        representation_kind = self.eng.eval("out.FrontDoorReadout.RepresentationKind", nargout=1)
+        declared_states = tuple(self.eng.eval("out.FrontDoorReadout.DeclaredStates", nargout=1))
+        bound_states = tuple(self.eng.eval("out.FrontDoorReadout.BoundStates", nargout=1))
+        route = self.eng.eval("out.FrontDoorReadout.Route", nargout=1)
+        support_status = self.eng.eval("out.FrontDoorDiagnosis.SupportStatus", nargout=1)
+        diagnosis_mode = self.eng.eval("out.FrontDoorDiagnosis.Mode", nargout=1)
+        option_stage = self.eng.eval("out.FrontDoorReadout.Stages.option_validation", nargout=1)
+        state_binding_stage = self.eng.eval("out.FrontDoorReadout.Stages.state_binding", nargout=1)
+        native_eligibility_stage = self.eng.eval("out.FrontDoorReadout.Stages.native_eligibility", nargout=1)
+
+        self.assertEqual(representation_kind, "symbolic_scalar")
+        self.assertEqual(declared_states, ("x",))
+        self.assertEqual(bound_states, ("x",))
+        self.assertEqual(route, "explicit_ode")
+        self.assertEqual(support_status, "supported")
+        self.assertEqual(diagnosis_mode, "deterministic")
+        self.assertEqual(option_stage, "passed")
+        self.assertEqual(state_binding_stage, "passed")
+        self.assertEqual(native_eligibility_stage, "passed")
+
     def test_matlabv2native_generate_builds_and_returns_parity_report(self) -> None:
         repo_root = str(REPO_ROOT).replace("'", "''")
         self.eng.eval(f"cd('{repo_root}')", nargout=0)
