@@ -80,6 +80,8 @@ The goal is to keep claims explicit:
 - `atan`, `atan2`, `exp`, `log`, and `sqrt` now also have direct MATLAB symbolic-expression recognition in the native path, not just struct-style input specs.
 - Larger MATLAB-symbolic nonlinear benchmarks now have committed runtime coverage: a coupled cart-pendulum, a planar quadrotor with biased step thrust input, and an acrobot with biased step torque input.
 - For simple affine explicit-ODE RHS expressions, the native builder now uses `Sum` / `Gain` composition instead of dropping straight to a `MATLAB Function` block.
+- The native explicit-ODE builder now also has a recursive nonlinear RHS lowerer for supported composed symbolic expressions, so sums/products/divisions/powers/trig/math-function trees can stay native instead of falling straight to `MATLAB Function` fallback.
+- The acrobot benchmark is now a stronger regression anchor: the `omega1` and `omega2` RHS expressions lower to native Simulink math/trig/product blocks, not top-level `MATLAB Function` blocks.
 - Plain vector-valued MATLAB symbolic equation arrays such as `diff(X,t) == A*X` and `diff(X,t) == A*X + B*u(t)` now flatten into the existing native explicit-ODE path, and explicit user-provided state order is preserved for those vector-form systems.
 - Mixed signal-plus-time RHS expressions such as `-x1 - 2*x2 - 3*x3 + 1 + heaviside(t - 1/2)` now lower natively instead of falling through to a broken MATLAB Function fallback, which is what unblocked the affine vector-form build case.
 - MATLAB symbolic canonical forms such as `max([1/5, sin(t)], [], 2, ...)` and `min([1/5, sin(t)], [], 2, ...)` are now normalized back into native `MinMax` input specs.

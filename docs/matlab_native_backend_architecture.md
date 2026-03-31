@@ -171,6 +171,13 @@ These behaviors are implemented on the MATLAB side today:
 - native mixed signal-plus-time RHS lowering for recognized expressions such as:
   - `-x1 - 2*x2 - 3*x3 + 1 + heaviside(t - 1/2)`
   - vector-form affine systems that flatten into the same pattern
+- native recursive nonlinear RHS lowering for supported symbolic compositions of:
+  - state/input/parameter/time leaves
+  - sums and differences
+  - products and divisions
+  - integer powers and square roots
+  - `sin`, `cos`, `atan`, `atan2`, `abs`, `sign`, `exp`, `log`, `sqrt`, `min`, and `max`
+  - current acrobot benchmark RHS expressions, which now lower to native math/trig/product graphs instead of `MATLAB Function` blocks
 - native time-driven RHS lowering for recognized pure-time expressions such as:
   - `sin(t)`
   - `t + 1`
@@ -236,7 +243,7 @@ These behaviors still use the existing Python backend, either as the primary exe
 - broader lowering/validation coverage beyond the current anchor matrix
 - broader benchmark coverage beyond the current cart-pendulum, planar-quadrotor, acrobot, and vector-form regression checkpoints
 
-This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, vector-form symbolic equation arrays that flatten cleanly, native pure-time and mixed signal-plus-time RHS lowering, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
+This means `matlabv2native` is already MATLAB-first from the user API perspective, and it now has a real standalone native runtime path for the current explicit-ODE anchor cases, the current widened waveform/nonlinear/math-family set, vector-form symbolic equation arrays that flatten cleanly, native pure-time and mixed signal-plus-time RHS lowering, recursive nonlinear RHS lowering for supported composed symbolic graphs, and a bounded reducible-DAE subset. It is still not a full native compiler with broad runtime coverage.
 
 ## Internal Module Boundaries
 

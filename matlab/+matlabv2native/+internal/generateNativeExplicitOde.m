@@ -267,6 +267,21 @@ for index = 1:numel(stateEquations)
         continue;
     end
 
+    [nativeRhsPort, clockBlockName, clockSignal] = localNativeRecursiveRhsPort( ...
+        modelName, ...
+        stateName, ...
+        rhsText, ...
+        positions.rhs(index, :), ...
+        signalSources, ...
+        timeVariable, ...
+        oracleConfig, ...
+        clockBlockName, ...
+        clockSignal);
+    if ~isempty(nativeRhsPort)
+        add_line(modelName, nativeRhsPort, targetPort, "autorouting", "on");
+        continue;
+    end
+
     blockName = ['rhs_' localSanitize(stateName)];
     blockPath = [modelName '/' blockName];
     add_block("simulink/User-Defined Functions/MATLAB Function", blockPath, ...
@@ -1421,6 +1436,879 @@ for index = 1:numel(termPorts)
     add_line(modelName, termPorts{index}, [mainName '/' num2str(index)], "autorouting", "on");
 end
 signalPort = [mainName '/1'];
+end
+
+function [signalPort, clockBlockName, clockSignal] = localNativeRecursiveRhsPort( ...
+    modelName, stateName, rhsText, position, signalSources, timeVariable, modelConfig, clockBlockName, clockSignal)
+signalPort = '';
+prefix = ['rhs_' localSanitize(stateName)];
+[node, clockBlockName, clockSignal, ~] = localLowerRecursiveRhsExpression( ...
+    modelName, ...
+    rhsText, ...
+    prefix, ...
+    position, ...
+    0, ...
+    signalSources, ...
+    timeVariable, ...
+    modelConfig, ...
+    clockBlockName, ...
+    clockSignal, ...
+    1);
+if ~node.supported || node.is_constant
+    return;
+end
+signalPort = node.port;
+end
+
+function [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+    modelName, exprText, preferredName, basePosition, depth, signalSources, timeVariable, ...
+    modelConfig, clockBlockName, clockSignal, nextId)
+node = localUnsupportedRecursiveNode();
+exprText = localRecursiveStripOuterParens(strtrim(char(string(exprText))));
+if strlength(string(exprText)) == 0
+    return;
+end
+
+if isfield(signalSources, exprText)
+    node = localSignalRecursiveNode(signalSources.(exprText));
+    return;
+end
+
+[isNumericConstant, numericConstant] = localTryNumericExpressionValue(exprText);
+if isNumericConstant
+    node = localConstantRecursiveNode(numericConstant);
+    return;
+end
+
+[timeSpec, recognizedTimeExpression] = localRecognizedRecursiveTimeSpec(exprText, timeVariable);
+if recognizedTimeExpression
+    blockName = localResolvedRecursiveBlockName(preferredName, nextId, 'time');
+    if strlength(string(preferredName)) == 0
+        nextId = nextId + 1;
+    end
+    inputSpecs = struct();
+    inputSpecs.(blockName) = timeSpec;
+    [signalPort, ~, clockBlockName, clockSignal] = localAddInputSource( ...
+        modelName, ...
+        blockName, ...
+        localRecursivePosition(basePosition, depth, nextId), ...
+        struct(), ...
+        inputSpecs, ...
+        struct(), ...
+        {}, ...
+        {}, ...
+        timeVariable, ...
+        modelConfig, ...
+        clockBlockName, ...
+        clockSignal);
+    node = localSignalRecursiveNode(signalPort);
+    return;
+end
+
+[isAdditive, additiveParts] = localRecursiveAdditiveParts(exprText);
+if isAdditive
+    [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveAdditiveRhs( ...
+        modelName, additiveParts, preferredName, basePosition, depth, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+    return;
+end
+
+[isMultiplicative, multiplicativeParts] = localRecursiveMultiplicativeParts(exprText);
+if isMultiplicative
+    [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveMultiplicativeRhs( ...
+        modelName, multiplicativeParts, preferredName, basePosition, depth, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+    return;
+end
+
+[isPower, powerBase, powerExponent] = localRecursivePowerParts(exprText);
+if isPower
+    [node, clockBlockName, clockSignal, nextId] = localLowerRecursivePowerRhs( ...
+        modelName, powerBase, powerExponent, preferredName, basePosition, depth, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+    return;
+end
+
+[functionName, functionArgs] = localRecursiveFunctionParts(exprText);
+if strlength(string(functionName)) ~= 0
+    [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveFunctionRhs( ...
+        modelName, functionName, functionArgs, preferredName, basePosition, depth, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+end
+end
+
+function [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveAdditiveRhs( ...
+    modelName, parts, preferredName, basePosition, depth, signalSources, timeVariable, ...
+    modelConfig, clockBlockName, clockSignal, nextId)
+node = localUnsupportedRecursiveNode();
+termPorts = {};
+termSigns = '';
+constantValue = 0.0;
+
+for index = 1:numel(parts)
+    [childName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [childNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+        modelName, parts(index).text, childName, basePosition, depth + 1, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+    if ~childNode.supported
+        return;
+    end
+    signValue = 1.0;
+    if parts(index).sign == '-'
+        signValue = -1.0;
+    end
+    if childNode.is_constant
+        constantValue = constantValue + signValue * childNode.constant_value;
+        continue;
+    end
+    termPorts{end + 1} = childNode.port; %#ok<AGROW>
+    termSigns(end + 1) = parts(index).sign; %#ok<AGROW>
+end
+
+if abs(constantValue) > 1e-12
+    [constantName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [constantNode, nextId] = localRecursiveConstantBlock( ...
+        modelName, abs(constantValue), constantName, basePosition, depth + 1, nextId);
+    termPorts{end + 1} = constantNode.port; %#ok<AGROW>
+    if constantValue < 0
+        termSigns(end + 1) = '-'; %#ok<AGROW>
+    else
+        termSigns(end + 1) = '+'; %#ok<AGROW>
+    end
+end
+
+if isempty(termPorts)
+    node = localConstantRecursiveNode(constantValue);
+    return;
+end
+
+if numel(termPorts) == 1
+    if termSigns(1) == '+'
+        node = localSignalRecursiveNode(termPorts{1});
+        return;
+    end
+    [node, nextId] = localRecursiveGainBlock( ...
+        modelName, termPorts{1}, -1.0, preferredName, basePosition, depth, nextId);
+    return;
+end
+
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, 'sum');
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+add_block("simulink/Math Operations/Sum", [modelName '/' blockName], ...
+    "Inputs", termSigns, ...
+    "Position", localRecursivePosition(basePosition, depth, nextId));
+for index = 1:numel(termPorts)
+    add_line(modelName, termPorts{index}, [blockName '/' num2str(index)], "autorouting", "on");
+end
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveMultiplicativeRhs( ...
+    modelName, parts, preferredName, basePosition, depth, signalSources, timeVariable, ...
+    modelConfig, clockBlockName, clockSignal, nextId)
+node = localUnsupportedRecursiveNode();
+
+[childName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+[currentNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+    modelName, parts(1).text, childName, basePosition, depth + 1, signalSources, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+if ~currentNode.supported
+    return;
+end
+
+for index = 2:numel(parts)
+    [childName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [rhsNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+        modelName, parts(index).text, childName, basePosition, depth + 1, signalSources, ...
+        timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+    if ~rhsNode.supported
+        return;
+    end
+    stepName = preferredName;
+    if index ~= numel(parts)
+        [stepName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    end
+    [currentNode, nextId] = localCombineRecursiveProductNodes( ...
+        modelName, currentNode, parts(index).operator, rhsNode, stepName, basePosition, depth, nextId);
+    if ~currentNode.supported
+        return;
+    end
+end
+
+node = currentNode;
+end
+
+function [node, clockBlockName, clockSignal, nextId] = localLowerRecursivePowerRhs( ...
+    modelName, baseExpr, exponentExpr, preferredName, basePosition, depth, signalSources, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal, nextId)
+node = localUnsupportedRecursiveNode();
+[isNumericExponent, exponentValue] = localTryNumericExpressionValue(exponentExpr);
+if ~isNumericExponent
+    return;
+end
+
+[childName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+[baseNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+    modelName, baseExpr, childName, basePosition, depth + 1, signalSources, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+if ~baseNode.supported
+    return;
+end
+
+roundedExponent = round(exponentValue);
+if abs(exponentValue - roundedExponent) <= 1e-12 && roundedExponent >= 0
+    if baseNode.is_constant
+        node = localConstantRecursiveNode(baseNode.constant_value ^ roundedExponent);
+        return;
+    end
+    switch roundedExponent
+        case 0
+            node = localConstantRecursiveNode(1.0);
+            return;
+        case 1
+            node = baseNode;
+            return;
+        otherwise
+            currentNode = baseNode;
+            for powerIndex = 2:roundedExponent
+                stepName = preferredName;
+                if powerIndex ~= roundedExponent
+                    [stepName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+                end
+                [currentNode, nextId] = localCombineRecursiveProductNodes( ...
+                    modelName, currentNode, '*', baseNode, stepName, basePosition, depth, nextId);
+                if ~currentNode.supported
+                    return;
+                end
+            end
+            node = currentNode;
+            return;
+    end
+end
+
+if abs(exponentValue - 0.5) <= 1e-12
+    [node, nextId] = localRecursiveUnaryBlock( ...
+        modelName, baseNode, "sqrt", preferredName, basePosition, depth, nextId);
+    return;
+end
+
+if abs(exponentValue + 1.0) <= 1e-12
+    oneNode = localConstantRecursiveNode(1.0);
+    [node, nextId] = localCombineRecursiveProductNodes( ...
+        modelName, oneNode, '/', baseNode, preferredName, basePosition, depth, nextId);
+end
+end
+
+function [node, clockBlockName, clockSignal, nextId] = localLowerRecursiveFunctionRhs( ...
+    modelName, functionName, functionArgs, preferredName, basePosition, depth, signalSources, ...
+    timeVariable, modelConfig, clockBlockName, clockSignal, nextId)
+node = localUnsupportedRecursiveNode();
+functionName = lower(char(string(functionName)));
+switch functionName
+    case {"sin", "cos", "atan", "exp", "log", "sqrt", "abs", "sign"}
+        if numel(functionArgs) ~= 1
+            return;
+        end
+        [childName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+        [inputNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+            modelName, functionArgs{1}, childName, basePosition, depth + 1, signalSources, ...
+            timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+        if ~inputNode.supported
+            return;
+        end
+        [node, nextId] = localRecursiveUnaryBlock( ...
+            modelName, inputNode, functionName, preferredName, basePosition, depth, nextId);
+    case {"atan2", "min", "max"}
+        if numel(functionArgs) ~= 2
+            return;
+        end
+        [leftName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+        [rightName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+        [leftNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+            modelName, functionArgs{1}, leftName, basePosition, depth + 1, signalSources, ...
+            timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+        if ~leftNode.supported
+            return;
+        end
+        [rightNode, clockBlockName, clockSignal, nextId] = localLowerRecursiveRhsExpression( ...
+            modelName, functionArgs{2}, rightName, basePosition, depth + 1, signalSources, ...
+            timeVariable, modelConfig, clockBlockName, clockSignal, nextId);
+        if ~rightNode.supported
+            return;
+        end
+        [node, nextId] = localRecursiveBinaryBlock( ...
+            modelName, leftNode, rightNode, functionName, preferredName, basePosition, depth, nextId);
+end
+end
+
+function [node, nextId] = localCombineRecursiveProductNodes( ...
+    modelName, leftNode, operatorToken, rightNode, preferredName, basePosition, depth, nextId)
+node = localUnsupportedRecursiveNode();
+
+if leftNode.is_constant && rightNode.is_constant
+    if operatorToken == '/'
+        node = localConstantRecursiveNode(leftNode.constant_value / rightNode.constant_value);
+    else
+        node = localConstantRecursiveNode(leftNode.constant_value * rightNode.constant_value);
+    end
+    return;
+end
+
+if operatorToken == '*'
+    if leftNode.is_constant && abs(leftNode.constant_value) <= 1e-12
+        node = leftNode;
+        return;
+    end
+    if rightNode.is_constant && abs(rightNode.constant_value) <= 1e-12
+        node = rightNode;
+        return;
+    end
+    if leftNode.is_constant && abs(leftNode.constant_value - 1.0) <= 1e-12
+        node = rightNode;
+        return;
+    end
+    if rightNode.is_constant && abs(rightNode.constant_value - 1.0) <= 1e-12
+        node = leftNode;
+        return;
+    end
+    if leftNode.is_constant && ~rightNode.is_constant
+        [node, nextId] = localRecursiveGainBlock( ...
+            modelName, rightNode.port, leftNode.constant_value, preferredName, basePosition, depth, nextId);
+        return;
+    end
+    if rightNode.is_constant && ~leftNode.is_constant
+        [node, nextId] = localRecursiveGainBlock( ...
+            modelName, leftNode.port, rightNode.constant_value, preferredName, basePosition, depth, nextId);
+        return;
+    end
+else
+    if rightNode.is_constant
+        if abs(rightNode.constant_value) <= 1e-12
+            return;
+        end
+        if leftNode.is_constant
+            node = localConstantRecursiveNode(leftNode.constant_value / rightNode.constant_value);
+            return;
+        end
+        [node, nextId] = localRecursiveGainBlock( ...
+            modelName, leftNode.port, 1.0 / rightNode.constant_value, preferredName, basePosition, depth, nextId);
+        return;
+    end
+    if leftNode.is_constant && abs(leftNode.constant_value) <= 1e-12
+        node = leftNode;
+        return;
+    end
+end
+
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, 'product');
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+productParams = {"Position", localRecursivePosition(basePosition, depth, nextId)};
+leftPort = leftNode.port;
+rightPort = rightNode.port;
+
+if leftNode.is_constant
+    [constantName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [constantNode, nextId] = localRecursiveConstantBlock( ...
+        modelName, leftNode.constant_value, constantName, basePosition, depth + 1, nextId);
+    leftPort = constantNode.port;
+end
+if rightNode.is_constant
+    [constantName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [constantNode, nextId] = localRecursiveConstantBlock( ...
+        modelName, rightNode.constant_value, constantName, basePosition, depth + 1, nextId);
+    rightPort = constantNode.port;
+end
+
+if operatorToken == '/'
+    productParams = [productParams, {"Inputs", "*/"}]; %#ok<AGROW>
+else
+    productParams = [productParams, {"Inputs", "2"}]; %#ok<AGROW>
+end
+add_block("simulink/Math Operations/Product", [modelName '/' blockName], productParams{:});
+add_line(modelName, leftPort, [blockName '/1'], "autorouting", "on");
+add_line(modelName, rightPort, [blockName '/2'], "autorouting", "on");
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [node, nextId] = localRecursiveUnaryBlock( ...
+    modelName, inputNode, functionName, preferredName, basePosition, depth, nextId)
+node = localUnsupportedRecursiveNode();
+functionName = lower(char(string(functionName)));
+if inputNode.is_constant
+    switch functionName
+        case "sin"
+            node = localConstantRecursiveNode(sin(inputNode.constant_value));
+        case "cos"
+            node = localConstantRecursiveNode(cos(inputNode.constant_value));
+        case "atan"
+            node = localConstantRecursiveNode(atan(inputNode.constant_value));
+        case "exp"
+            node = localConstantRecursiveNode(exp(inputNode.constant_value));
+        case "log"
+            node = localConstantRecursiveNode(log(inputNode.constant_value));
+        case "sqrt"
+            node = localConstantRecursiveNode(sqrt(inputNode.constant_value));
+        case "abs"
+            node = localConstantRecursiveNode(abs(inputNode.constant_value));
+        case "sign"
+            node = localConstantRecursiveNode(sign(inputNode.constant_value));
+    end
+    return;
+end
+
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, functionName);
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+blockPosition = localRecursivePosition(basePosition, depth, nextId);
+
+switch functionName
+    case {"sin", "cos", "atan"}
+        add_block("simulink/Math Operations/Trigonometric Function", [modelName '/' blockName], ...
+            "Operator", functionName, ...
+            "Position", blockPosition);
+    case {"exp", "log", "sqrt"}
+        add_block("simulink/Math Operations/Math Function", [modelName '/' blockName], ...
+            "Operator", functionName, ...
+            "Position", blockPosition);
+    case "abs"
+        add_block("simulink/Math Operations/Abs", [modelName '/' blockName], ...
+            "Position", blockPosition);
+    case "sign"
+        add_block("simulink/Math Operations/Sign", [modelName '/' blockName], ...
+            "Position", blockPosition);
+    otherwise
+        return;
+end
+add_line(modelName, inputNode.port, [blockName '/1'], "autorouting", "on");
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [node, nextId] = localRecursiveBinaryBlock( ...
+    modelName, leftNode, rightNode, functionName, preferredName, basePosition, depth, nextId)
+node = localUnsupportedRecursiveNode();
+functionName = lower(char(string(functionName)));
+
+if leftNode.is_constant && rightNode.is_constant
+    switch functionName
+        case "atan2"
+            node = localConstantRecursiveNode(atan2(leftNode.constant_value, rightNode.constant_value));
+        case "min"
+            node = localConstantRecursiveNode(min(leftNode.constant_value, rightNode.constant_value));
+        case "max"
+            node = localConstantRecursiveNode(max(leftNode.constant_value, rightNode.constant_value));
+    end
+    return;
+end
+
+leftPort = leftNode.port;
+rightPort = rightNode.port;
+if leftNode.is_constant
+    [constantName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [constantNode, nextId] = localRecursiveConstantBlock( ...
+        modelName, leftNode.constant_value, constantName, basePosition, depth + 1, nextId);
+    leftPort = constantNode.port;
+end
+if rightNode.is_constant
+    [constantName, nextId] = localTakeRecursiveChildName(preferredName, nextId);
+    [constantNode, nextId] = localRecursiveConstantBlock( ...
+        modelName, rightNode.constant_value, constantName, basePosition, depth + 1, nextId);
+    rightPort = constantNode.port;
+end
+
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, functionName);
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+blockPosition = localRecursivePosition(basePosition, depth, nextId);
+
+switch functionName
+    case "atan2"
+        add_block("simulink/Math Operations/Trigonometric Function", [modelName '/' blockName], ...
+            "Operator", "atan2", ...
+            "Position", blockPosition);
+    case {"min", "max"}
+        add_block("simulink/Math Operations/MinMax", [modelName '/' blockName], ...
+            "Function", functionName, ...
+            "Inputs", "2", ...
+            "Position", blockPosition);
+    otherwise
+        return;
+end
+add_line(modelName, leftPort, [blockName '/1'], "autorouting", "on");
+add_line(modelName, rightPort, [blockName '/2'], "autorouting", "on");
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [node, nextId] = localRecursiveGainBlock( ...
+    modelName, sourcePort, gainValue, preferredName, basePosition, depth, nextId)
+if abs(gainValue - 1.0) <= 1e-12
+    node = localSignalRecursiveNode(sourcePort);
+    return;
+end
+if abs(gainValue) <= 1e-12
+    node = localConstantRecursiveNode(0.0);
+    return;
+end
+
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, 'gain');
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+add_block("simulink/Math Operations/Gain", [modelName '/' blockName], ...
+    "Gain", localNumericString(gainValue), ...
+    "Position", localRecursivePosition(basePosition, depth, nextId));
+add_line(modelName, sourcePort, [blockName '/1'], "autorouting", "on");
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [node, nextId] = localRecursiveConstantBlock( ...
+    modelName, constantValue, preferredName, basePosition, depth, nextId)
+blockName = localResolvedRecursiveBlockName(preferredName, nextId, 'const');
+if strlength(string(preferredName)) == 0
+    nextId = nextId + 1;
+end
+add_block("simulink/Sources/Constant", [modelName '/' blockName], ...
+    "Value", localNumericString(constantValue), ...
+    "Position", localRecursivePosition(basePosition, depth, nextId));
+node = localSignalRecursiveNode([blockName '/1']);
+end
+
+function [spec, tf] = localRecognizedRecursiveTimeSpec(exprText, timeVariable)
+tf = false;
+spec = [];
+if ~localExpressionDependsOnlyOnTime(exprText, timeVariable)
+    return;
+end
+spec = simucopilot.internal.recognizeExpressionInputSpec(exprText, timeVariable);
+if isempty(spec)
+    spec = localRecognizeAffineTimeSpec(exprText, timeVariable);
+end
+tf = ~isempty(spec);
+end
+
+function [tf, value] = localTryNumericExpressionValue(exprText)
+tf = false;
+value = NaN;
+try
+    exprSym = str2sym(exprText);
+    if ~isempty(symvar(exprSym))
+        return;
+    end
+    value = double(exprSym);
+    tf = true;
+catch
+    tf = false;
+    value = NaN;
+end
+end
+
+function [tf, parts] = localRecursiveAdditiveParts(exprText)
+exprText = localRecursiveStripOuterParens(exprText);
+parts = struct("sign", {}, "text", {});
+if strlength(string(exprText)) == 0
+    tf = false;
+    return;
+end
+
+currentSign = '+';
+tokenStart = 1;
+if exprText(1) == '+' || exprText(1) == '-'
+    currentSign = exprText(1);
+    tokenStart = 2;
+end
+
+depthParen = 0;
+depthBracket = 0;
+for index = tokenStart:numel(exprText)
+    ch = exprText(index);
+    if ch == '('
+        depthParen = depthParen + 1;
+        continue;
+    end
+    if ch == ')'
+        depthParen = depthParen - 1;
+        continue;
+    end
+    if ch == '['
+        depthBracket = depthBracket + 1;
+        continue;
+    end
+    if ch == ']'
+        depthBracket = depthBracket - 1;
+        continue;
+    end
+    if depthParen ~= 0 || depthBracket ~= 0
+        continue;
+    end
+    if (ch == '+' || ch == '-') && localIsRecursiveBinaryAddSub(exprText, index)
+        token = strtrim(exprText(tokenStart:index-1));
+        if strlength(string(token)) ~= 0
+            parts(end + 1) = struct("sign", currentSign, "text", token); %#ok<AGROW>
+        end
+        currentSign = ch;
+        tokenStart = index + 1;
+    end
+end
+
+token = strtrim(exprText(tokenStart:end));
+if strlength(string(token)) ~= 0
+    parts(end + 1) = struct("sign", currentSign, "text", token); %#ok<AGROW>
+end
+
+tf = numel(parts) > 1 || (numel(parts) == 1 && parts(1).sign == '-');
+end
+
+function [tf, parts] = localRecursiveMultiplicativeParts(exprText)
+exprText = localRecursiveStripOuterParens(exprText);
+parts = struct("operator", {}, "text", {});
+depthParen = 0;
+depthBracket = 0;
+tokenStart = 1;
+currentOperator = '*';
+
+for index = 1:numel(exprText)
+    ch = exprText(index);
+    if ch == '('
+        depthParen = depthParen + 1;
+        continue;
+    end
+    if ch == ')'
+        depthParen = depthParen - 1;
+        continue;
+    end
+    if ch == '['
+        depthBracket = depthBracket + 1;
+        continue;
+    end
+    if ch == ']'
+        depthBracket = depthBracket - 1;
+        continue;
+    end
+    if depthParen ~= 0 || depthBracket ~= 0
+        continue;
+    end
+    if (ch == '*' || ch == '/') && localIsRecursiveBinaryMulDiv(exprText, index)
+        token = strtrim(exprText(tokenStart:index-1));
+        if strlength(string(token)) == 0
+            tf = false;
+            parts = struct("operator", {}, "text", {});
+            return;
+        end
+        parts(end + 1) = struct("operator", currentOperator, "text", token); %#ok<AGROW>
+        currentOperator = ch;
+        tokenStart = index + 1;
+    end
+end
+
+token = strtrim(exprText(tokenStart:end));
+if strlength(string(token)) == 0
+    tf = false;
+    parts = struct("operator", {}, "text", {});
+    return;
+end
+parts(end + 1) = struct("operator", currentOperator, "text", token); %#ok<AGROW>
+tf = numel(parts) > 1;
+end
+
+function [tf, baseExpr, exponentExpr] = localRecursivePowerParts(exprText)
+exprText = localRecursiveStripOuterParens(exprText);
+tf = false;
+baseExpr = '';
+exponentExpr = '';
+depthParen = 0;
+depthBracket = 0;
+for index = numel(exprText):-1:1
+    ch = exprText(index);
+    if ch == ')'
+        depthParen = depthParen + 1;
+        continue;
+    end
+    if ch == '('
+        depthParen = depthParen - 1;
+        continue;
+    end
+    if ch == ']'
+        depthBracket = depthBracket + 1;
+        continue;
+    end
+    if ch == '['
+        depthBracket = depthBracket - 1;
+        continue;
+    end
+    if depthParen ~= 0 || depthBracket ~= 0
+        continue;
+    end
+    if ch == '^'
+        baseExpr = strtrim(exprText(1:index-1));
+        exponentExpr = strtrim(exprText(index+1:end));
+        tf = strlength(string(baseExpr)) ~= 0 && strlength(string(exponentExpr)) ~= 0;
+        return;
+    end
+end
+end
+
+function [functionName, args] = localRecursiveFunctionParts(exprText)
+functionName = "";
+args = {};
+exprText = localRecursiveStripOuterParens(exprText);
+openIndex = find(exprText == '(', 1, 'first');
+if isempty(openIndex) || exprText(end) ~= ')'
+    return;
+end
+candidateName = strtrim(exprText(1:openIndex-1));
+if isempty(candidateName) || ~isstrprop(candidateName(1), 'alpha')
+    return;
+end
+for index = 2:numel(candidateName)
+    if ~(isstrprop(candidateName(index), 'alphanum') || candidateName(index) == '_')
+        functionName = "";
+        args = {};
+        return;
+    end
+end
+if strlength(string(candidateName)) == 0
+    return;
+end
+functionName = candidateName;
+args = localRecursiveSplitTopLevel(exprText(openIndex + 1:end - 1));
+end
+
+function parts = localRecursiveSplitTopLevel(exprText)
+parts = {};
+exprText = char(string(exprText));
+depthParen = 0;
+depthBracket = 0;
+tokenStart = 1;
+for index = 1:numel(exprText)
+    ch = exprText(index);
+    switch ch
+        case '('
+            depthParen = depthParen + 1;
+        case ')'
+            depthParen = depthParen - 1;
+        case '['
+            depthBracket = depthBracket + 1;
+        case ']'
+            depthBracket = depthBracket - 1;
+        case ','
+            if depthParen == 0 && depthBracket == 0
+                parts{end + 1} = localRecursiveStripOuterParens(strtrim(exprText(tokenStart:index-1))); %#ok<AGROW>
+                tokenStart = index + 1;
+            end
+    end
+end
+parts{end + 1} = localRecursiveStripOuterParens(strtrim(exprText(tokenStart:end)));
+end
+
+function tf = localIsRecursiveBinaryAddSub(exprText, index)
+previousIndex = index - 1;
+while previousIndex >= 1 && isspace(exprText(previousIndex))
+    previousIndex = previousIndex - 1;
+end
+if previousIndex < 1
+    tf = false;
+    return;
+end
+previousChar = exprText(previousIndex);
+tf = isempty(strfind('([,+-*/^', previousChar)); %#ok<STREMP>
+end
+
+function tf = localIsRecursiveBinaryMulDiv(exprText, index)
+previousIndex = index - 1;
+while previousIndex >= 1 && isspace(exprText(previousIndex))
+    previousIndex = previousIndex - 1;
+end
+if previousIndex < 1
+    tf = false;
+    return;
+end
+previousChar = exprText(previousIndex);
+tf = isempty(strfind('([,+-*/^', previousChar)); %#ok<STREMP>
+end
+
+function exprText = localRecursiveStripOuterParens(exprText)
+exprText = strtrim(char(string(exprText)));
+while strlength(string(exprText)) >= 2 && exprText(1) == '(' && exprText(end) == ')'
+    depth = 0;
+    balanced = true;
+    for index = 1:numel(exprText)
+        if exprText(index) == '('
+            depth = depth + 1;
+        elseif exprText(index) == ')'
+            depth = depth - 1;
+            if depth == 0 && index < numel(exprText)
+                balanced = false;
+                break;
+            end
+        end
+    end
+    if ~balanced || depth ~= 0
+        break;
+    end
+    exprText = strtrim(exprText(2:end-1));
+end
+end
+
+function name = localResolvedRecursiveBlockName(preferredName, nextId, suffix)
+preferredName = char(string(preferredName));
+if strlength(string(preferredName)) ~= 0
+    name = preferredName;
+    return;
+end
+name = sprintf('rhs_%s_%d', localSanitize(suffix), nextId);
+end
+
+function name = localGeneratedRecursiveChildName(preferredName, nextId)
+baseName = localSanitize(char(string(preferredName)));
+if strlength(string(baseName)) == 0
+    baseName = 'rhs';
+end
+name = sprintf('%s_n%d', baseName, nextId);
+end
+
+function [name, nextId] = localTakeRecursiveChildName(preferredName, nextId)
+name = localGeneratedRecursiveChildName(preferredName, nextId);
+nextId = nextId + 1;
+end
+
+function position = localRecursivePosition(basePosition, depth, nextId)
+xShift = 150 * max(depth, 0);
+yShift = 34 * max(nextId - 1, 0);
+position = [ ...
+    basePosition(1) - xShift, ...
+    basePosition(2) + yShift, ...
+    basePosition(3) - xShift, ...
+    basePosition(4) + yShift ...
+];
+end
+
+function node = localUnsupportedRecursiveNode()
+node = struct( ...
+    "supported", false, ...
+    "is_constant", false, ...
+    "constant_value", NaN, ...
+    "port", "");
+end
+
+function node = localSignalRecursiveNode(signalPort)
+node = struct( ...
+    "supported", true, ...
+    "is_constant", false, ...
+    "constant_value", NaN, ...
+    "port", char(string(signalPort)));
+end
+
+function node = localConstantRecursiveNode(constantValue)
+node = struct( ...
+    "supported", true, ...
+    "is_constant", true, ...
+    "constant_value", double(constantValue), ...
+    "port", "");
 end
 
 function [isMixed, affine, timeExpression] = localSignalPlusTimeExpression(rhsText, stateNames, inputNames, parameterNames, timeVariable)

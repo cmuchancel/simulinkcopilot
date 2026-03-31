@@ -1060,6 +1060,12 @@ class BackendIntegrationTests(unittest.TestCase):
             "any(strcmp(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'), [out.ModelName '/tau']))",
             nargout=1,
         )
+        has_any_top_level_matlab_function = self.eng.eval(
+            "~isempty(find_system(out.ModelName, 'SearchDepth', 1, 'LookUnderMasks', 'all', 'FollowLinks', 'on', 'SFBlockType', 'MATLAB Function'))",
+            nargout=1,
+        )
+        rhs_omega1_block_type = self.eng.eval("get_param([out.ModelName '/rhs_omega1'], 'BlockType')", nargout=1)
+        rhs_omega2_block_type = self.eng.eval("get_param([out.ModelName '/rhs_omega2'], 'BlockType')", nargout=1)
         first_order_states = tuple(self.eng.eval("out.FirstOrder.states", nargout=1))
         self.eng.eval("bdclose(out.ModelName);", nargout=0)
 
@@ -1069,6 +1075,9 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertEqual(source_family_tau, "Step")
         self.assertEqual(source_block_tau, "Step")
         self.assertFalse(has_source_matlab_function)
+        self.assertFalse(has_any_top_level_matlab_function)
+        self.assertNotEqual(rhs_omega1_block_type, "SubSystem")
+        self.assertNotEqual(rhs_omega2_block_type, "SubSystem")
         self.assertEqual(first_order_states, ("theta1", "theta2", "omega1", "omega2"))
 
     def test_matlabv2native_generate_builds_native_reducible_dae_benchmark(self) -> None:
